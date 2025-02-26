@@ -47,7 +47,7 @@ export default {
 
         <!-- Tab Bar with Chat Icon -->
         <div class="bg-gray-900 border-b border-gray-700 px-4 py-2 relative flex items-center">
-          <div class="flex gap-2 overflow-x-auto scrollbar-hide">
+          <div class="flex gap-2 flex-wrap scrollbar-hide">
             <button
               v-for="tab in tabs"
               :key="tab"
