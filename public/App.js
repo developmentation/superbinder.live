@@ -12,7 +12,7 @@ export default {
 
       <div class="min-h-screen">
         <nav class="bg-gray-800 shadow-lg border-b border-gray-700">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-12 items-center">
               <div class="flex items-center">
                 <!-- Home Link -->
