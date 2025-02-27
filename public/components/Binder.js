@@ -132,7 +132,6 @@ export default {
     const isChatOpen = Vue.ref(false);
     const chatWidth = Vue.ref(300);
     const { userUuid, displayName, channelName } = useRealTime();
-
     const { agents, cleanup: cleanupAgents } = useAgents();
     const { messages, cleanup: cleanupChat } = useChat();
     const { clips, cleanup: cleanupClips } = useClips();
@@ -141,14 +140,13 @@ export default {
     const { questions, cleanup: cleanupQuestions } = useQuestions();
     const { artifacts, cleanup: cleanupArtifacts } = useArtifacts();
     const { transcripts, cleanup: cleanupTranscripts } = useTranscripts();
-
     const isMobile = Vue.ref(window.matchMedia('(max-width: 640px)').matches);
     const updateIsMobile = () => {
       isMobile.value = window.matchMedia('(max-width: 640px)').matches;
     };
     window.addEventListener('resize', updateIsMobile);
-
     const participantCount = Vue.computed(() => Object.keys(activeUsers.value || {}).length);
+    const timeoutId = [];
 
     function handleSetupComplete({ channel, name }) {
       if (!isValidChannelName(channel)) {
@@ -225,7 +223,7 @@ export default {
     //   }
     // }
 
-    function handleBlur() {
+    function TimeoutDisconnect() {
       if (isConnected.value && channelName.value) {
         const updatedUsers = { ...activeUsers.value };
         delete updatedUsers[userUuid.value];
@@ -235,7 +233,19 @@ export default {
       }
     }
 
+    function handleBlur() {
+      timeoutId.push(setTimeout(TimeoutDisconnect, 180000)); //Automatically disconnect after 30 minutes of inactivity.
+    }
+
     function handleFocus() {
+      if (isConnected.value && displayName.value) {
+        timeoutId.forEach(id => {
+          clearTimeout(id);
+        });
+        timeoutId.length = 0;
+        return;
+      }
+
       if (channelName.value && displayName.value) {
         if (!isValidChannelName(channelName.value)) {
           console.error('Invalid channel name. Use alphanumeric characters and underscores only.');
