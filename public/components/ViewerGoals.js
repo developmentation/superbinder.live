@@ -28,12 +28,14 @@ export default {
         <div
           v-for="(goal, index) in goals"
           :key="goal.id"
-          class="p-2 bg-gray-700 rounded-lg flex items-center gap-2 min-w-0 cursor-move transition-transform duration-300"
+          class="p-2 bg-gray-700 rounded-lg flex items-center gap-2 min-w-0 transition-transform duration-300"
           :class="{ 'dragging': isDragging && draggedIndex === index, 'unselectable': isDragging }"
-          @mousedown="startDrag(index, $event)"
-          @touchstart="startDrag(index, $event)"
         >
-          <span class="text-gray-400 mr-2" :class="{ 'unselectable': isDragging }">⋮⋮</span>
+          <span 
+            class="text-gray-400 mr-2 cursor-move" 
+            :class="{ 'unselectable': isDragging }"
+            @mousedown="startDrag(index, $event)"
+            @touchstart="startDrag(index, $event)">⋮⋮</span>
           <div
             contenteditable="true"
             @input="handleGoalInput(goal.id, $event)"
