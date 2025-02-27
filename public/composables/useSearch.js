@@ -15,7 +15,7 @@ export function useSearch() {
     if (!keywords.length) return;
 
     documents.value.forEach(doc => {
-      const content = doc.content.toLowerCase();
+      const content = doc.originalContent.toLowerCase();
       const sentences = content.split(/[.!?]+/).map(s => s.trim()).filter(s => s);
 
       sentences.forEach(sentence => {
