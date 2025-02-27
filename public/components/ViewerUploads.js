@@ -39,16 +39,16 @@ export default {
           class="flex items-center justify-between p-2 bg-gray-700 rounded-lg hover:bg-gray-600 cursor-pointer"
           @click="selectDocument(doc)"
         >
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center space-x-2 flex-1">
             <i :class="getFileIcon(doc.type)"></i>
             <input
               v-model="doc.name"
-              @change="renameDocument(doc.id, $event.target.value)"
-              class="bg-transparent text-white border-b border-gray-500 focus:border-purple-400 outline-none w-32"
+              @change="renameDocument(doc.id, $event)"
+              class="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
               placeholder="Rename document"
             />
           </div>
-          <button @click.stop="removeDocumentLocal(doc.id)" class="text-red-400 hover:text-red-300">
+          <button @click.stop="removeDocumentLocal(doc.id)" class="ml-2.5 text-red-400 hover:text-red-300">
             <i class="pi pi-times"></i>
           </button>
         </div>
@@ -111,11 +111,13 @@ export default {
     }
 
     // Rename document and sync with others
-    function renameDocument(docId, newName) {
+    function renameDocument(docId, event) {
       const doc = documents.value.find(d => d.id === docId);
+      var newName = event.currentTarget.value;
+
       if (doc && newName.trim()) {
         doc.name = newName.trim();
-        emit('rename-document', { documentId: docId, newName: doc.name }); // Sync rename
+        emit('rename-document', { documentId: docId, name: doc.name }); // Sync rename
       }
     }
 
