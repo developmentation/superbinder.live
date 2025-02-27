@@ -23,7 +23,7 @@ export default {
 
       <div v-if="sessionReady" class="flex flex-col h-full relative">
         <!-- Menu Bar -->
-        <div class="bg-gray-800 p-2 border-b border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-2">
+        <div class="bg-gray-800 p-2 border-b border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-2 px-4">
           <div class="flex items-center space-x-2">
             <span class="text-lg font-semibold text-gray-100">Channel: '{{ channelName }}' ({{ participantCount }} participants)</span>
           </div>
