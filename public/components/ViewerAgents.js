@@ -11,6 +11,7 @@ export default {
     <div class="h-full flex flex-col overflow-hidden p-4">
       <!-- Filter and Add Agent Buttons -->
       <div class="mb-4 flex gap-2">
+<!--        <button @click="clearFilter" class="py-2 px-4 bg-gray-600 hover:bg-gray-500 text-white rounded-lg">Clear</button> -->
         <input
           v-model="filterQuery"
           @input="filterAgents"
@@ -18,8 +19,7 @@ export default {
           class="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
           placeholder="Filter agents by name, description, or creator..."
         />
-        <button @click="clearFilter" class="py-2 px-4 bg-gray-600 hover:bg-gray-500 text-white rounded-lg">Clear</button>
-        <button @click="openEditModal()" class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">Add Agent</button>
+        <button @click="openEditModal()" class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">Add</button>
       </div>
 
       <!-- Agents Grid (Scrollable) -->

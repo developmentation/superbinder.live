@@ -22,7 +22,15 @@ export default {
       <div class="flex-1 overflow-auto p-4">
         <!-- Document View -->
         <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg">
-          <span class="text-gray-400">{{ selectedDocument.name }}</span>
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-gray-300 font-semibold">{{ selectedDocument.name }}</span>
+            <button
+              @click="renameDocument"
+              class="py-1 px-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg"
+            >
+              Rename
+            </button>
+          </div>
           <div ref="docContent" v-html="renderContent(selectedDocument.processedContent)" class="prose text-gray-300"></div>
           <button
             v-if="selectedText"
@@ -73,7 +81,7 @@ export default {
     </div>
   `,
   setup() {
-    const { selectedDocument, documents } = useDocuments();
+    const { selectedDocument, documents, updateDocument } = useDocuments();
     const { addClip } = useClips();
     const { searchQuery, searchResults, searchDocuments } = useSearch();
     const selectedText = Vue.ref('');
@@ -110,7 +118,7 @@ export default {
     function viewFullDoc(docId, segment) {
       const doc = documents.value.find(d => d.id === docId);
       if (doc) {
-        selectedDocument.value = doc; // Set selected document directly
+        selectedDocument.value = doc;
         Vue.nextTick(() => {
           const contentEl = docContent.value;
           if (contentEl) {
@@ -131,13 +139,15 @@ export default {
     }
 
 
-    function scrollToTop() {
-      if (docContent.value) docContent.value.scrollTop = 0;
+    function renameDocument() {
+      if (selectedDocument.value) {
+        const newName = prompt('Enter new document name:', selectedDocument.value.name);
+        if (newName && newName.trim()) {
+          updateDocument(selectedDocument.value.id, newName.trim());
+        }
+      }
     }
 
-    /**
-     * Define handleSelectionChange at the top level
-     */
     function handleSelectionChange() {
       const selection = window.getSelection();
       if (selection.rangeCount && docContent.value && docContent.value.contains(selection.anchorNode)) {
@@ -147,21 +157,17 @@ export default {
       }
     }
 
-    /**
-     * Safe selection change handler
-     */
     Vue.onMounted(() => {
       const checkAndAddListener = () => {
         if (docContent.value) {
-          document.removeEventListener('selectionchange', handleSelectionChange); // Prevent duplicates
+          document.removeEventListener('selectionchange', handleSelectionChange);
           document.addEventListener('selectionchange', handleSelectionChange);
         } else {
           Vue.nextTick(() => {
-            setTimeout(checkAndAddListener, 100); // Check again after 100ms
+            setTimeout(checkAndAddListener, 100);
           });
         }
       };
-
       checkAndAddListener();
     });
 
@@ -184,7 +190,7 @@ export default {
       viewFullDoc,
       addClip,
       clipSelectedText,
-      scrollToTop,
+      renameDocument,
     };
   },
 };

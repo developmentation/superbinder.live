@@ -1,4 +1,5 @@
 import { useChat } from '../composables/useChat.js';
+import { useRealTime } from '../composables/useRealTime.js'; // Import useRealTime
 
 export default {
   name: 'ChatPanel',
@@ -26,20 +27,21 @@ export default {
             v-for="msg in allMessages"
             :key="msg.id"
             :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg.color ? msg.color + '33' : '#80808033') }" 
-            class="p-2 mb-2 rounded-lg flex flex-col relative" 
+            class="p-2 mb-2 rounded-lg flex flex-col relative"
           >
             <button
-              v-if="!msg.isDraft && msg.id"  
-              @click="deleteChat(msg.id)"
-              class="absolute top-1 right-1 text-red-400 hover:text-red-300 p-1 rounded-full bg-gray-800"
-              style="width: 20px; height: 20px; line-height: 20px; font-size: 12px;"
+              v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid" 
+              @click.stop="deleteChat(msg.id)"
+              @touchend.stop.prevent="deleteChat(msg.id)"
+              class="absolute top-1 right-1 text-red-400 hover:text-red-300  rounded-full bg-gray-800"
+              style="width: 24px; height: 24px; line-height: 24px; font-size: 16px;"
             >
               <i class="pi pi-times"></i>
             </button>
             <span class="font-semibold text-white">
-              {{ getDisplayName(msg) }}: <!-- Use a method to compute the display name -->
+              {{ getDisplayName(msg) }}:
             </span>
-            <span class="text-white">{{ msg.text }}</span> <!-- Show the raw text without modification -->
+            <span class="text-white">{{ msg.text }}</span>
             <span class="text-gray-400 text-xs">{{ formatTime(msg.timestamp) }}</span>
           </div>
           <div v-if="!allMessages.length" class="text-gray-400">No messages yet.</div>
@@ -68,7 +70,6 @@ export default {
           <button @click="closeChat" class="text-white hover:text-red-400">
             <i class="pi pi-times text-xl"></i>
           </button>
-          <!-- Draggable Handle -->
           <div
             class="absolute left-0 top-0 h-full w-4 cursor-col-resize bg-transparent"
             @mousedown="startResize"
@@ -80,20 +81,21 @@ export default {
             v-for="msg in allMessages"
             :key="msg.id"
             :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg.color ? msg.color + '33' : '#80808033') }"  
-            class="p-2 mb-2 rounded-lg flex flex-col relative"  
+            class="p-2 mb-2 rounded-lg flex flex-col relative"
           >
             <button
-              v-if="!msg.isDraft && msg.id" 
-              @click="deleteChat(msg.id)"
+              v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid"  
+              @click.stop="deleteChat(msg.id)"
+              @touchend.stop.prevent="deleteChat(msg.id)"
               class="absolute top-1 right-1 text-red-400 hover:text-red-300 p-1 rounded-full bg-gray-800"
-              style="width: 20px; height: 20px; line-height: 20px; font-size: 12px;"
+              style="width: 24px; height: 24px; line-height: 24px; font-size: 14px;"
             >
               <i class="pi pi-times"></i>
             </button>
             <span class="font-semibold text-white">
-              {{ getDisplayName(msg) }}: <!-- Use a method to compute the display name -->
+              {{ getDisplayName(msg) }}:
             </span>
-            <span class="text-white">{{ msg.text }}</span> <!-- Show the raw text without modification -->
+            <span class="text-white">{{ msg.text }}</span>
             <span class="text-gray-400 text-xs">{{ formatTime(msg.timestamp) }}</span>
           </div>
           <div v-if="!allMessages.length" class="text-gray-400">No messages yet.</div>
@@ -134,11 +136,11 @@ export default {
   emits: ['close', 'update:width'],
   setup(props, { emit }) {
     const { messages, draftMessages, sendMessage, updateDraft, deleteChat, activeUsers } = useChat();
-    const draft = Vue.ref(''); // Ensure initialized as empty string
+    const { userUuid: currentUserUuid } = useRealTime(); // Destructure userUuid from useRealTime
+    const draft = Vue.ref('');
     const chatContainer = Vue.ref(null);
     const isAutoScrollEnabled = Vue.ref(true);
 
-    // Combine confirmed and draft messages for display
     const allMessages = Vue.computed(() => [
       ...messages.value.map(msg => ({ ...msg, isDraft: false })),
       ...Object.values(draftMessages.value || {}).map(msg => ({ ...msg, isDraft: true })),
@@ -146,13 +148,12 @@ export default {
 
     function getDisplayName(msg) {
       const baseName = activeUsers.value[msg.userUuid]?.displayName || (msg.userUuid.startsWith('agent-') ? 'AI Agent' : 'Unknown');
-      // console.log('Message:', msg, 'Base Name:', baseName, 'Is Draft:', msg.isDraft, 'Suffix:', msg.displayNameSuffix);
       return msg.isDraft && msg.displayNameSuffix ? `${baseName} ${msg.displayNameSuffix}` : baseName;
     }
 
     function formatTime(timestamp) {
       if (!timestamp || isNaN(new Date(timestamp).getTime())) {
-        return 'Invalid Date'; // Fallback for invalid timestamps
+        return 'Invalid Date';
       }
       return new Date(timestamp).toLocaleTimeString();
     }
@@ -165,11 +166,7 @@ export default {
       if (!chatContainer.value) return;
       const container = chatContainer.value;
       const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 5;
-      if (isAtBottom) {
-        isAutoScrollEnabled.value = true;
-      } else {
-        isAutoScrollEnabled.value = false;
-      }
+      isAutoScrollEnabled.value = isAtBottom;
     }
 
     Vue.watch(allMessages, () => {
@@ -181,16 +178,14 @@ export default {
     }, { deep: true });
 
     function updateDraftLocally(event) {
-      // Update local draft without server emit for now
       const text = event.target.value || '';
       updateDraft(text);
     }
 
     function sendFinalMessage() {
-      // Ensure draft.value is a string and not empty
       if (draft.value && typeof draft.value === 'string' && draft.value.trim()) {
         sendMessage(draft.value.trim());
-        draft.value = ''; // Clear the input after sending
+        draft.value = '';
       } else {
         console.warn('No valid text to send in draft:', draft.value);
       }
@@ -229,22 +224,20 @@ export default {
       document.removeEventListener('touchend', stopResize);
     });
 
-    // console.log('Active Users in ChatPanel:', activeUsers.value);
-    // console.log('All Messages in ChatPanel:', allMessages.value);
-
     return {
       allMessages,
       draft,
       sendFinalMessage,
-      updateDraft: updateDraftLocally, // Map to updateDraftLocally for clarity
+      updateDraft: updateDraftLocally,
       deleteChat,
       activeUsers,
       formatTime,
-      getDisplayName, // Return the method for the template
+      getDisplayName,
       chatContainer,
       handleScroll,
       closeChat,
       startResize,
+      currentUserUuid, // Expose currentUserUuid for the template
     };
   },
 };
