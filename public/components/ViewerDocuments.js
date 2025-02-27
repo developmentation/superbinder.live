@@ -102,7 +102,8 @@ export default {
     }
 
     function toggleExpand(index) {
-      Vue.set(expanded.value, index, !expanded.value[index]);
+      expanded.value[index] = !expanded.value[index];
+      //Vue.set(expanded.value, index, !expanded.value[index]);
     }
 
     function viewFullDoc(docId, segment) {
@@ -128,11 +129,14 @@ export default {
       }
     }
 
+
     function scrollToTop() {
       if (docContent.value) docContent.value.scrollTop = 0;
     }
 
-    // Define handleSelectionChange at the top level
+    /**
+     * Define handleSelectionChange at the top level
+     */
     function handleSelectionChange() {
       const selection = window.getSelection();
       if (selection.rangeCount && docContent.value && docContent.value.contains(selection.anchorNode)) {
@@ -142,7 +146,9 @@ export default {
       }
     }
 
-    // Safe selection change handler
+    /**
+     * Safe selection change handler
+     */
     Vue.onMounted(() => {
       const checkAndAddListener = () => {
         if (docContent.value) {
