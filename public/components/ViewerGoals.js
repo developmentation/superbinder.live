@@ -22,6 +22,10 @@ export default {
           class="transition-all duration-200"
         ></div>
         <div
+          v-else
+          class="invisible"
+        ></div>
+        <div
           v-for="(goal, index) in goals"
           :key="goal.id"
           class="p-2 bg-gray-700 rounded-lg flex items-center gap-2 min-w-0 cursor-move transition-transform duration-300"
@@ -104,7 +108,7 @@ export default {
         const y = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
         const rect = container.getBoundingClientRect();
         const goalHeight = goalElement.offsetHeight;
-        const offsetY = y - rect.top - goalHeight / 2;
+        const offsetY = y - rect.top;
         const newIndex = Math.max(0, Math.min(goals.value.length - 1, Math.floor(offsetY / (goalHeight + 8))));
 
         requestAnimationFrame(() => {
