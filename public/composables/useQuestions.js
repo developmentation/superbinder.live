@@ -131,13 +131,13 @@ export function useQuestions() {
     const question = questions.value.find(q => q.id === id);
     if (question) {
       question.text = text;
-      emit('update-question', { id, text });
+      emit('update-question', { question });
     }
   }
 
   function removeQuestion(id) {
     questions.value = questions.value.filter(q => q.id !== id);
-    emit('remove-question', { id });
+    emit('remove-question', { questionId: id });
   }
 
   function reorderQuestions(draggedId, newIndex) {
