@@ -245,8 +245,8 @@ export function useRealTime() {
         userColor.value = '#808080';
         sessionStorage.setItem(`userColor_${channelName.value}_${userUuid.value}`, userColor.value);
       }
-      socketManager.initializeSocket(channelName.value, userUuid.value, displayName.value, handleMessage, handleStatusChange);
-      socketManager.emit('join-channel', { userUuid: userUuid.value, displayName: displayName.value, channelName: channelName.value, color: userColor.value }, channelName.value, userUuid.value);
+      socketManager.initializeSocket(channelName.value, userUuid.value, displayName.value, handleMessage, handleStatusChange, { color: userColor.value });
+      // socketManager.emit('join-channel', { userUuid: userUuid.value, displayName: displayName.value, channelName: channelName.value, color: userColor.value }, channelName.value, userUuid.value);
     }
   }
 
