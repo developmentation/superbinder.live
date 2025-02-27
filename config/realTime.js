@@ -302,64 +302,6 @@ function createRealTimeServers(server, corsOptions) {
   io.on('connection', async (socket) => {
     console.log(`Client connected: ${socket.id}`);
 
-    socket.on('join-channel', async (data) => {
-      if (!validateJoinData(data)) {
-        socket.emit('message', { type: 'error', message: 'Invalid channel name or data', timestamp: Date.now() });
-        return;
-      }
-
-      const { userUuid, displayName, channelName, color } = data;
-
-      console.log("display and color", data);
-      socket.join(channelName);
-      socket.userUuid = userUuid;
-
-      if (!channels.has(channelName)) {
-        const initialState = {};
-        for (const entityType of Object.keys(entityConfigs)) {
-          initialState[entityType] = await loadStateFromServer(channelName, entityType);
-        }
-        channels.set(channelName, {
-          users: {},
-          sockets: {},
-          state: initialState,
-          locked: false,
-        });
-      }
-
-      const channel = channels.get(channelName);
-      if (channel.locked) {
-        socket.emit('message', { type: 'error', message: 'Channel is Locked', timestamp: Date.now() });
-        return;
-      }
-
-      if (channel.users[userUuid]) {
-        console.log(`${displayName} (${userUuid}) rejoined channel ${channelName}`);
-      } else {
-        console.log(`${displayName} (${userUuid}) joined channel ${channelName}`);
-      }
-
-      const userColor = color || '#808080';
-      channel.users[userUuid] = { displayName, color: userColor, joinedAt: Date.now() };
-      channel.sockets[userUuid] = socket;
-
-      socket.emit('message', {
-        type: 'init-state',
-        userUuid,
-        channelName,
-        timestamp: Date.now(),
-        state: channel.state,
-      });
-
-      broadcastToChannel(channelName, 'user-list', { users: channel.users });
-      broadcastToChannel(channelName, 'user-joined', { userUuid, displayName, color: userColor, timestamp: Date.now() });
-    });
-
-    socket.on('leave-channel', (data) => {
-      if (!validateLeaveData(data)) return;
-      cleanupUser(data.channelName, data.userUuid, socket);
-    });
-
     socket.on('disconnect', () => {
       for (const [channelName, channel] of channels) {
         if (channel.sockets[socket.userUuid]) {
@@ -371,12 +313,66 @@ function createRealTimeServers(server, corsOptions) {
     });
 
     socket.on('message', async (data) => {
-      await handleMessage(data, socket);
+      await handleMessage(data, socket, io);
     });
   });
 }
 
-async function handleMessage(data, socket) {
+async function joinChannel(data, socket, io)
+{
+  if (!validateJoinData(data)) {
+    socket.emit('message', { type: 'error', message: 'Invalid channel name or data', timestamp: Date.now() });
+    return;
+  }
+
+  const { userUuid, displayName, channelName, color } = data;
+
+  console.log("display and color", data);
+  socket.join(channelName);
+  socket.userUuid = userUuid;
+
+  if (!channels.has(channelName)) {
+    const initialState = {};
+    for (const entityType of Object.keys(entityConfigs)) {
+      initialState[entityType] = await loadStateFromServer(channelName, entityType);
+    }
+    channels.set(channelName, {
+      users: {},
+      sockets: {},
+      state: initialState,
+      locked: false,
+    });
+  }
+
+  const channel = channels.get(channelName);
+  if (channel.locked) {
+    socket.emit('message', { type: 'error', message: 'Channel is Locked', timestamp: Date.now() });
+    return;
+  }
+
+  if (channel.users[userUuid]) {
+    console.log(`${displayName} (${userUuid}) rejoined channel ${channelName}`);
+  } else {
+    console.log(`${displayName} (${userUuid}) joined channel ${channelName}`);
+  }
+
+  const userColor = color || '#808080';
+  channel.users[userUuid] = { displayName, color: userColor, joinedAt: Date.now() };
+  channel.sockets[userUuid] = socket;
+
+  socket.emit('message', {
+    type: 'init-state',
+    userUuid,
+    channelName,
+    timestamp: Date.now(),
+    state: channel.state,
+  });
+
+  broadcastToChannel(channelName, 'user-list', { users: channel.users });
+  broadcastToChannel(channelName, 'user-joined', { userUuid, displayName, color: userColor, timestamp: Date.now() });
+}
+
+async function handleMessage(data, socket, io) {
   if (!validateMessage(data)) {
     socket.emit('message', { type: 'error', message: 'Invalid channel name or message format', timestamp: Date.now() });
     return;
@@ -384,9 +380,17 @@ async function handleMessage(data, socket) {
 
   const { userUuid, channelName, type, ...payload } = data;
   if (!channels.has(channelName) || !channels.get(channelName).sockets[userUuid]) {
-    if (type !== 'ping' && type !== 'pong') {
-      socket.emit('message', { type: 'error', message: 'Invalid channel or user', timestamp: Date.now() });
-      return;
+    switch(type)
+    {
+      case 'join-channel':
+        await joinChannel(data, socket, io);
+        return;
+      case 'ping':
+      case 'pong':
+        break;
+      default:
+        socket.emit('message', { type: 'error', message: 'Invalid channel or user', timestamp: Date.now() });
+        return;
     }
   }
 
@@ -483,6 +487,13 @@ async function handleMessage(data, socket) {
       for (const entityType of Object.keys(entityConfigs)) {
         await saveStateToServer(channelName, entityType, channel.state[entityType]);
       }
+      break;
+    case 'join-channel':
+      await joinChannel(data, socket, io);
+      break;
+    case 'leave-channel':
+      if (!validateLeaveData(data)) return;
+      cleanupUser(data.channelName, data.userUuid, socket);
       break;
     case 'error':
     case 'unknown':

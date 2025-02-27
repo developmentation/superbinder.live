@@ -14,7 +14,7 @@ function initializeSocket(channelName, userUuid, displayName, onMessage, onStatu
       onStatusChange('connected', null);
       // Emit join-channel with the provided joinData if already connected
       if (channelName && displayName) {
-        socket.emit('join-channel', { userUuid, displayName, channelName, ...joinData });
+        emit('join-channel', { userUuid, displayName, channelName, ...joinData });
       }
       return;
     } else {
@@ -40,7 +40,7 @@ function initializeSocket(channelName, userUuid, displayName, onMessage, onStatu
     console.log(`Connected to server with UUID: ${userUuid}, Socket ID: ${socket.id}`);
     onStatusChange('connected', null);
     if (channelName && displayName) {
-      socket.emit('join-channel', { userUuid, displayName, channelName, ...joinData });
+      emit('join-channel', { userUuid, displayName, channelName, ...joinData });
     }
     startHeartbeat(channelName, userUuid);
   });
@@ -84,7 +84,7 @@ function emit(event, data, channelName, userUuid) {
 
 function disconnect(channelName, userUuid) {
   if (socket && socket.connected) {
-    socket.emit('leave-channel', { userUuid, channelName });
+    emit('leave-channel', { userUuid, channelName });
     socket.disconnect();
     stopHeartbeat();
     socket = null;
