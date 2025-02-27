@@ -6,7 +6,7 @@ import ViewerClips from './ViewerClips.js';
 import ViewerTranscribe from './ViewerTranscribe.js';
 import ViewerQuestions from './ViewerQuestions.js';
 import ViewerArtifacts from './ViewerArtifacts.js';
-import Uploads from './Uploads.js'; // Renamed DocumentSidebar.js
+import Uploads from './ViewerUploads.js'; // Renamed DocumentSidebar.js
 import { useRealTime } from '../composables/useRealTime.js';
 
 export default {

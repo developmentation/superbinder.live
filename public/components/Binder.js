@@ -2,7 +2,7 @@
 import { useRealTime } from '../composables/useRealTime.js';
 import { useHistory } from '../composables/useHistory.js';
 import SessionSetup from './SessionSetup.js';
-import Uploads from './Uploads.js';
+import Uploads from './ViewerUploads.js';
 import Viewer from './Viewer.js';
 import ChatPanel from './ChatPanel.js';
 import { useAgents } from '../composables/useAgents.js';
@@ -52,7 +52,7 @@ export default {
               v-for="tab in tabs"
               :key="tab"
               @click="activeTab = tab; updateActiveTab(tab)"
-              class="px-4 py-2 rounded-t-lg font-semibold transition-colors whitespace-nowrap"
+              class="px-4 py-2 flex-1 rounded-lg font-semibold transition-colors whitespace-nowrap"
               :class="[activeTab === tab ? 'bg-gray-800 text-purple-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600']"
             >
               {{ tab }}
@@ -78,7 +78,7 @@ export default {
                 v-for="subTab in documentSubTabs"
                 :key="subTab"
                 @click="activeDocumentSubTab = subTab; updateActiveTab('Documents')"
-                class="px-4 py-2 rounded-t-lg font-semibold transition-colors whitespace-nowrap"
+                class="px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap"
                 :class="[activeDocumentSubTab === subTab ? 'bg-gray-800 text-purple-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600']"
               >
                 {{ subTab }}
@@ -126,7 +126,7 @@ export default {
     const sessionReady = Vue.ref(false);
     const activeTab = Vue.ref('Goals');
     const activeDocumentSubTab = Vue.ref('Uploads');
-    const tabs = ['Goals', 'Agents', 'Documents', 'Transcriptions', 'Q&A', 'Artifacts'];
+    const tabs = ['Goals', 'Agents', 'Q&A', 'Artifacts', 'Transcriptions', 'Documents'];
     const documentSubTabs = ['Uploads', 'Viewer', 'Clips'];
     const isRoomLocked = Vue.ref(false);
     const isChatOpen = Vue.ref(false);
