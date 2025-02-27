@@ -22,6 +22,7 @@ export default {
       <div class="flex-1 overflow-auto p-4">
         <!-- Document View -->
         <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg">
+          <span class="text-gray-400">{{ selectedDocument.name }}</span>
           <div ref="docContent" v-html="renderContent(selectedDocument.processedContent)" class="prose text-gray-300"></div>
           <button
             v-if="selectedText"
