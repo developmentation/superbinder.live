@@ -92,14 +92,20 @@ export default {
       fileInput.value.click();
     }
 
-    // Delegate file handling to useDocuments
+    /**
+     * Delegate file handling to useDocuments, Adds multiple documents from an array of files.
+     * @param files Array of files to add.
+     */
     async function handleFiles(files) {
       for (const file of Array.from(files)) {
         await addDocument(file); // Use addDocument from useDocuments to handle processing and syncing
       }
     }
 
-    // Select document and set it in useDocuments
+    /**
+     * Sets the document to the selected document. 
+     * @param doc document to select.
+     */
     function selectDocument(doc) {
       setSelectedDocument(doc);
     }
