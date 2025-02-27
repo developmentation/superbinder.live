@@ -43,7 +43,7 @@ export default {
             <i :class="getFileIcon(doc.name)"></i>
             <input
               v-model="doc.name"
-              @change="renameDocument(doc.id, $event)"
+              @change="renameDocument(doc.id, $event.target.value)"
               class="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
               placeholder="Rename document"
             />
