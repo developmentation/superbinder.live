@@ -76,9 +76,9 @@ export default {
               <table class="w-full text-left">
                 <thead>
                   <tr class="border-b border-gray-600">
-                    <th class="py-2 px-4 text-gray-300">Type</th>
-                    <th class="py-2 px-4 text-gray-300">Content</th>
-                    <th class="py-2 px-4 text-gray-300">Actions</th>
+                    <th class="py-2 px-4 bg-gray-700 text-gray-300">Type</th>
+                    <th class="py-2 px-4 bg-gray-700 text-gray-300">Content</th>
+                    <th class="py-2 px-4 bg-gray-700 text-gray-300">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -130,9 +130,9 @@ export default {
               <table class="w-full text-left">
                 <thead>
                   <tr class="border-b border-gray-600">
-                    <th class="py-2 px-4 text-gray-300">Type</th>
-                    <th class="py-2 px-4 text-gray-300">Content</th>
-                    <th class="py-2 px-4 text-gray-300">Actions</th>
+                    <th class="py-2 px-4 bg-gray-700 text-gray-300">Type</th>
+                    <th class="py-2 px-4 bg-gray-700 text-gray-300">Content</th>
+                    <th class="py-2 px-4 bg-gray-700 text-gray-300">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
