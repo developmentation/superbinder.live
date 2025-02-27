@@ -22,13 +22,14 @@ export default {
         <div
           v-for="(question, index) in questions"
           :key="question.id"
-          class="bg-gray-700 rounded-lg p-4 cursor-move transition-transform duration-300"
+          class="bg-gray-700 rounded-lg p-4 transition-transform duration-300 question"
           :class="{ 'dragging': isDraggingQuestion && draggedQuestionIndex === index }"
-          @mousedown="startDragQuestion(index, $event)"
-          @touchstart="startDragQuestion(index, $event)"
         >
           <div class="flex items-center gap-2 mb-2">
-            <span class="text-gray-400 cursor-move">⋮⋮</span>
+            <span class="text-gray-400 cursor-move"
+            @mousedown="startDragQuestion(index, $event)"
+            @touchstart="startDragQuestion(index, $event)"
+          >⋮⋮</span>
             <div
               contenteditable="true"
               @input="updateQuestion(question.id, $event.target.textContent)"
@@ -48,12 +49,13 @@ export default {
             <div
               v-for="(answer, ansIndex) in question.answers"
               :key="answer.id"
-              class="p-2 bg-gray-600 rounded-lg flex items-center gap-2 cursor-move transition-transform duration-300"
+              class="p-2 bg-gray-600 rounded-lg flex items-center gap-2 transition-transform duration-300"
               :class="{ 'dragging': isDraggingAnswer && draggedAnswerIndex[question.id] === ansIndex }"
-              @mousedown="startDragAnswer(question.id, ansIndex, $event)"
-              @touchstart="startDragAnswer(question.id, ansIndex, $event)"
+              
             >
-              <span class="text-gray-400 cursor-move">⋮⋮</span>
+              <span class="text-gray-400 cursor-move"
+              @mousedown="startDragAnswer(question.id, ansIndex, $event)"
+              @touchstart="startDragAnswer(question.id, ansIndex, $event)">⋮⋮</span>
               <div
                 contenteditable="true"
                 @input="updateAnswer(question.id, answer.id, $event.target.textContent)"
@@ -101,9 +103,12 @@ export default {
     const newAnswerId = Vue.ref({});
     const isDraggingQuestion = Vue.ref(false);
     const draggedQuestionIndex = Vue.ref(null);
+    const questionsContainer = Vue.ref(null); //Implement
+    const dragQuestionsIndicator = Vue.ref(null); //Implement
     const isDraggingAnswer = Vue.ref(false);
     const draggedAnswerIndex = Vue.ref({});
-    const questionsContainer = Vue.ref(null);
+    const questionContainer = Vue.ref(null); //Implement
+    const dragAnswersIndicator = Vue.ref({}); //Implement
     const answersContainers = Vue.ref({});
 
     function addQuestionLocal() {
@@ -123,10 +128,12 @@ export default {
     }
 
     function startDragQuestion(index, event) {
+      event.preventDefault();
       isDraggingQuestion.value = true;
       draggedQuestionIndex.value = index;
-      const questionElement = event.target.closest('.bg-gray-700');
+      const questionElement = event.target.closest('.question');
       const container = questionsContainer.value;
+      let lastY = 0;
 
       if (event.type === 'mousedown') {
         document.addEventListener('mousemove', handleDragQuestion);
@@ -140,18 +147,34 @@ export default {
         e.preventDefault();
         const y = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
         const rect = container.getBoundingClientRect();
-        const offsetY = y - rect.top - questionElement.offsetHeight / 2;
-        const newIndex = Math.max(0, Math.min(questions.value.length - 1, Math.floor(offsetY / questionElement.offsetHeight)));
+        const questionHeight = questionElement.offsetHeight;
+        const offsetY = y - rect.top;
+        const newIndex = Math.max(0, Math.min(questions.value.length - 1, Math.floor(offsetY / (questionHeight + 16))));
 
-        if (newIndex !== index) {
-          reorderQuestions(questions.value[index].id, newIndex);
-          draggedQuestionIndex.value = newIndex;
-        }
+        // if (newIndex !== index) {
+        //   reorderQuestions(questions.value[index].id, newIndex);
+        //   draggedQuestionIndex.value = newIndex;
+        // }
+
+        requestAnimationFrame(() => {
+          if (Math.abs(y - lastY) > 5) {
+            if (newIndex !== index) {
+              reorderQuestions(questions.value[index].id, newIndex);
+              draggedQuestionIndex.value = newIndex;
+              index = newIndex;
+            }
+            console.log(dragQuestionsIndicator.value);
+
+            dragQuestionsIndicator.value = { y: newIndex * (questionHeight) + 4 };
+            lastY = y;
+          }
+        });
       }
 
       function stopDragQuestion() {
         isDraggingQuestion.value = false;
         draggedQuestionIndex.value = null;
+        dragQuestionsIndicator.value = null;
         document.removeEventListener('mousemove', handleDragQuestion);
         document.removeEventListener('mouseup', stopDragQuestion);
         document.removeEventListener('touchmove', handleDragQuestion);
