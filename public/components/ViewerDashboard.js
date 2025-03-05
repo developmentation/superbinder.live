@@ -1,4 +1,3 @@
-// components/ViewerDashboard.js
 import { useRealTime } from '../composables/useRealTime.js';
 import { useHistory } from '../composables/useHistory.js';
 
@@ -42,7 +41,7 @@ export default {
           >
             <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
               <i class="pi pi-target text-green-400"></i>
-              Goals: {{ history.goals.length }}
+              Goals: {{ (history.goals || []).length }}
             </h2>
             <p class="text-gray-400">Total number of goals set.</p>
           </div>
@@ -54,7 +53,7 @@ export default {
           >
             <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
               <i class="pi pi-file text-blue-400"></i>
-              Documents: {{ history.documents.length }}
+              Documents: {{ (history.documents || []).length }}
             </h2>
             <p class="text-gray-400">Total uploaded documents.</p>
           </div>
@@ -66,9 +65,21 @@ export default {
           >
             <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
               <i class="pi pi-video text-yellow-400"></i>
-              Clips: {{ history.clips.length }}
+              Clips: {{ (history.clips || []).length }}
             </h2>
             <p class="text-gray-400">Total video/audio clips.</p>
+          </div>
+
+          <!-- Bookmarks -->
+          <div 
+            class="bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl hover:bg-gray-700 transition-all cursor-pointer"
+            @click="navigateToTab('Documents', 'Bookmarks')"
+          >
+            <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+              <i class="pi pi-bookmark text-cyan-400"></i>
+              Bookmarks: {{ (history.bookmarks || []).length }}
+            </h2>
+            <p class="text-gray-400">Total bookmarks created.</p>
           </div>
 
           <!-- Agents -->
@@ -78,7 +89,7 @@ export default {
           >
             <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
               <i class="pi pi-user text-orange-400"></i>
-              Agents: {{ history.agents.length }}
+              Agents: {{ (history.agents || []).length }}
             </h2>
             <p class="text-gray-400">Total active agents.</p>
           </div>
@@ -90,7 +101,7 @@ export default {
           >
             <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
               <i class="pi pi-question-circle text-purple-400"></i>
-              Questions: {{ history.questions.length }}
+              Questions: {{ (history.questions || []).length }}
             </h2>
             <p class="text-gray-400">Total questions asked.</p>
           </div>
@@ -114,7 +125,7 @@ export default {
           >
             <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
               <i class="pi pi-comments text-indigo-400"></i>
-              Chat Messages: {{ history.messages.length }}
+              Chat Messages: {{ (history.messages || []).length }}
             </h2>
             <p class="text-gray-400">Total chat message count.</p>
           </div>
@@ -126,7 +137,7 @@ export default {
           >
             <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
               <i class="pi pi-box text-red-400"></i>
-              Artifacts: {{ history.artifacts.length }}
+              Artifacts: {{ (history.artifacts || []).length }}
             </h2>
             <p class="text-gray-400">Total artifacts stored.</p>
           </div>
@@ -138,7 +149,7 @@ export default {
           >
             <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
               <i class="pi pi-file-word text-pink-400"></i>
-              Transcripts: {{ history.transcripts.length }}
+              Transcripts: {{ (history.transcripts || []).length }}
             </h2>
             <p class="text-gray-400">Total transcription entries.</p>
           </div>
@@ -153,7 +164,7 @@ export default {
     const history = Vue.ref(gatherLocalHistory());
     const userCount = Vue.computed(() => Object.keys(activeUsers.value).length);
     const answerCount = Vue.computed(() => {
-      return history.value.questions.reduce((total, question) => {
+      return (history.value.questions || []).reduce((total, question) => {
         return total + (question.answers ? question.answers.length : 0);
       }, 0);
     });
@@ -167,12 +178,12 @@ export default {
     );
 
     function navigateToTab(tab, subTab = null) {
-      // Pass documents with renderAsHtml flag for .docx, .xlsx, and .pdf
-      const documents = history.value.documents.map(doc => ({
+      const documents = (history.value.documents || []).map(doc => ({
         ...doc,
         renderAsHtml: ['docx', 'xlsx', 'pdf'].includes(doc.type),
       }));
-      props.updateTab(tab, subTab, { documents });
+      const bookmarks = history.value.bookmarks || [];
+      props.updateTab(tab, subTab, { documents, bookmarks });
     }
 
     return {

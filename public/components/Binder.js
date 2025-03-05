@@ -127,7 +127,7 @@ export default {
     const activeTab = Vue.ref('Dashboard');
     const activeDocumentSubTab = Vue.ref('Uploads');
     const tabs = ['Dashboard', 'Goals', 'Agents', 'Documents', 'Transcriptions', 'Q&A', 'Artifacts'];
-    const documentSubTabs = ['Uploads', 'Viewer', 'Clips'];
+    const documentSubTabs = ['Uploads', 'Viewer', 'Clips', 'Bookmarks'];
     const isRoomLocked = Vue.ref(false);
     const isChatOpen = Vue.ref(false);
     const chatWidth = Vue.ref(300);

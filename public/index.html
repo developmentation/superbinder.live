@@ -144,7 +144,32 @@
   flex-shrink: 0; /* Prevent the input area from shrinking */
 }
   </style>
-  <style>
+ 
+ <style>
+
+.pdf-viewer {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.pdf-viewer .pdf-page {
+  width: 100% !important; /* Override inline width */
+  height: auto !important; /* Maintain aspect ratio */
+  margin: 20px 0;
+}
+
+.pdf-viewer .pdf-page img {
+  width: 100%;
+  height: auto;
+  display: block; /* Remove any inline spacing */
+}
+
+.pdf-page.selected {
+  border: 2px solid #3b82f6; /* Tailwind's blue-500 hex value */
+}
+
+ </style>
+ <style>
     html,
     body {
       position: fixed;

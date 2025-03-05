@@ -56,8 +56,9 @@ const wordStyles = `
     .mammoth-page-break { page-break-before: always; }
     .pdf-page { position: relative; margin: 20px 0; user-select: text; }
     pre { background-color: #1e293b; padding: 8px; border-radius: 4px; overflow-x: auto; }
-    .pdf-text { position: absolute; color: #000; user-select: text; }
+    .pdf-text { position: absolute; color: #000; user-select: text; font-family: Arial, sans-serif; }
     .pdf-image { position: absolute; user-select: none; }
+    .pdf-container { max-width: 100%; overflow-x: auto; }
   </style>
 `;
 
@@ -100,14 +101,14 @@ export async function processFile(file) {
         }
         pages = docxResult.pages || [];
         break;
-      case 'pdf':
-        const pdfResult = await processPdf(file);
-        processedContent = pdfResult.html;
-        if (processedContent.includes('<')) {
-          processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
-        }
-        pages = pdfResult.pages || [];
-        break;
+        case 'pdf':
+          const pdfResult = await processPdf(file);
+          processedContent = pdfResult.html;
+          if (processedContent.includes('<')) {
+            processedContent = `${wordStyles}<div class="pdf-container">${processedContent}</div>`;
+          }
+          pages = pdfResult.pages || [];
+          break;
       case 'md':
         processedContent = await processMarkdown(originalContent);
         break;
@@ -232,58 +233,48 @@ async function processPdf(file) {
   let html = '';
   const pages = [];
 
+  // Set scale for 300 DPI (300 / 72 = ~4.1667)
+  const scale = 4.1667;
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 1.5 });
+    const viewport = page.getViewport({ scale });
+
+    // Create a canvas for rendering
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
-
     canvas.width = viewport.width;
     canvas.height = viewport.height;
 
+    // Render the page to the canvas
     const renderTask = page.render({
       canvasContext: context,
       viewport: viewport,
-      enableWebGL: true,
+      enableWebGL: true, // Optional: improves performance if supported
     });
 
     await renderTask.promise;
 
-    const textContent = await page.getTextContent();
-    const textItems = textContent.items.map(item => ({
-      text: item.str || "",
-      x: item.transform[4],
-      y: item.transform[5],
-      fontSize: Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]),
-      fontFamily: item.fontName || 'Arial',
-    }));
+    // Convert canvas to image data URL
+    const dataUrl = canvas.toDataURL('image/png', 0.95); // 0.95 quality for PNG
 
-    const images = await getPageImages(page, i);
+    // Build HTML for the page
+    const pageContent = `
+      <div class="pdf-page" style="position: relative; width: ${viewport.width}px; height: ${viewport.height}px; margin: 20px 0;">
+        <img src="${dataUrl}" style="width: 100%; height: 100%; user-select: none;" alt="Page ${i}" />
+      </div>
+    `;
 
-    let pageContent = `<div class="pdf-page" style="position: relative; width: ${viewport.width}px; height: ${viewport.height}px; background: #fff;">`;
-    pageContent += `<canvas class="pdf-canvas" width="${viewport.width}" height="${viewport.height}" style="position: absolute; top: 0; left: 0;"></canvas>`;
-
-    textItems.sort((a, b) => a.y - b.y).forEach(item => {
-      pageContent += `<span class="pdf-text" style="position: absolute; left: ${item.x}px; top: ${item.y}px; font-size: ${item.fontSize}px; font-family: ${item.fontFamily}; color: #000; user-select: text;">${item.text}</span>`;
-    });
-
-    images.forEach(img => {
-      pageContent += `<img class="pdf-image" src="${img.dataUrl}" style="position: absolute; left: 0; top: 0; width: ${img.width}px; height: ${img.height}px;" alt="Page ${img.pageNumber} image" />`;
-    });
-
-    pageContent += '</div>';
     pages.push(pageContent);
     html += pageContent;
 
-    document.body.appendChild(canvas);
-    const dataUrl = canvas.toDataURL('image/png', 0.95);
+    // Clean up canvas
     canvas.remove();
   }
 
   return { html, pages };
 }
-
-// Helper function for images (unchanged)
+// Helper function for images (updated to include positioning)
 async function getPageImages(page, pageNumber) {
   const images = [];
   try {
@@ -332,6 +323,7 @@ async function getPageImages(page, pageNumber) {
         if (!imageData) continue;
 
         const canvas = document.createElement('canvas');
+        let x = 0, y = 0; // Default position (to be refined)
         if (fn === pdfjsLib.OPS.paintFormXObject) {
           const formViewport = page.getViewport({ scale: 1.0 });
           canvas.width = formViewport.width;
@@ -339,11 +331,13 @@ async function getPageImages(page, pageNumber) {
           const ctx = canvas.getContext('2d');
           const renderContext = { canvasContext: ctx, viewport: formViewport, enableWebGL: true };
           await page.render(renderContext).promise;
+          x = 0; y = 0; // Adjust based on form position if available
         } else if (imageData.bitmap) {
           canvas.width = imageData.bitmap.width;
           canvas.height = imageData.bitmap.height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(imageData.bitmap, 0, 0);
+          x = 0; y = 0; // Adjust based on position in PDF (if available)
         } else if (imageData.data) {
           canvas.width = imageData.width;
           canvas.height = imageData.height;
@@ -363,6 +357,7 @@ async function getPageImages(page, pageNumber) {
             imgData = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
           }
           ctx.putImageData(imgData, 0, 0);
+          x = 0; y = 0; // Adjust based on position in PDF (if available)
         }
 
         const dataUrl = canvas.toDataURL('image/png', 0.95);
@@ -375,6 +370,8 @@ async function getPageImages(page, pageNumber) {
             height: canvas.height,
             pageNumber,
             id: imgKey,
+            x: x, // Position X (to be refined)
+            y: y, // Position Y (to be refined)
             viewport: { width: viewport.width, height: viewport.height },
           });
         }
@@ -402,6 +399,8 @@ async function getPageImages(page, pageNumber) {
             height: scaledViewport.height,
             pageNumber,
             id: `page-${pageNumber}`,
+            x: 0, // Default position
+            y: 0, // Default position
             viewport: { width: viewport.width, height: viewport.height },
           });
         }

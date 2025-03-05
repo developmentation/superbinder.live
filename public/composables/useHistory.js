@@ -16,6 +16,7 @@ export function useHistory() {
       agents: [...useAgents().agents.value], // Convert reactive array to plain array
       messages: [...useChat().messages.value], // Convert reactive array to plain array
       clips: [...useClips().clips.value],
+      clips: [...useClips().bookmarks.value],
       documents: [...useDocuments().documents.value],
       goals: [...useGoals().goals.value],
       questions: [...useQuestions().questions.value],
@@ -37,6 +38,7 @@ export function useHistory() {
       useAgents().agents.value = data?.agents || [];
       useChat().messages.value = data?.chat || [];
       useClips().clips.value = data?.clips || [];
+      useClips().bookmarks.value = data?.bookmarks || [];
       useDocuments().documents.value = data?.documents || [];
       useGoals().goals.value = data?.goals || [];
       useQuestions().questions.value = data?.questions || [];

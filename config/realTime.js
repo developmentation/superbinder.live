@@ -9,6 +9,7 @@ const entityConfigs = {
   agents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-agent', update: 'update-agent', remove: 'remove-agent', reorder: null } },
   chat: { idKey: 'id', requiredFields: ['id', 'text'], orderField: null, events: { add: 'add-chat', update: 'update-chat', remove: 'delete-chat', draft: 'draft-chat' } },
   clips: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-clip', update: null, remove: 'remove-clip', reorder: null } },
+  bookmarks: { idKey: 'id', requiredFields: ['id', 'documentId'], orderField: null, events: { add: 'add-bookmark', update: null, remove: 'remove-bookmark', reorder: null } }, // Added bookmarks
   documents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-document', update: 'rename-document', remove: 'remove-document', reorder: null } },
   questions: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-question', update: 'update-question', remove: 'remove-question', reorder: 'reorder-questions' } },
   answers: { idKey: 'id', requiredFields: ['id', 'questionId'], orderField: null, events: { add: 'add-answer', update: 'update-answer', remove: 'delete-answer', vote: 'vote-answer' } },
@@ -106,7 +107,7 @@ function validateEntity(payload, entityType, operation) {
   switch (operation) {
     case 'add':
     case 'update':
-      const entity = payload.agent || payload.clip || payload.document || payload.question || payload.artifact || payload.transcript || payload.answer || payload;
+      const entity = payload.bookmark || payload.clip || payload.document || payload.question || payload.artifact || payload.transcript || payload.answer || payload;
       if (!entity || typeof entity !== 'object') {
         return { valid: false, message: `Invalid ${entityType} data for ${operation}: missing entity object` };
       }
@@ -277,7 +278,7 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
   }
 
   const normalizedPayload = {
-    ...payload.agent || payload.clip || payload.document || payload.question || payload.artifact || payload.transcript || payload.answer || payload,
+    ...payload.bookmark || payload.clip || payload.document || payload.question || payload.artifact || payload.transcript || payload.answer || payload,
     userUuid,
     timestamp: Date.now(),
   };
@@ -316,7 +317,11 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
   }
 
   let broadcastData;
-  if (entityType === 'agents' && (operation === 'add' || operation === 'update')) {
+  if (entityType === 'bookmarks' && operation === 'add') {
+    broadcastData = { bookmark: normalizedPayload };
+  } else if (entityType === 'bookmarks' && operation === 'remove') {
+    broadcastData = { id: normalizedPayload[config.idKey] };
+  } else if (entityType === 'agents' && (operation === 'add' || operation === 'update')) {
     broadcastData = { agent: normalizedPayload };
   } else if (entityType === 'agents' && operation === 'remove') {
     broadcastData = { id: normalizedPayload[config.idKey] };
@@ -498,6 +503,12 @@ async function handleMessage(data, socket) {
     case 'remove-clip':
       await handleCrudOperation(channelName, userUuid, 'remove-clip', { id: payload.clipId, userUuid }, socket);
       break;
+    case 'add-bookmark':
+      await handleCrudOperation(channelName, userUuid, 'add-bookmark', { ...payload.bookmark, userUuid }, socket);
+      break;
+    case 'remove-bookmark':
+      await handleCrudOperation(channelName, userUuid, 'remove-bookmark', { id: payload.bookmarkId, userUuid }, socket);
+      break;
     case 'add-document':
       await handleCrudOperation(channelName, userUuid, 'add-document', { ...payload.document, userUuid }, socket);
       break;
@@ -529,7 +540,7 @@ async function handleMessage(data, socket) {
       await handleCrudOperation(channelName, userUuid, 'delete-answer', { id: payload.id, questionId: payload.questionId, userUuid }, socket);
       break;
     case 'vote-answer':
-        await handleCrudOperation(channelName, userUuid, 'vote-answer', { questionId: payload.questionId, answerId: payload.id, vote: payload.vote, userUuid }, socket);
+      await handleCrudOperation(channelName, userUuid, 'vote-answer', { questionId: payload.questionId, answerId: payload.id, vote: payload.vote, userUuid }, socket);
       break;
     case 'add-artifact':
       await handleCrudOperation(channelName, userUuid, 'add-artifact', { ...payload.artifact, userUuid }, socket);
