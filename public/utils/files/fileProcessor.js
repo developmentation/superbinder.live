@@ -73,7 +73,7 @@ export async function processFile(file) {
   const newMetadata = {
     id: uuid,
     name: file.name,
-    type: extension,
+    type: extension, // Ensure type is included
   };
   let status = 'pending';
   let originalContent = '';
@@ -94,12 +94,18 @@ export async function processFile(file) {
     switch (extension) {
       case 'docx':
         const docxResult = await processDocx(originalContent);
-        processedContent = docxResult.html;
+        processedContent = docxResult.html; // Ensure HTML is not escaped
+        if (processedContent.includes('<')) {
+          processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
+        }
         pages = docxResult.pages || [];
         break;
       case 'pdf':
         const pdfResult = await processPdf(file);
         processedContent = pdfResult.html;
+        if (processedContent.includes('<')) {
+          processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
+        }
         pages = pdfResult.pages || [];
         break;
       case 'md':
@@ -107,6 +113,9 @@ export async function processFile(file) {
         break;
       case 'xlsx':
         processedContent = await processExcel(file);
+        if (processedContent.includes('<')) {
+          processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
+        }
         break;
       case 'json':
         processedContent = await processJson(originalContent);
@@ -115,19 +124,15 @@ export async function processFile(file) {
       case 'js':
       case 'html':
       case 'css':
-        processedContent = `<pre>${escapeHtml(originalContent)}</pre>`;
+        // Render as plain text without HTML interpretation
+        processedContent = escapeHtml(originalContent);
         break;
       default:
         if (isTextFile(file)) {
-          processedContent = `<pre>${escapeHtml(originalContent)}</pre>`;
+          processedContent = escapeHtml(originalContent); // Plain text rendering
         } else {
           throw new Error('Unsupported file type');
         }
-    }
-
-    // Wrap processed content with styles if it’s HTML
-    if (processedContent.includes('<')) {
-      processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
     }
 
     // Placeholder AI analysis (implement later)
@@ -157,7 +162,7 @@ export async function processFile(file) {
   };
 }
 
-// Helper functions
+// Helper functions (unchanged except for context)
 function readFileContent(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -169,6 +174,8 @@ function readFileContent(file) {
       reader.readAsArrayBuffer(file);
     } else if (file.type === 'application/pdf') {
       reader.readAsArrayBuffer(file);
+    } else if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      reader.readAsArrayBuffer(file); // For .xlsx
     } else {
       reader.readAsText(file);
     }
@@ -203,7 +210,6 @@ async function processDocx(buffer) {
     },
   });
 
-  // Extract pages (simplified; may need advanced parsing for exact page breaks)
   const pages = [];
   let currentPageContent = '';
   result.value.split('<div class="mammoth-page-break">').forEach((section, index) => {
@@ -216,7 +222,7 @@ async function processDocx(buffer) {
   });
   if (currentPageContent) pages.push(currentPageContent);
 
-  return { html: result.value, pages };
+  return { html: result.value, pages }; // Ensure the HTML is returned as is, not escaped
 }
 
 async function processPdf(file) {
@@ -226,10 +232,9 @@ async function processPdf(file) {
   let html = '';
   const pages = [];
 
-  // Process each page for native-like rendering with pdf.js
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 1.5 }); // Adjust scale for better rendering
+    const viewport = page.getViewport({ scale: 1.5 });
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
 
@@ -244,7 +249,6 @@ async function processPdf(file) {
 
     await renderTask.promise;
 
-    // Extract text and images for selectability
     const textContent = await page.getTextContent();
     const textItems = textContent.items.map(item => ({
       text: item.str || "",
@@ -257,16 +261,12 @@ async function processPdf(file) {
     const images = await getPageImages(page, i);
 
     let pageContent = `<div class="pdf-page" style="position: relative; width: ${viewport.width}px; height: ${viewport.height}px; background: #fff;">`;
-    
-    // Add canvas for native rendering
     pageContent += `<canvas class="pdf-canvas" width="${viewport.width}" height="${viewport.height}" style="position: absolute; top: 0; left: 0;"></canvas>`;
 
-    // Overlay selectable text for clipping
     textItems.sort((a, b) => a.y - b.y).forEach(item => {
       pageContent += `<span class="pdf-text" style="position: absolute; left: ${item.x}px; top: ${item.y}px; font-size: ${item.fontSize}px; font-family: ${item.fontFamily}; color: #000; user-select: text;">${item.text}</span>`;
     });
 
-    // Add images (non-selectable but visible)
     images.forEach(img => {
       pageContent += `<img class="pdf-image" src="${img.dataUrl}" style="position: absolute; left: 0; top: 0; width: ${img.width}px; height: ${img.height}px;" alt="Page ${img.pageNumber} image" />`;
     });
@@ -275,16 +275,15 @@ async function processPdf(file) {
     pages.push(pageContent);
     html += pageContent;
 
-    // Optionally, append canvas to DOM temporarily for debugging
     document.body.appendChild(canvas);
     const dataUrl = canvas.toDataURL('image/png', 0.95);
-    canvas.remove(); // Clean up
+    canvas.remove();
   }
 
   return { html, pages };
 }
 
-// Helper function for images (simplified from parsePdf.js)
+// Helper function for images (unchanged)
 async function getPageImages(page, pageNumber) {
   const images = [];
   try {
@@ -410,22 +409,18 @@ async function getPageImages(page, pageNumber) {
     }
 
     return images;
-  }
-  catch(error)
-  {
-    console.log("Parsing error", error)
+  } catch (error) {
+    console.log("Parsing error", error);
   }
 }
 
-
-  // Utility function from parsePdf.js (simplified)
-  async function hasTextContent(page) {
-    const textContent = await page.getTextContent({
-      includeMarkedContent: true,
-      disableCombineTextItems: false,
-    });
-    return textContent.items.some((item) => (item.str || "").trim().length > 0);
-  }
+async function hasTextContent(page) {
+  const textContent = await page.getTextContent({
+    includeMarkedContent: true,
+    disableCombineTextItems: false,
+  });
+  return textContent.items.some((item) => (item.str || "").trim().length > 0);
+}
 
 async function processMarkdown(text) {
   return md.render(text);

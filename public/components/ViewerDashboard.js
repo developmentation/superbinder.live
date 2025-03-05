@@ -12,7 +12,6 @@ export default {
   },
   template: `
     <div class="h-full flex flex-col overflow-hidden p-4 text-white">
-     <!-- <h1 class="text-2xl font-bold mb-6">Dashboard</h1> -->
       <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 overflow-y-auto">
         <!-- Users (Dedicated Column) -->
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg col-span-1">
@@ -151,20 +150,14 @@ export default {
     const { activeUsers } = useRealTime();
     const { gatherLocalHistory } = useHistory();
 
-    // Reactive history data
     const history = Vue.ref(gatherLocalHistory());
-
-    // Compute user count
     const userCount = Vue.computed(() => Object.keys(activeUsers.value).length);
-
-    // Compute total answers from questions
     const answerCount = Vue.computed(() => {
       return history.value.questions.reduce((total, question) => {
         return total + (question.answers ? question.answers.length : 0);
       }, 0);
     });
 
-    // Watch for changes in history or users to keep dashboard updated
     Vue.watch(
       () => [activeUsers.value, gatherLocalHistory()],
       () => {
@@ -174,7 +167,12 @@ export default {
     );
 
     function navigateToTab(tab, subTab = null) {
-      props.updateTab(tab, subTab); // Use the prop instead of emit
+      // Pass documents with renderAsHtml flag for .docx, .xlsx, and .pdf
+      const documents = history.value.documents.map(doc => ({
+        ...doc,
+        renderAsHtml: ['docx', 'xlsx', 'pdf'].includes(doc.type),
+      }));
+      props.updateTab(tab, subTab, { documents });
     }
 
     return {

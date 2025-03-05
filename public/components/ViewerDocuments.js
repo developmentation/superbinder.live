@@ -5,6 +5,12 @@ import { useSearch } from '../composables/useSearch.js';
 
 export default {
   name: 'ViewerDocuments',
+  props: {
+    documents: {
+      type: Array,
+      default: () => [],
+    },
+  },
   template: `
     <div class="h-full flex flex-col overflow-hidden">
       <!-- Search Bar -->
@@ -19,10 +25,12 @@ export default {
       </div>
 
       <!-- Document and Search Results -->
-        <div class=" " v-if = "selectedDocument">
-          <div class=" ">
-          
- 
+      <div class="flex-1 overflow-auto p-4">
+        <!-- Document View -->
+        <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg">
+          <span class="text-gray-400">{{ selectedDocument.name }}</span>
+          <div v-if="selectedDocument.renderAsHtml" ref="docContent" v-html="selectedDocument.processedContent" class="prose text-gray-300"></div>
+          <pre v-else ref="docContent" class="text-gray-300 whitespace-pre-wrap">{{ selectedDocument.processedContent }}</pre>
           <button
             v-if="selectedText"
             @click="clipSelectedText"
@@ -30,16 +38,6 @@ export default {
           >
             Clip Selected
           </button>
-
-          </div>
-        </div>
-
-      <div class="flex-1 overflow-auto p-4">
-        <!-- Document View -->
-        <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg">
-
-          <div ref="docContent" v-html="renderContent(selectedDocument.processedContent)" class="prose text-gray-300"></div>
-
         </div>
 
         <!-- Search Results -->
@@ -81,13 +79,27 @@ export default {
       </div>
     </div>
   `,
-  setup() {
-    const { selectedDocument, documents, updateDocument } = useDocuments();
+  setup(props) {
+    const { selectedDocument, documents, updateDocument, setDocuments, setSelectedDocument } = useDocuments();
     const { addClip } = useClips();
     const { searchQuery, searchResults, searchDocuments } = useSearch();
     const selectedText = Vue.ref('');
     const expanded = Vue.ref({});
     const docContent = Vue.ref(null);
+
+    // Set documents from props on mount
+    Vue.onMounted(() => {
+      if (props.documents && props.documents.length > 0) {
+        setDocuments(props.documents);
+      }
+    });
+
+    // Watch for changes in props.documents and update
+    Vue.watch(() => props.documents, (newDocuments) => {
+      if (newDocuments && newDocuments.length > 0) {
+        setDocuments(newDocuments);
+      }
+    }, { deep: true });
 
     function performSearch() {
       if (searchQuery.value.trim()) {
@@ -107,18 +119,14 @@ export default {
       return highlighted;
     }
 
-    function renderContent(content) {
-      return content.includes('<') ? content : `<p>${content}</p>`;
-    }
-
     function toggleExpand(index) {
-      Vue.set(expanded.value, index, !expanded.value[index]);
+      expanded.value[index] = !expanded.value[index];
     }
 
     function viewFullDoc(docId, segment) {
       const doc = documents.value.find(d => d.id === docId);
       if (doc) {
-        selectedDocument.value = doc;
+        setSelectedDocument(doc); // Use setSelectedDocument to preserve renderAsHtml
         Vue.nextTick(() => {
           const contentEl = docContent.value;
           if (contentEl) {
@@ -184,7 +192,6 @@ export default {
       selectedText,
       performSearch,
       highlightMatch,
-      renderContent,
       toggleExpand,
       viewFullDoc,
       addClip,
