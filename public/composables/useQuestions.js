@@ -1,87 +1,93 @@
+// composables/useQuestions.js
 import { useRealTime } from './useRealTime.js';
 
 const questions = Vue.ref([]);
 const answers = Vue.ref([]);
-
-const { emit, on, off } = useRealTime();
+const { userUuid, emit, on, off } = useRealTime();
+const eventHandlers = new WeakMap();
+const processedEvents = new Set();
 
 export function useQuestions() {
-  // Event handlers
-  const handleSyncHistoryData = (state) => {
-    questions.value = state.questions || [];
-    answers.value = state.answers || [];
+
+  const handleAddQuestion = (eventObj) => {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const eventKey = `add-question-${id}-${timestamp}`;
+    if (!processedEvents.has(eventKey)) {
+      processedEvents.add(eventKey);
+      if (!questions.value.some(q => q.id === id)) {
+        questions.value.push({ id, userUuid: eventUserUuid, data });
+        questions.value = [...questions.value];
+      }
+      setTimeout(() => processedEvents.delete(eventKey), 1000);
+    }
   };
 
-const handleAddQuestion = (data) => {
-  // console.log("Handle question add", data)
-  const question = { id: data.id, text: data.text, order: data.order, answers: data.answers || [] };
-  if (!questions.value.some(q => q.id === question.id)) {
-    questions.value.push(question);
-  }
-};
-
-  const handleUpdateQuestion = ({ id, text }) => {
+  const handleUpdateQuestion = (eventObj) => {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
     const question = questions.value.find(q => q.id === id);
-    if (question) question.text = text;
+    if (question) {
+      question.data.text = data.text;
+      questions.value = [...questions.value];
+    }
   };
 
-  const handleDeleteQuestion = ({ id }) => {
+  const handleDeleteQuestion = (eventObj) => {
+    const { id, timestamp } = eventObj;
     questions.value = questions.value.filter(q => q.id !== id);
+    answers.value = answers.value.filter(a => a.data.questionId !== id); // Clean up answers
+    questions.value = [...questions.value];
   };
 
-  const handleReorderQuestions = ({ order }) => {
-    questions.value = order.map((id, index) => {
-      const question = questions.value.find(q => q.id === id);
-      return { ...question, order: index };
-    }).sort((a, b) => a.order - b.order);
+  const handleReorderQuestions = (eventObj) => {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    questions.value = data.order.map((qId, index) => {
+      const question = questions.value.find(q => q.id === qId);
+      return { ...question, data: { ...question.data, order: index } };
+    });
+    questions.value = [...questions.value];
   };
 
-  const handleAddAnswer = ({ id, questionId, text }) => {
-    if (!answers.value.some(a => a.id === id)) {
-      answers.value.push({ id, questionId, text, votes: 0 });
+  const handleAddAnswer = (eventObj) => {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const eventKey = `add-answer-${id}-${timestamp}`;
+    if (!processedEvents.has(eventKey)) {
+      processedEvents.add(eventKey);
+      if (!answers.value.some(a => a.id === id)) {
+        answers.value.push({ id, userUuid: eventUserUuid, data });
+        answers.value = [...answers.value];
+      }
+      setTimeout(() => processedEvents.delete(eventKey), 1000);
     }
-    const question = questions.value.find(q => q.id === questionId);
-    if (question && !question.answers.includes(id)) {
-      question.answers.push(id);
-    }
   };
 
-  const handleUpdateAnswer = ({ id, questionId, text }) => {
+  const handleUpdateAnswer = (eventObj) => {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
     const answer = answers.value.find(a => a.id === id);
-    if (answer) answer.text = text;
-  };
-
-  const handleDeleteAnswer = ({ id, questionId }) => {
-    answers.value = answers.value.filter(a => a.id !== id);
-    const question = questions.value.find(q => q.id === questionId);
-    if (question) question.answers = question.answers.filter(aId => aId !== id);
-  };
-
-  const handleVoteAnswer = ({ questionId, answerId, vote, votes }) => {
-    // console.log('Vote received:', { questionId, answerId, vote, votes });
-    const answer = answers.value.find(a => a.id === answerId);
-    if (votes !== undefined) {
-      // Server broadcast
-      if (answer) {
-        // console.log('Updating votes for', answerId, 'to', votes);
-        answer.votes = votes;
-      } else {
-        console.warn(`Vote received for unknown answer ${answerId} in question ${questionId}`);
-      }
-    } else {
-      // Local vote
-      if (answer) {
-        // console.log('Local vote for', answerId, 'with', vote);
-        answer.votes = (answer.votes || 0) + (vote === 'up' ? 1 : -1);
-        emit('vote-answer', { questionId, id: answerId, vote });
-      } else {
-        console.warn(`Local vote failed: Answer ${answerId} not found`);
-      }
+    if (answer) {
+      answer.data.text = data.text;
+      answers.value = [...answers.value];
     }
   };
 
-  // Register listeners
-  on('sync-history-data', handleSyncHistoryData);
+  const handleDeleteAnswer = (eventObj) => {
+    const { id, timestamp } = eventObj;
+    answers.value = answers.value.filter(a => a.id !== id);
+    answers.value = [...answers.value];
+  };
+
+  const handleVoteAnswer = (eventObj) => {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const answer = answers.value.find(a => a.id === id);
+    if (answer) {
+      if (data.votes !== undefined) {
+        answer.data.votes = data.votes;
+      } else if (data.vote) {
+        answer.data.votes = (answer.data.votes || 0) + (data.vote === 'up' ? 1 : -1);
+      }
+      answers.value = [...answers.value];
+    }
+  };
+
   on('add-question', handleAddQuestion);
   on('update-question', handleUpdateQuestion);
   on('remove-question', handleDeleteQuestion);
@@ -91,35 +97,42 @@ const handleAddQuestion = (data) => {
   on('delete-answer', handleDeleteAnswer);
   on('vote-answer', handleVoteAnswer);
 
-  // Computed property to merge questions with their answers, sorted by votes
   const questionsWithAnswers = Vue.computed(() => {
-    const result = questions.value.map(question => ({
-      ...question,
-      answers: (question.answers || []).map(answerId => answers.value.find(a => a.id === answerId)).filter(Boolean).sort((a, b) => (b.votes || 0) - (a.votes || 0)),
-    })).sort((a, b) => a.order - b.order);
-    // console.log('Computed questionsWithAnswers:', result);
-    return result;
+    return questions.value.map(question => ({
+      id: question.id,
+      userUuid: question.userUuid,
+      data: {
+        ...question.data,
+        answers: answers.value
+          .filter(a => a.data.questionId === question.id)
+          .sort((a, b) => (b.data.votes || 0) - (a.data.votes || 0)),
+      },
+    })).sort((a, b) => a.data.order - b.data.order);
   });
 
-  // Actions
   const addQuestion = (text) => {
     const id = uuidv4();
-    const question = { id, text, order: questions.value.length, answers: [] };
-    questions.value.push(question);
-    emit('add-question', { question });
+    const data = { text, order: questions.value.length };
+    const payload = { id, userUuid: userUuid.value, data, timestamp: Date.now() };
+    questions.value.push(payload);
+    questions.value = [...questions.value];
+    emit('add-question', payload);
   };
 
   const updateQuestion = (id, text) => {
     const question = questions.value.find(q => q.id === id);
     if (question) {
-      question.text = text;
-      emit('update-question', { id, text });
+      question.data.text = text;
+      questions.value = [...questions.value];
+      emit('update-question', { id, userUuid: userUuid.value, data: { text }, timestamp: Date.now() });
     }
   };
 
   const deleteQuestion = (id) => {
     questions.value = questions.value.filter(q => q.id !== id);
-    emit('remove-question', { id });
+    answers.value = answers.value.filter(a => a.data.questionId !== id);
+    questions.value = [...questions.value];
+    emit('remove-question', { id, userUuid: userUuid.value, data: null, timestamp: Date.now() });
   };
 
   const reorderQuestions = (draggedId, newIndex) => {
@@ -127,45 +140,56 @@ const handleAddQuestion = (data) => {
     const newOrder = [...questions.value];
     const [moved] = newOrder.splice(currentIndex, 1);
     newOrder.splice(newIndex, 0, moved);
-    newOrder.forEach((q, i) => q.order = i);
+    newOrder.forEach((q, i) => q.data.order = i);
     questions.value = newOrder;
-    emit('reorder-questions', { order: newOrder.map(q => q.id) });
+    questions.value = [...questions.value];
+    emit('reorder-questions', { id: uuidv4(), userUuid: userUuid.value, data: { order: newOrder.map(q => q.id) }, timestamp: Date.now() });
   };
 
   const addAnswer = (questionId) => {
     const id = uuidv4();
-    answers.value.push({ id, questionId, text: '', votes: 0 });
-    const question = questions.value.find(q => q.id === questionId);
-    if (question) {
-      question.answers.push(id);
-      emit('add-answer', { id, questionId, text: '' });
-    }
+    const data = { questionId, text: '', votes: 0 };
+    const payload = { id, userUuid: userUuid.value, data, timestamp: Date.now() };
+    answers.value.push(payload);
+    answers.value = [...answers.value];
+    emit('add-answer', payload);
     return id;
   };
 
   const updateAnswer = (id, questionId, text) => {
     const answer = answers.value.find(a => a.id === id);
     if (answer) {
-      answer.text = text;
-      emit('update-answer', { id, questionId, text });
+      answer.data.text = text;
+      answers.value = [...answers.value];
+      emit('update-answer', { id, userUuid: userUuid.value, data: { questionId, text }, timestamp: Date.now() });
     }
   };
 
   const deleteAnswer = (id, questionId) => {
     answers.value = answers.value.filter(a => a.id !== id);
-    const question = questions.value.find(q => q.id === questionId);
-    if (question) {
-      question.answers = question.answers.filter(aId => aId !== id);
-      emit('delete-answer', { id, questionId });
-    }
+    answers.value = [...answers.value];
+    emit('delete-answer', { id, userUuid: userUuid.value, data: { questionId }, timestamp: Date.now() });
   };
 
   const voteAnswer = (questionId, id, vote) => {
-    handleVoteAnswer({ questionId, answerId: id, vote });
+    const answer = answers.value.find(a => a.id === id);
+    if (answer) {
+      answer.data.votes = (answer.data.votes || 0) + (vote === 'up' ? 1 : -1);
+      answers.value = [...answers.value];
+      emit('vote-answer', { 
+        id, 
+        userUuid: userUuid.value, 
+        data: { questionId, vote, votes: answer.data.votes }, 
+        timestamp: Date.now() 
+      });
+    }
+  };
+  
+  const addQuestionProgrammatically = (text) => {
+    addQuestion(text);
   };
 
   const cleanup = () => {
-    off('sync-history-data', handleSyncHistoryData);
     off('add-question', handleAddQuestion);
     off('update-question', handleUpdateQuestion);
     off('remove-question', handleDeleteQuestion);
@@ -174,10 +198,12 @@ const handleAddQuestion = (data) => {
     off('update-answer', handleUpdateAnswer);
     off('delete-answer', handleDeleteAnswer);
     off('vote-answer', handleVoteAnswer);
+    processedEvents.clear();
   };
 
   return {
     questions,
+    answers,
     questionsWithAnswers,
     rawQuestions: questions,
     rawAnswers: answers,
@@ -189,6 +215,7 @@ const handleAddQuestion = (data) => {
     updateAnswer,
     deleteAnswer,
     voteAnswer,
+    addQuestionProgrammatically,
     cleanup,
   };
 }

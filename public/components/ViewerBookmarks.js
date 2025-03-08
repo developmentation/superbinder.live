@@ -1,10 +1,11 @@
+// components/ViewerBookmarks.js
 import { useClips } from '../composables/useClips.js';
 import { useDocuments } from '../composables/useDocuments.js';
 
 export default {
   name: 'ViewerBookmarks',
   props: {
-    updateTab: { // Add prop to receive updateTab from Viewer.vue
+    updateTab: {
       type: Function,
       default: null,
     },
@@ -26,7 +27,7 @@ export default {
             @click="navigateToBookmark(bookmark)"
           >
             <div class="flex justify-between items-center">
-              <span class="text-gray-300">{{ bookmark.name }}</span>
+              <span class="text-gray-300">{{ bookmark.data.name }}</span>
               <button
                 @click.stop="removeBookmark(bookmark.id)"
                 class="text-red-400 hover:text-red-300"
@@ -35,7 +36,7 @@ export default {
               </button>
             </div>
             <div class="text-gray-400 text-sm mt-1">
-              {{ bookmark.type === 'pdf-page' ? 'Page ' + (bookmark.pageIndex + 1) : 'Text Selection' }}
+              {{ bookmark.data.type === 'pdf-page' ? 'Page ' + (bookmark.data.pageIndex + 1) : 'Text Selection' }}
             </div>
           </div>
         </div>
@@ -47,40 +48,29 @@ export default {
     const { documents, setSelectedDocument } = useDocuments();
 
     const sortedBookmarks = Vue.computed(() => {
-      return [...bookmarks.value].sort((a, b) => b.timestamp - a.timestamp); // Newest first
+      return [...bookmarks.value].sort((a, b) => b.timestamp - a.timestamp);
     });
 
     function navigateToBookmark(bookmark) {
-      const doc = documents.value.find(d => d.id === bookmark.documentId);
+      const doc = documents.value.find(d => d.id === bookmark.data.documentId);
       if (doc) {
-        // Set the selected document
         setSelectedDocument(doc);
-
-        // Navigate to the Documents tab with Viewer sub-tab
         if (props.updateTab) {
           props.updateTab('Documents', 'Viewer', { documents: documents.value, bookmarks: bookmarks.value });
         }
-
-        // Scroll to the bookmark location after rendering
         Vue.nextTick(() => {
           const contentEl = document.querySelector('.pdf-viewer') || document.querySelector('pre');
           if (contentEl) {
-            if (bookmark.type === 'pdf-page') {
-              const pageEl = contentEl.querySelectorAll('.pdf-page')[bookmark.pageIndex];
+            if (bookmark.data.type === 'pdf-page') {
+              const pageEl = contentEl.querySelectorAll('.pdf-page')[bookmark.data.pageIndex];
               if (pageEl) {
                 pageEl.scrollIntoView({ behavior: 'smooth' });
-              } else {
-                console.warn(`Page ${bookmark.pageIndex} not found in document ${doc.id}`);
               }
-            } else if (bookmark.type === 'text') {
-              contentEl.scrollTop = bookmark.offset / doc.processedContent.length * contentEl.scrollHeight;
+            } else if (bookmark.data.type === 'text') {
+              contentEl.scrollTop = bookmark.data.offset / doc.data.processedContent.length * contentEl.scrollHeight;
             }
-          } else {
-            console.warn('Document content element not found');
           }
         });
-      } else {
-        console.warn(`Document with ID ${bookmark.documentId} not found`);
       }
     }
 

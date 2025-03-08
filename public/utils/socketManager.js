@@ -1,10 +1,10 @@
-// utils/socketManager.js
 import { useConfigs } from '../composables/useConfigs.js';
 
 const { env } = useConfigs();
 
 let socket = null;
 const activeUsers = {};
+
 let heartbeatInterval = null;
 
 function initializeSocket(channelName, userUuid, displayName, onMessage, onStatusChange, joinData = {}) {
@@ -12,7 +12,6 @@ function initializeSocket(channelName, userUuid, displayName, onMessage, onStatu
     if (socket.connected) {
       console.log('Socket already connected, reusing existing connection');
       onStatusChange('connected', null);
-      // Emit join-channel with the provided joinData if already connected
       if (channelName && displayName) {
         socket.emit('join-channel', { userUuid, displayName, channelName, ...joinData });
       }
@@ -40,7 +39,7 @@ function initializeSocket(channelName, userUuid, displayName, onMessage, onStatu
     console.log(`Connected to server with UUID: ${userUuid}, Socket ID: ${socket.id}`);
     onStatusChange('connected', null);
     if (channelName && displayName) {
-      socket.emit('join-channel', { userUuid, displayName, channelName, ...joinData });
+      socket.emit('join-channel', { userUuid, displayName, channelName });
     }
     startHeartbeat(channelName, userUuid);
   });
@@ -60,7 +59,7 @@ function initializeSocket(channelName, userUuid, displayName, onMessage, onStatu
     if (data.type === 'error') {
       console.error('Received error from server:', data);
       if (data.message === 'Invalid message format' || data.message === 'Invalid channel or user') {
-        reconnect(channelName, userUuid, displayName, onMessage, onStatusChange, joinData);
+        reconnect(channelName, userUuid, displayName, onMessage, onStatusChange);
       }
     }
     onMessage(data);

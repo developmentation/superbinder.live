@@ -1,5 +1,6 @@
+// components/ChatPanel.js
 import { useChat } from '../composables/useChat.js';
-import { useRealTime } from '../composables/useRealTime.js'; // Import useRealTime
+import { useRealTime } from '../composables/useRealTime.js';
 
 export default {
   name: 'ChatPanel',
@@ -26,14 +27,14 @@ export default {
           <div
             v-for="msg in allMessages"
             :key="msg.id"
-            :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg.color ? msg.color + '33' : '#80808033') }" 
+            :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg?.data?.color ? msg.data.color + '33' : '#80808033') }" 
             class="p-2 mb-2 rounded-lg flex flex-col relative"
           >
             <button
               v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid" 
               @click.stop="deleteChat(msg.id)"
               @touchend.stop.prevent="deleteChat(msg.id)"
-              class="absolute top-1 right-1 text-red-400 hover:text-red-300  rounded-full bg-gray-800"
+              class="absolute top-1 right-1 text-red-400 hover:text-red-300 rounded-full bg-gray-800"
               style="width: 24px; height: 24px; line-height: 24px; font-size: 16px;"
             >
               <i class="pi pi-times"></i>
@@ -41,7 +42,7 @@ export default {
             <span class="font-semibold text-white">
               {{ getDisplayName(msg) }}:
             </span>
-            <span class="text-white">{{ msg.text }}</span>
+            <span class="text-white">{{ msg.data.text }}</span>
             <span class="text-gray-400 text-xs">{{ formatTime(msg.timestamp) }}</span>
           </div>
           <div v-if="!allMessages.length" class="text-gray-400">No messages yet.</div>
@@ -80,7 +81,7 @@ export default {
           <div
             v-for="msg in allMessages"
             :key="msg.id"
-            :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg.color ? msg.color + '33' : '#80808033') }"  
+            :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg?.data?.color ? msg.data.color + '33' : '#80808033') }"  
             class="p-2 mb-2 rounded-lg flex flex-col relative"
           >
             <button
@@ -95,7 +96,7 @@ export default {
             <span class="font-semibold text-white">
               {{ getDisplayName(msg) }}:
             </span>
-            <span class="text-white">{{ msg.text }}</span>
+            <span class="text-white">{{ msg.data.text }}</span>
             <span class="text-gray-400 text-xs">{{ formatTime(msg.timestamp) }}</span>
           </div>
           <div v-if="!allMessages.length" class="text-gray-400">No messages yet.</div>
@@ -120,23 +121,14 @@ export default {
     </div>
   `,
   props: {
-    isOpen: {
-      type: Boolean,
-      required: true,
-    },
-    isMobile: {
-      type: Boolean,
-      required: true,
-    },
-    width: {
-      type: Number,
-      default: 300,
-    },
+    isOpen: { type: Boolean, required: true },
+    isMobile: { type: Boolean, required: true },
+    width: { type: Number, default: 300 },
   },
   emits: ['close', 'update:width'],
   setup(props, { emit }) {
     const { messages, draftMessages, sendMessage, updateDraft, deleteChat, activeUsers } = useChat();
-    const { userUuid: currentUserUuid } = useRealTime(); // Destructure userUuid from useRealTime
+    const { userUuid: currentUserUuid } = useRealTime();
     const draft = Vue.ref('');
     const chatContainer = Vue.ref(null);
     const isAutoScrollEnabled = Vue.ref(true);
@@ -147,14 +139,13 @@ export default {
     ].sort((a, b) => a.timestamp - b.timestamp));
 
     function getDisplayName(msg) {
-      const baseName = activeUsers.value[msg.userUuid]?.displayName || (msg.userUuid.startsWith('agent-') ? 'AI Agent' : 'Unknown');
+      const user = activeUsers.value.find(user => user.userUuid === msg.userUuid);
+      const baseName = user?.displayName || (msg.userUuid.startsWith('agent-') ? 'AI Agent' : 'Unknown');
       return msg.isDraft && msg.displayNameSuffix ? `${baseName} ${msg.displayNameSuffix}` : baseName;
     }
 
     function formatTime(timestamp) {
-      if (!timestamp || isNaN(new Date(timestamp).getTime())) {
-        return 'Invalid Date';
-      }
+      if (!timestamp || isNaN(new Date(timestamp).getTime())) return 'Invalid Date';
       return new Date(timestamp).toLocaleTimeString();
     }
 
@@ -237,7 +228,7 @@ export default {
       handleScroll,
       closeChat,
       startResize,
-      currentUserUuid, // Expose currentUserUuid for the template
+      currentUserUuid,
     };
   },
 };

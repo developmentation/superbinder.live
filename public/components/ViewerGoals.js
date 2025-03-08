@@ -1,12 +1,11 @@
 // components/ViewerGoals.js
 import { useGoals } from '../composables/useGoals.js';
-
+// components/ViewerGoals.js
 export default {
   name: 'ViewerGoals',
   template: `
     <div class="h-full overflow-y-auto p-4">
       <div class="flex flex-col h-full">
-        <!-- Input Bar (Fixed at Top) -->
         <div class="flex gap-2 mb-4 flex-shrink-0">
           <input
             v-model="newGoal"
@@ -16,9 +15,7 @@ export default {
           />
           <button @click.prevent="debounceAddGoal" class="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg">Add</button>
         </div>
-        <!-- Goals List (Scrollable) -->
         <div class="flex-1 overflow-y-auto space-y-2 relative" ref="goalsContainer">
-          <!-- Reorder Indicator Line -->
           <div
             v-if="dragIndicator"
             :style="{ top: dragIndicator.y + 'px', left: '8px', width: 'calc(100% - 16px)', height: '2px', backgroundColor: '#3B82F6', position: 'absolute', zIndex: 10 }"
@@ -43,7 +40,7 @@ export default {
               @mousedown.stop="preventDefaultIfDragging"
               @touchstart.passive.stop="preventDefaultIfDragging"
             >
-              {{ goal.text }}
+              {{ goal.data.text }}
             </div>
             <button @click.stop="removeGoal(goal.id)" class="text-red-400 hover:text-red-300 ml-2">
               <i class="pi pi-times"></i>
@@ -65,16 +62,14 @@ export default {
     let debounceTimer = null;
 
     function debounceAddGoal() {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
+      if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         if (newGoal.value && newGoal.value.trim()) {
           addGoal(newGoal.value.trim());
           newGoal.value = '';
         }
         debounceTimer = null;
-      }, 300); // 300ms debounce to prevent multiple rapid triggers
+      }, 300);
     }
 
     function handleGoalInput(id, event) {
@@ -82,7 +77,6 @@ export default {
       if (newText) {
         updateGoal(id, newText);
       } else {
-        // If text is empty, remove the goal
         removeGoal(id);
       }
     }
@@ -136,15 +130,26 @@ export default {
     }
 
     function preventDefaultIfDragging(event) {
-      if (isDragging.value) {
-        event.preventDefault();
-      }
+      if (isDragging.value) event.preventDefault();
     }
 
     Vue.onUnmounted(() => {
       cleanup();
     });
 
-    return { goals, newGoal, editingGoal, debounceAddGoal, handleGoalInput, removeGoal, startDrag, isDragging, draggedIndex, goalsContainer, dragIndicator, preventDefaultIfDragging };
+    return {
+      goals,
+      newGoal,
+      editingGoal,
+      debounceAddGoal,
+      handleGoalInput,
+      removeGoal,
+      startDrag,
+      isDragging,
+      draggedIndex,
+      goalsContainer,
+      dragIndicator,
+      preventDefaultIfDragging,
+    };
   },
 };

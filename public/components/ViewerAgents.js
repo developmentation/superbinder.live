@@ -11,7 +11,6 @@ export default {
     <div class="h-full flex flex-col overflow-hidden p-4">
       <!-- Filter and Add Agent Buttons -->
       <div class="mb-4 flex gap-2">
-<!--        <button @click="clearFilter" class="py-2 px-4 bg-gray-600 hover:bg-gray-500 text-white rounded-lg">Clear</button> -->
         <input
           v-model="filterQuery"
           @input="filterAgents"
@@ -31,8 +30,8 @@ export default {
             class="p-4 bg-gray-700 rounded-lg flex flex-col items-center cursor-pointer hover:bg-gray-600 transition-colors"
             @click="openEditModal(agent)"
           >
-            <img :src="agent.imageUrl || defaultImage" :alt="agent.name" class="w-16 h-16 rounded-full mb-2 object-cover" />
-            <h3 class="text-purple-400 font-semibold">{{ agent.name }}</h3>
+            <img :src="agent.data.imageUrl || defaultImage" :alt="agent.data.name" class="w-16 h-16 rounded-full mb-2 object-cover" />
+            <h3 class="text-purple-400 font-semibold">{{ agent.data.name }}</h3>
             <div class="flex gap-2 mt-2">
               <button @click.stop="openEditModal(agent)" class="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
                 Edit
@@ -99,17 +98,17 @@ export default {
                       </template>
                       <template v-else-if="prompt.type === 'goal'">
                         <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
-                          <option v-for="goal in goals" :key="goal.id" :value="goal.id">{{ goal.text.substring(0, 100) }}...</option>
+                          <option v-for="goal in goals" :key="goal.id" :value="goal.id">{{ goal.data.text.substring(0, 100) }}...</option>
                         </select>
                       </template>
                       <template v-else-if="prompt.type === 'document'">
                         <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
-                          <option v-for="doc in documents" :key="doc.id" :value="doc.id">{{ doc.name }}</option>
+                          <option v-for="doc in documents" :key="doc.id" :value="doc.id">{{ doc.data.name }}</option>
                         </select>
                       </template>
                       <template v-else-if="prompt.type === 'clip'">
                         <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
-                          <option v-for="clip in clips" :key="clip.id" :value="clip.id">{{ clip.text.substring(0, 100) }}...</option>
+                          <option v-for="clip in clips" :key="clip.id" :value="clip.id">{{ clip.data.text.substring(0, 100) }}...</option>
                         </select>
                       </template>
                     </td>
@@ -153,17 +152,17 @@ export default {
                       </template>
                       <template v-else-if="prompt.type === 'goal'">
                         <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
-                          <option v-for="goal in goals" :key="goal.id" :value="goal.id">{{ goal.text.substring(0, 100) }}...</option>
+                          <option v-for="goal in goals" :key="goal.id" :value="goal.id">{{ goal.data.text.substring(0, 100) }}...</option>
                         </select>
                       </template>
                       <template v-else-if="prompt.type === 'document'">
                         <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
-                          <option v-for="doc in documents" :key="doc.id" :value="doc.id">{{ doc.name }}</option>
+                          <option v-for="doc in documents" :key="doc.id" :value="doc.id">{{ doc.data.name }}</option>
                         </select>
                       </template>
                       <template v-else-if="prompt.type === 'clip'">
                         <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
-                          <option v-for="clip in clips" :key="clip.id" :value="clip.id">{{ clip.text.substring(0, 100) }}...</option>
+                          <option v-for="clip in clips" :key="clip.id" :value="clip.id">{{ clip.data.text.substring(0, 100) }}...</option>
                         </select>
                       </template>
                     </td>
@@ -214,7 +213,7 @@ export default {
     const isModalOpen = Vue.ref(false);
     const isPromptModalOpen = Vue.ref(false);
     const editingAgent = Vue.ref(null);
-    const agentId = Vue.ref(''); // Changed from agentUuid to agentId
+    const agentId = Vue.ref('');
     const agentName = Vue.ref('');
     const agentDescription = Vue.ref('');
     const agentImageUrl = Vue.ref('');
@@ -230,9 +229,9 @@ export default {
       if (!filterQuery.value) return agents.value;
       const query = filterQuery.value.toLowerCase();
       return agents.value.filter(agent =>
-        agent.name.toLowerCase().includes(query) ||
-        agent.description.toLowerCase().includes(query) ||
-        agent.createdBy.toLowerCase().includes(query)
+        agent.data.name.toLowerCase().includes(query) ||
+        agent.data.description.toLowerCase().includes(query) ||
+        agent.data.createdBy.toLowerCase().includes(query)
       );
     });
 
@@ -248,22 +247,18 @@ export default {
       // Handled by filteredAgents computed property
     }
 
-    function clearFilter() {
-      filterQuery.value = '';
-    }
-
     function openEditModal(agent = null) {
       if (agent) {
         editingAgent.value = agent;
-        agentId.value = agent.id; // Changed from uuid to id
-        agentName.value = agent.name;
-        agentDescription.value = agent.description;
-        agentImageUrl.value = agent.imageUrl;
-        systemPrompts.value = [...agent.systemPrompts];
-        userPrompts.value = [...agent.userPrompts];
+        agentId.value = agent.id;
+        agentName.value = agent.data.name;
+        agentDescription.value = agent.data.description;
+        agentImageUrl.value = agent.data.imageUrl;
+        systemPrompts.value = [...agent.data.systemPrompts];
+        userPrompts.value = [...agent.data.userPrompts];
       } else {
         editingAgent.value = null;
-        agentId.value = uuidv4(); // Still using uuidv4() for unique IDs
+        agentId.value = uuidv4();
         agentName.value = '';
         agentDescription.value = '';
         agentImageUrl.value = '';
@@ -327,7 +322,7 @@ export default {
       closeModal();
     }
 
-    function confirmDelete(id) { // Changed from uuid to id
+    function confirmDelete(id) {
       if (confirm('Are you sure you want to delete this agent?')) {
         removeAgent(id);
       }
@@ -347,7 +342,7 @@ export default {
       isModalOpen,
       isPromptModalOpen,
       editingAgent,
-      agentId, // Changed from agentUuid to agentId
+      agentId,
       agentName,
       agentDescription,
       agentImageUrl,
@@ -359,7 +354,6 @@ export default {
       promptContent,
       defaultImage,
       filterAgents,
-      clearFilter,
       openEditModal,
       closeModal,
       addPrompt,

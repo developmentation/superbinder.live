@@ -25,7 +25,7 @@ export default {
               class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded transition-colors cursor-pointer"
               @click="navigateToTab('Dashboard')"
             >
-              <span :style="{ color: user.color }" class="w-3 h-3 rounded-full inline-block"></span>
+              <span :style="{ color: user?.color }" class="w-3 h-3 rounded-full inline-block"></span>
               {{ user.displayName }}
             </li>
             <li v-if="userCount === 0" class="text-gray-400">No users currently in the room.</li>
@@ -164,9 +164,7 @@ export default {
     const history = Vue.ref(gatherLocalHistory());
     const userCount = Vue.computed(() => Object.keys(activeUsers.value).length);
     const answerCount = Vue.computed(() => {
-      return (history.value.questions || []).reduce((total, question) => {
-        return total + (question.answers ? question.answers.length : 0);
-      }, 0);
+      return history.value.answers.length
     });
 
     Vue.watch(

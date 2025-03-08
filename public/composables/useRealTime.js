@@ -1,3 +1,4 @@
+// composables/useRealTime.js
 import eventBus from './eventBus.js';
 import { socketManager } from '../utils/socketManager.js';
 
@@ -6,11 +7,10 @@ const displayName = Vue.ref(sessionStorage.getItem('displayName') || '');
 const channelName = Vue.ref(sessionStorage.getItem('channelName') || '');
 const isConnected = Vue.ref(false);
 const connectionStatus = Vue.ref('disconnected');
-const activeUsers = Vue.ref(socketManager.activeUsers);
+const activeUsers = Vue.ref([]); // Initialized as an array
 const connectionError = Vue.ref(null);
 const lastMessageTimestamp = Vue.ref(0);
-
-const userColor = Vue.ref(sessionStorage.getItem(`userColor_${channelName.value}_${userUuid.value}`) || '');
+const userColor = Vue.ref(sessionStorage.getItem('userColor') || '#808080'); // Default to grey if not set
 
 const TIMESTAMP_TOLERANCE = 5000;
 
@@ -25,153 +25,78 @@ const sessionInfo = Vue.computed(() => ({
 export function useRealTime() {
   function handleMessage(data) {
     if (typeof data !== 'object' || !data.type) {
-      console.error('Invalid message format: Missing type or not an object', data);
+      console.error('Invalid message format:', data);
       return;
     }
 
-    const processedData = {
-      ...data,
-      timestamp: data.serverTimestamp || data.timestamp || Date.now(),
-    };
-
-    if (['user-list', 'user-joined'].includes(processedData.type)) {
-      console.log(`Processing critical update: ${processedData.type}`);
-    } else {
-      const timeDiff = processedData.timestamp - lastMessageTimestamp.value;
-      if (processedData.timestamp < lastMessageTimestamp.value - TIMESTAMP_TOLERANCE) {
-        console.warn('Ignoring outdated message (beyond tolerance):', processedData, `Time difference: ${timeDiff}ms`);
-        return;
+    let processedData;
+    if (data.type === 'user-joined') {
+      processedData = {
+        type: data.type,
+        userUuid: data.userUuid,
+        displayName: data.displayName,
+        color: data.color,
+        joinedAt: data.joinedAt || data.timestamp || Date.now(),
+        timestamp: data.timestamp || Date.now(),
+      };
+      if (processedData.userUuid === userUuid.value) {
+        userColor.value = processedData.color;
+        sessionStorage.setItem('userColor', userColor.value);
+        console.log('User color set from server:', userColor.value);
       }
+    } else if (data.type === 'user-list') {
+      processedData = {
+        type: data.type,
+        users: Array.isArray(data.users) ? data.users : [],
+        timestamp: data.timestamp || Date.now(),
+      };
+    } else if (data.type === 'user-left') {
+      processedData = {
+        type: data.type,
+        userUuid: data.userUuid,
+        timestamp: data.timestamp || Date.now(),
+      };
+    } else {
+      processedData = {
+        type: data.type,
+        id: data.id,
+        userUuid: data.userUuid,
+        data: data.data,
+        timestamp: data.timestamp || Date.now(),
+        serverTimestamp: data.serverTimestamp,
+      };
+    }
+
+    const timeDiff = processedData.timestamp - lastMessageTimestamp.value;
+    if (processedData.timestamp < lastMessageTimestamp.value - TIMESTAMP_TOLERANCE) {
+      console.warn('Ignoring outdated message:', processedData, `Time difference: ${timeDiff}ms`);
+      return;
     }
     lastMessageTimestamp.value = Math.max(lastMessageTimestamp.value, processedData.timestamp);
 
     switch (processedData.type) {
       case 'init-state':
-        console.log('Received initial state:', processedData.state);
-        eventBus.$emit('sync-history-data', processedData.state);
+        eventBus.$emit('sync-history-data', processedData);
         break;
       case 'user-list':
-        activeUsers.value = processedData.users || {};
-        if (!activeUsers.value[userUuid.value] && userUuid.value) {
-          activeUsers.value = {
-            ...activeUsers.value,
-            [userUuid.value]: {
-              displayName: displayName.value,
-              color: userColor.value || '#808080',
-              joinedAt: Date.now(),
-            },
-          };
-        }
-        eventBus.$emit('user-list', activeUsers.value);
+        activeUsers.value = processedData.users;
+        eventBus.$emit('user-list', processedData);
         break;
       case 'user-joined':
-        activeUsers.value = {
-          ...activeUsers.value,
-          [processedData.userUuid]: {
-            displayName: processedData.displayName,
-            color: processedData.color || (processedData.userUuid === userUuid.value ? userColor.value : '#808080'),
-            joinedAt: processedData.timestamp || Date.now(),
-          },
-        };
+        if (!activeUsers.value.some((user) => user.userUuid === processedData.userUuid)) {
+          activeUsers.value.push(processedData);
+        }
         eventBus.$emit('user-joined', processedData);
         break;
-      case 'add-chat':
-        eventBus.$emit('add-chat', processedData);
-        break;
-      case 'draft-chat':
-        eventBus.$emit('draft-chat', processedData);
-        break;
-      case 'update-chat':
-        eventBus.$emit('update-chat', processedData);
-        break;
-      case 'delete-chat':
-        eventBus.$emit('delete-chat', processedData);
-        break;
-      case 'add-goal':
-        eventBus.$emit('add-goal', processedData);
-        break;
-      case 'update-goal':
-        eventBus.$emit('update-goal', processedData);
-        break;
-      case 'remove-goal':
-        eventBus.$emit('remove-goal', processedData);
-        break;
-      case 'reorder-goals':
-        eventBus.$emit('reorder-goals', processedData);
-        break;
-      case 'add-agent':
-        eventBus.$emit('add-agent', processedData);
-        break;
-      case 'update-agent':
-        eventBus.$emit('update-agent', processedData);
-        break;
-      case 'remove-agent':
-        eventBus.$emit('remove-agent', processedData);
-        break;
-      case 'chat-message':
-        eventBus.$emit('chat-message', processedData);
-        break;
-      case 'add-clip':
-        eventBus.$emit('add-clip', processedData);
-        break;
-      case 'remove-clip':
-        eventBus.$emit('remove-clip', processedData);
-        break;
-      case 'add-document':
-        eventBus.$emit('add-document', processedData);
-        break;
-      case 'remove-document':
-        eventBus.$emit('remove-document', processedData);
-        break;
-      case 'rename-document':
-        eventBus.$emit('rename-document', processedData);
-        break;
-      case 'add-question':
-        eventBus.$emit('add-question', processedData);
-        break;
-      case 'update-question':
-        eventBus.$emit('update-question', processedData);
-        break;
-      case 'remove-question':
-        eventBus.$emit('remove-question', processedData);
-        break;
-      case 'reorder-questions':
-        eventBus.$emit('reorder-questions', processedData);
-        break;
-      case 'add-answer':
-        eventBus.$emit('add-answer', processedData);
-        break;
-      case 'update-answer':
-        eventBus.$emit('update-answer', processedData);
-        break;
-      case 'delete-answer':
-        eventBus.$emit('delete-answer', processedData);
-        break;
-      case 'vote-answer':
-          eventBus.$emit('vote-answer', processedData);
-        break;
-      case 'add-artifact':
-        eventBus.$emit('add-artifact', processedData);
-        break;
-      case 'remove-artifact':
-        eventBus.$emit('remove-artifact', processedData);
-        break;
-      case 'add-transcript':
-        eventBus.$emit('add-transcript', processedData);
-        break;
-      case 'remove-transcript':
-        eventBus.$emit('remove-transcript', processedData);
-        break;
-      case 'room-lock-toggle':
-      case 'pong':
-      case 'error':
-        eventBus.$emit(processedData.type, processedData);
-        break;
-      case 'ping':
-        eventBus.$emit('ping', processedData);
+      case 'user-left':
+        const userIndex = activeUsers.value.findIndex((user) => user.userUuid === processedData.userUuid);
+        if (userIndex !== -1) {
+          activeUsers.value.splice(userIndex, 1);
+        }
+        eventBus.$emit('user-left', processedData);
         break;
       default:
-        console.warn('Unhandled message type:', processedData.type);
+        eventBus.$emit(processedData.type, processedData);
     }
   }
 
@@ -182,14 +107,11 @@ export function useRealTime() {
     if (error) console.error('Connection status changed:', error);
   }
 
-  function generateMutedDarkColor() {
-    const r = Math.floor(Math.random() * 129);
-    const g = Math.floor(Math.random() * 129);
-    const b = Math.floor(Math.random() * 129);
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-  }
-
   function connect(channel, name) {
+    if (isConnected.value) {
+      console.log('Already connected, skipping join');
+      return;
+    }
     userUuid.value = sessionStorage.getItem('userUuid') || uuidv4();
     sessionStorage.setItem('userUuid', userUuid.value);
     displayName.value = name;
@@ -197,60 +119,81 @@ export function useRealTime() {
     sessionStorage.setItem('displayName', name);
     sessionStorage.setItem('channelName', channel);
 
-    const storedColor = sessionStorage.getItem(`userColor_${channel}_${userUuid.value}`);
-    if (!storedColor) {
-      userColor.value = generateMutedDarkColor();
-      sessionStorage.setItem(`userColor_${channel}_${userUuid.value}`, userColor.value);
-    } else {
-      userColor.value = storedColor;
-    }
-
-    console.log('Emitting join-channel with:', {
-      userUuid: userUuid.value,
-      displayName: displayName.value,
-      channelName: channelName.value,
-      color: userColor.value,
-    });
-
     Vue.nextTick(() => {
-      socketManager.initializeSocket(channelName.value, userUuid.value, displayName.value, handleMessage, handleStatusChange, { color: userColor.value });
+      socketManager.initializeSocket(
+        channelName.value,
+        userUuid.value,
+        displayName.value,
+        handleMessage,
+        handleStatusChange
+      );
     });
   }
 
   function disconnect() {
     socketManager.disconnect(channelName.value, userUuid.value);
+    activeUsers.value = [];
+    console.log('Cleared activeUsers on disconnect:', {
+      value: activeUsers.value,
+      isArray: Array.isArray(activeUsers.value),
+    });
   }
 
-  function emit(event, data) {
-    socketManager.emit(event, { ...data, userUuid: userUuid.value, color: userColor.value }, channelName.value, userUuid.value);
+  function emit(event, { id, data }) {
+    socketManager.emit(
+      event,
+      { id, userUuid: userUuid.value, data, timestamp: Date.now() },
+      channelName.value,
+      userUuid.value
+    );
   }
 
   function reconnect() {
     if (!isConnected.value) {
       console.log('Attempting to reconnect...');
-      const storedColor = sessionStorage.getItem(`userColor_${channelName.value}_${userUuid.value}`);
-      if (storedColor) {
-        userColor.value = storedColor;
-      } else {
-        userColor.value = '#808080';
-        sessionStorage.setItem(`userColor_${channelName.value}_${userUuid.value}`, userColor.value);
-      }
-      socketManager.reconnect(channelName.value, userUuid.value, displayName.value, handleMessage, handleStatusChange);
-      socketManager.emit('join-channel', { userUuid: userUuid.value, displayName: displayName.value, channelName: channelName.value, color: userColor.value }, channelName.value, userUuid.value);
+      socketManager.reconnect(
+        channelName.value,
+        userUuid.value,
+        displayName.value,
+        handleMessage,
+        handleStatusChange
+      );
+      socketManager.emit(
+        'join-channel',
+        {
+          userUuid: userUuid.value,
+          displayName: displayName.value,
+          channelName: channelName.value,
+        },
+        channelName.value,
+        userUuid.value
+      );
     }
   }
 
   function loadSession() {
     if (userUuid.value && displayName.value && channelName.value) {
-      const storedColor = sessionStorage.getItem(`userColor_${channelName.value}_${userUuid.value}`);
-      if (storedColor) {
-        userColor.value = storedColor;
-      } else {
-        userColor.value = '#808080';
-        sessionStorage.setItem(`userColor_${channelName.value}_${userUuid.value}`, userColor.value);
+      if (isConnected.value) {
+        console.log('Already connected, skipping loadSession join');
+        return;
       }
-      socketManager.initializeSocket(channelName.value, userUuid.value, displayName.value, handleMessage, handleStatusChange);
-      socketManager.emit('join-channel', { userUuid: userUuid.value, displayName: displayName.value, channelName: channelName.value, color: userColor.value }, channelName.value, userUuid.value);
+      socketManager.initializeSocket(
+        channelName.value,
+        userUuid.value,
+        displayName.value,
+        handleMessage,
+        handleStatusChange
+      );
+      socketManager.emit(
+        'join-channel',
+        {
+          userUuid: userUuid.value,
+          displayName: displayName.value,
+          channelName: channelName.value,
+        },
+        channelName.value,
+        userUuid.value
+      );
     }
   }
 
@@ -266,6 +209,7 @@ export function useRealTime() {
     off('init-state');
     off('user-list');
     off('user-joined');
+    off('user-left');
     off('add-chat');
     off('draft-chat');
     off('update-chat');
@@ -306,6 +250,7 @@ export function useRealTime() {
     activeUsers,
     connectionError,
     sessionInfo,
+    userColor,
     connect,
     disconnect,
     emit,
@@ -314,6 +259,5 @@ export function useRealTime() {
     off,
     loadSession,
     cleanup,
-    userColor,
   };
 }

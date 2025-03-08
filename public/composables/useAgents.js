@@ -3,49 +3,58 @@ import { useRealTime } from './useRealTime.js';
 
 const agents = Vue.ref([]);
 const { userUuid, displayName, emit, on, off } = useRealTime();
-
-// Store event handlers for cleanup
 const eventHandlers = new WeakMap();
+const processedEvents = new Set(); // Add deduplication like useGoals
 
 export function useAgents() {
-  function handleAddAgent({ agent }) {
-    if (!agents.value.some(a => a.id === agent.id)) {
-      agents.value = [...agents.value, agent];
+  function handleAddAgent(eventObj) {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const eventKey = `add-agent-${id}-${timestamp}`;
+    if (!processedEvents.has(eventKey)) {
+      processedEvents.add(eventKey);
+      if (!agents.value.some(a => a.id === id)) {
+        agents.value.push({ id, userUuid: eventUserUuid, data });
+        agents.value = [...agents.value];
+      }
+      setTimeout(() => processedEvents.delete(eventKey), 1000);
     }
   }
 
-  function handleUpdateAgent({ agent }) {
-    const index = agents.value.findIndex(a => a.id === agent.id);
+  function handleUpdateAgent(eventObj) {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const index = agents.value.findIndex(a => a.id === id);
     if (index !== -1) {
-      agents.value = agents.value.map((a, i) => (i === index ? { ...agent } : a));
+      agents.value[index] = { id, userUuid: eventUserUuid, data };
+      agents.value = [...agents.value];
     } else {
-      console.warn(`Agent with ID ${agent.id} not found for update, adding as new`);
-      agents.value = [...agents.value, agent];
+      console.warn(`Agent with ID ${id} not found for update, adding as new`);
+      agents.value.push({ id, userUuid: eventUserUuid, data });
+      agents.value = [...agents.value];
     }
   }
 
-  function handleRemoveAgent({ id }) {
+  function handleRemoveAgent(eventObj) {
+    const { id, timestamp } = eventObj;
     agents.value = agents.value.filter(a => a.id !== id);
+    agents.value = [...agents.value];
   }
 
-  // Register event listeners
   const addAgentHandler = on('add-agent', handleAddAgent);
   const updateAgentHandler = on('update-agent', handleUpdateAgent);
   const removeAgentHandler = on('remove-agent', handleRemoveAgent);
 
   eventHandlers.set(useAgents, {
-    addAgent: addAgentHandler,
-    updateAgent: updateAgentHandler,
-    removeAgent: removeAgentHandler,
+    add: addAgentHandler,
+    update: updateAgentHandler,
+    remove: removeAgentHandler,
   });
 
   function addAgent(name, description, imageUrl, systemPrompts = [], userPrompts = []) {
     if (!/^[a-zA-Z0-9_]+$/.test(name)) {
       throw new Error('Agent name must contain only letters, numbers, or underscores, with no spaces.');
     }
-    const id = uuidv4(); // Generate unique ID
-    const agent = {
-      id,
+    const id = uuidv4();
+    const data = {
       name,
       createdBy: displayName.value,
       description,
@@ -61,20 +70,22 @@ export function useAgents() {
         content: prompt.content || '',
       })),
     };
-    // Add to local state immediately
-    if (!agents.value.some(a => a.id === agent.id)) {
-      agents.value = [...agents.value, agent];
-    }
-    // Emit to backend for persistence and sync with other clients
-    emit('add-agent', { agent });
+    const payload = {
+      id,
+      userUuid: userUuid.value,
+      data,
+      timestamp: Date.now(),
+    };
+    agents.value.push(payload);
+    agents.value = [...agents.value];
+    emit('add-agent', payload);
   }
 
   function updateAgent(id, name, description, imageUrl, systemPrompts, userPrompts) {
     if (!/^[a-zA-Z0-9_]+$/.test(name)) {
       throw new Error('Agent name must contain only letters, numbers, or underscores, with no spaces.');
     }
-    const agent = {
-      id,
+    const data = {
       name,
       createdBy: displayName.value,
       description,
@@ -90,33 +101,44 @@ export function useAgents() {
         content: prompt.content || '',
       })),
     };
-    // Update local state immediately
-    const index = agents.value.findIndex(a => a.id === agent.id);
+    const payload = {
+      id,
+      userUuid: userUuid.value,
+      data,
+      timestamp: Date.now(),
+    };
+    const index = agents.value.findIndex(a => a.id === id);
     if (index !== -1) {
-      agents.value = agents.value.map((a, i) => (i === index ? { ...agent } : a));
+      agents.value[index] = payload;
+      agents.value = [...agents.value];
     } else {
-      console.warn(`Agent with ID ${agent.id} not found for update, adding as new`);
-      agents.value = [...agents.value, agent];
+      agents.value.push(payload);
+      agents.value = [...agents.value];
     }
-    // Emit to backend
-    emit('update-agent', { agent });
+    emit('update-agent', payload);
   }
 
   function removeAgent(id) {
-    // Update local state immediately
+    const payload = {
+      id,
+      userUuid: userUuid.value,
+      data: null,
+      timestamp: Date.now(),
+    };
     agents.value = agents.value.filter(a => a.id !== id);
-    // Emit to backend
-    emit('remove-agent', { id });
+    agents.value = [...agents.value];
+    emit('remove-agent', payload);
   }
 
   function cleanup() {
     const handlers = eventHandlers.get(useAgents);
     if (handlers) {
-      off('add-agent', handlers.addAgent);
-      off('update-agent', handlers.updateAgent);
-      off('remove-agent', handlers.removeAgent);
+      off('add-agent', handlers.add);
+      off('update-agent', handlers.update);
+      off('remove-agent', handlers.remove);
       eventHandlers.delete(useAgents);
     }
+    processedEvents.clear();
   }
 
   return { agents, addAgent, updateAgent, removeAgent, cleanup };

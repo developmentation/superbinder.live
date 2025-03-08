@@ -1,42 +1,58 @@
+// composables/useClips.js
 import { useRealTime } from './useRealTime.js';
 
 const clips = Vue.ref([]);
 const bookmarks = Vue.ref([]);
-const { emit, on, off } = useRealTime();
-
+const { userUuid, emit, on, off } = useRealTime();
 const eventHandlers = new WeakMap();
+const processedEvents = new Set(); // Add deduplication
 
 export function useClips() {
-  function handleAddClip(clip) {
-    console.log('handleAddClip:', clip);
-    if (!clips.value.some(c => c.id === clip.id)) clips.value.push(clip);
+  function handleAddClip(eventObj) {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const eventKey = `add-clip-${id}-${timestamp}`;
+    if (!processedEvents.has(eventKey)) {
+      processedEvents.add(eventKey);
+      if (!clips.value.some(c => c.id === id)) {
+        clips.value.push({ id, userUuid: eventUserUuid, data });
+        clips.value = [...clips.value];
+      }
+      setTimeout(() => processedEvents.delete(eventKey), 1000);
+    }
   }
 
-  function handleRemoveClip(id) {
-    console.log('handleRemoveClip:', id);
+  function handleRemoveClip(eventObj) {
+    const { id, timestamp } = eventObj;
     clips.value = clips.value.filter(c => c.id !== id);
+    clips.value = [...clips.value];
   }
 
-  function handleVoteClip({ clipId, direction }) {
-    console.log('handleVoteClip:', { clipId, direction });
-    const clip = clips.value.find(c => c.id === clipId);
-    if (clip) clip.votes += direction === 'up' ? 1 : -1;
+  function handleVoteClip(eventObj) {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const index = clips.value.findIndex(c => c.id === id);
+    if (index !== -1 && typeof data.votes === 'number') {
+      clips.value[index].data.votes = data.votes;
+      clips.value = [...clips.value];
+    }
   }
 
-  function handleAddBookmark(bookmark) {
-    console.log('handleAddBookmark:', bookmark);
-    if (!bookmarks.value.some(b => b.id === bookmark.id)) bookmarks.value.push(bookmark);
+  function handleAddBookmark(eventObj) {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const eventKey = `add-bookmark-${id}-${timestamp}`;
+    if (!processedEvents.has(eventKey)) {
+      processedEvents.add(eventKey);
+      if (!bookmarks.value.some(b => b.id === id)) {
+        bookmarks.value.push({ id, userUuid: eventUserUuid, data });
+        bookmarks.value = [...bookmarks.value];
+      }
+      setTimeout(() => processedEvents.delete(eventKey), 1000);
+    }
   }
 
-  function handleRemoveBookmark(id) {
-    console.log('handleRemoveBookmark:', id);
+  function handleRemoveBookmark(eventObj) {
+    const { id, timestamp } = eventObj;
     bookmarks.value = bookmarks.value.filter(b => b.id !== id);
-  }
-
-  function handleSnapshot(history) {
-    console.log('handleSnapshot:', history);
-    clips.value = history.clips || [];
-    bookmarks.value = history.bookmarks || [];
+    bookmarks.value = [...bookmarks.value];
   }
 
   const addClipHandler = on('add-clip', handleAddClip);
@@ -44,7 +60,6 @@ export function useClips() {
   const voteClipHandler = on('vote-clip', handleVoteClip);
   const addBookmarkHandler = on('add-bookmark', handleAddBookmark);
   const removeBookmarkHandler = on('remove-bookmark', handleRemoveBookmark);
-  const snapshotHandler = on('history-snapshot', handleSnapshot);
 
   eventHandlers.set(useClips, {
     addClip: addClipHandler,
@@ -52,48 +67,48 @@ export function useClips() {
     voteClip: voteClipHandler,
     addBookmark: addBookmarkHandler,
     removeBookmark: removeBookmarkHandler,
-    snapshot: snapshotHandler,
   });
 
   function addClip(content, documentId, location = {}) {
-    console.log('addClip called:', { content, documentId, location });
-    const clip = { 
-      id: uuidv4(), 
-      documentId, 
-      content, 
-      votes: 0, 
-      timestamp: Date.now(), 
-      location // Store offset or pageIndex
-    };
-    clips.value.push(clip);
-    emit('add-clip', { clip });
-    console.log('Emitted add-clip:', clip);
+    const id = uuidv4();
+    const data = { documentId, content, votes: 0, location };
+    const payload = { id, userUuid: userUuid.value, data, timestamp: Date.now() };
+    clips.value.push(payload);
+    clips.value = [...clips.value];
+    emit('add-clip', payload);
   }
 
   function removeClip(id) {
+    const payload = { id, userUuid: userUuid.value, data: null, timestamp: Date.now() };
     clips.value = clips.value.filter(c => c.id !== id);
-    emit('remove-clip', { clipId: id });
+    clips.value = [...clips.value];
+    emit('remove-clip', payload);
   }
 
   function voteClip(id, direction) {
-    const clip = clips.value.find(c => c.id === id);
-    if (clip) {
-      clip.votes += direction === 'up' ? 1 : -1;
-      emit('vote-clip', { clipId: id, direction });
+    const index = clips.value.findIndex(c => c.id === id);
+    if (index !== -1) {
+      const votes = clips.value[index].data.votes + (direction === 'up' ? 1 : -1);
+      clips.value[index].data.votes = votes;
+      clips.value = [...clips.value];
+      emit('vote-clip', { id, userUuid: userUuid.value, data: { votes }, timestamp: Date.now() });
     }
   }
 
   function addBookmark(bookmark) {
-    console.log('addBookmark called:', bookmark);
-    const bookmarkData = { id: uuidv4(), ...bookmark, timestamp: Date.now() };
-    bookmarks.value.push(bookmarkData);
-    emit('add-bookmark', { bookmark: bookmarkData });
-    console.log('Emitted add-bookmark:', bookmarkData);
+    const id = uuidv4();
+    const data = { ...bookmark };
+    const payload = { id, userUuid: userUuid.value, data, timestamp: Date.now() };
+    bookmarks.value.push(payload);
+    bookmarks.value = [...bookmarks.value];
+    emit('add-bookmark', payload);
   }
 
   function removeBookmark(id) {
+    const payload = { id, userUuid: userUuid.value, data: null, timestamp: Date.now() };
     bookmarks.value = bookmarks.value.filter(b => b.id !== id);
-    emit('remove-bookmark', { bookmarkId: id });
+    bookmarks.value = [...bookmarks.value];
+    emit('remove-bookmark', payload);
   }
 
   function cleanup() {
@@ -104,9 +119,9 @@ export function useClips() {
       off('vote-clip', handlers.voteClip);
       off('add-bookmark', handlers.addBookmark);
       off('remove-bookmark', handlers.removeBookmark);
-      off('history-snapshot', handlers.snapshot);
       eventHandlers.delete(useClips);
     }
+    processedEvents.clear();
   }
 
   return {

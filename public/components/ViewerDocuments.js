@@ -1,3 +1,4 @@
+// components/ViewerDocuments.js
 import { useDocuments } from "../composables/useDocuments.js";
 import { useClips } from "../composables/useClips.js";
 import { useSearch } from "../composables/useSearch.js";
@@ -32,7 +33,7 @@ export default {
         <!-- Document View -->
         <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg h-full">
           <div class="flex justify-between items-center mb-2">
-            <span class="text-gray-400">{{ selectedDocument.name }}</span>
+            <span class="text-gray-400">{{ selectedDocument.data.name }}</span>
             <button
               v-if="selectedPageIndex !== null"
               @click="addBookmarkLocal"
@@ -42,9 +43,9 @@ export default {
             </button>
           </div>
           <div
-            v-if="selectedDocument.renderAsHtml"
+            v-if="selectedDocument.data.renderAsHtml"
             ref="docContent"
-            v-html="selectedDocument.processedContent"
+            v-html="selectedDocument.data.processedContent"
             class="prose text-gray-300 pdf-viewer"
             @contextmenu="handleContextMenu"
             @click="handlePageSelection"
@@ -54,7 +55,7 @@ export default {
             ref="docContent"
             class="text-gray-300 whitespace-pre-wrap"
             @contextmenu="handleContextMenu"
-          >{{ selectedDocument.processedContent }}</pre>
+          >{{ selectedDocument.data.processedContent }}</pre>
           <div class="mt-2 flex gap-2">
             <button
               v-if="selectedText"
@@ -64,7 +65,7 @@ export default {
               Clip Selected
             </button>
             <button
-              v-if="selectedText && !selectedDocument.renderAsHtml"
+              v-if="selectedText && !selectedDocument.data.renderAsHtml"
               @click="addTextBookmark"
               class="py-1 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
             >
@@ -136,7 +137,7 @@ export default {
     </div>
   `,
   setup(props) {
-    const { selectedDocument, documents, updateDocument, setDocuments, setSelectedDocument } = useDocuments();
+    const { selectedDocument, documents, setSelectedDocument } = useDocuments();
     const { addClip, addBookmark } = useClips();
     const { searchQuery, searchResults, searchDocuments } = useSearch();
     const selectedText = Vue.ref("");
@@ -151,7 +152,11 @@ export default {
 
     Vue.onMounted(() => {
       if (props.documents && props.documents.length > 0) {
-        setDocuments(props.documents);
+        documents.value = props.documents.map(doc => ({
+          id: doc.id,
+          userUuid: doc.userUuid,
+          data: doc.data || { ...doc }, // Fallback for flat props
+        }));
       }
       document.addEventListener('click', hideContextMenu);
     });
@@ -160,7 +165,11 @@ export default {
       () => props.documents,
       (newDocuments) => {
         if (newDocuments && newDocuments.length > 0) {
-          setDocuments(newDocuments);
+          documents.value = newDocuments.map(doc => ({
+            id: doc.id,
+            userUuid: doc.userUuid,
+            data: doc.data || { ...doc },
+          }));
         }
       },
       { deep: true }
@@ -200,13 +209,11 @@ export default {
         Vue.nextTick(() => {
           const contentEl = docContent.value;
           if (contentEl) {
-            const matchIndex = doc.processedContent.indexOf(segment);
+            const matchIndex = doc.data.processedContent.indexOf(segment);
             if (matchIndex >= 0) {
               const scrollContainer = contentEl.closest('.flex-1.overflow-y-auto');
               if (scrollContainer) {
-                scrollContainer.scrollTop = matchIndex / doc.processedContent.length * scrollContainer.scrollHeight;
-              } else {
-                console.warn('Scroll container not found for viewFullDoc');
+                scrollContainer.scrollTop = matchIndex / doc.data.processedContent.length * scrollContainer.scrollHeight;
               }
             }
           }
@@ -218,7 +225,7 @@ export default {
       if (selectedText.value && selectedDocument.value) {
         const contentEl = docContent.value;
         const offset = contentEl.innerText.indexOf(selectedText.value);
-        const location = selectedDocument.value.renderAsHtml ? 
+        const location = selectedDocument.value.data.renderAsHtml ? 
           { pageIndex: selectedPageIndex.value } : 
           { offset };
         addClip(selectedText.value, selectedDocument.value.id, location);
@@ -228,7 +235,6 @@ export default {
 
     function clipSelectedTextFromContext() {
       if (storedSelection.value && storedSelection.value.text && selectedDocument.value) {
-        console.log('clipSelectedTextFromContext:', storedSelection.value);
         addClip(storedSelection.value.text, selectedDocument.value.id, storedSelection.value.location);
         storedSelection.value = null;
       }
@@ -245,7 +251,7 @@ export default {
     }
 
     function handlePageSelection(event) {
-      if (selectedDocument.value.type === "pdf") {
+      if (selectedDocument.value.data.type === "pdf") {
         const pageDiv = event.target.closest(".pdf-page");
         if (pageDiv) {
           const allPages = docContent.value.querySelectorAll(".pdf-page");
@@ -266,7 +272,7 @@ export default {
 
       const selection = window.getSelection();
       const hasTextSelection = selection.toString().trim().length > 0 && docContent.value.contains(selection.anchorNode);
-      const pageDiv = selectedDocument.value.type === "pdf" ? event.target.closest(".pdf-page") : null;
+      const pageDiv = selectedDocument.value.data.type === "pdf" ? event.target.closest(".pdf-page") : null;
 
       if (!hasTextSelection && !pageDiv) return;
 
@@ -288,7 +294,7 @@ export default {
         const offset = contentEl.innerText.indexOf(selection.toString().trim());
         storedSelection.value = { text: selection.toString().trim(), location: { offset } };
         contextMenuOptions.value.push("Create Clip");
-        if (!selectedDocument.value.renderAsHtml) contextMenuOptions.value.push("Create Bookmark");
+        if (!selectedDocument.value.data.renderAsHtml) contextMenuOptions.value.push("Create Bookmark");
       }
 
       const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
@@ -318,7 +324,7 @@ export default {
           documentId: selectedDocument.value.id,
           pageIndex: selectedPageIndex.value,
           type: "pdf-page",
-          name: `${selectedDocument.value.name} - Page ${selectedPageIndex.value + 1}`,
+          name: `${selectedDocument.value.data.name} - Page ${selectedPageIndex.value + 1}`,
         });
         selectedPageIndex.value = null;
         docContent.value.querySelectorAll(".pdf-page").forEach(page => page.classList.remove("selected"));
@@ -339,7 +345,7 @@ export default {
           text: selectedText.value,
           offset: offset,
           type: "text",
-          name: `${selectedDocument.value.name} - Text Selection`,
+          name: `${selectedDocument.value.data.name} - Text Selection`,
         });
         selectedText.value = "";
       }

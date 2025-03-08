@@ -4,109 +4,114 @@ import { processFile } from '../utils/files/fileProcessor.js';
 
 const documents = Vue.ref([]);
 const selectedDocument = Vue.ref(null);
-const { emit, on, off } = useRealTime();
-
+const { userUuid, displayName, emit, on, off } = useRealTime();
 const eventHandlers = new WeakMap();
+const processedEvents = new Set(); // Add deduplication
 
 export function useDocuments() {
-  function handleAddDocument({ document }) {
-    console.log('Handling add-document:', document);
-    if (!documents.value.some(d => d.id === document.id)) {
-      // Ensure renderAsHtml is set based on file type
-      const updatedDocument = {
-        ...document,
-        renderAsHtml: ['docx', 'xlsx', 'pdf'].includes(document.type),
-      };
-      documents.value = [...documents.value, updatedDocument];
+  function handleAddDocument(eventObj) {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const eventKey = `add-document-${id}-${timestamp}`;
+    if (!processedEvents.has(eventKey)) {
+      processedEvents.add(eventKey);
+      if (!documents.value.some(d => d.id === id)) {
+        documents.value.push({ id, userUuid: eventUserUuid, data });
+        documents.value = [...documents.value];
+      }
+      setTimeout(() => processedEvents.delete(eventKey), 1000);
     }
   }
 
-  function handleRemoveDocument({ id }) {
-    console.log('Handling remove-document:', id);
+  function handleRemoveDocument(eventObj) {
+    const { id, timestamp } = eventObj;
     documents.value = documents.value.filter(d => d.id !== id);
     if (selectedDocument.value && selectedDocument.value.id === id) {
       selectedDocument.value = null;
     }
   }
 
-  function handleRenameDocument({ id, name }) {
-    console.log('Handling rename-document:', { id, name });
-    const doc = documents.value.find(d => d.id === id);
-    if (doc) {
-      doc.name = name.trim();
+  function handleRenameDocument(eventObj) {
+    const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    const index = documents.value.findIndex(d => d.id === id);
+    if (index !== -1) {
+      documents.value[index].data.name = data.name;
+      documents.value = [...documents.value];
       if (selectedDocument.value && selectedDocument.value.id === id) {
-        selectedDocument.value.name = name.trim();
+        selectedDocument.value.data.name = data.name;
       }
     }
-  }
-
-  function handleSnapshot(history) {
-    console.log('Handling history snapshot for documents:', history.documents);
-    // Ensure renderAsHtml is set for each document in the snapshot
-    const updatedDocuments = (history.documents || []).map(doc => ({
-      ...doc,
-      renderAsHtml: ['docx', 'xlsx', 'pdf'].includes(doc.type),
-    })).sort((a, b) => a.timestamp - b.timestamp);
-    documents.value = updatedDocuments;
   }
 
   const addDocumentHandler = on('add-document', handleAddDocument);
   const removeDocumentHandler = on('remove-document', handleRemoveDocument);
   const renameDocumentHandler = on('rename-document', handleRenameDocument);
-  const snapshotHandler = on('history-snapshot', handleSnapshot);
 
   eventHandlers.set(useDocuments, {
     addDocument: addDocumentHandler,
     removeDocument: removeDocumentHandler,
     renameDocument: renameDocumentHandler,
-    snapshot: snapshotHandler,
   });
 
   async function addDocument(file) {
     const doc = await processFile(file);
     if (doc.status === 'complete') {
-      const documentWithMetadata = {
-        id: doc.id,
+      const id = doc.id;
+      const data = {
         name: doc.name,
-        type: doc.type, // Ensure type is included for renderAsHtml
-        createdBy: useRealTime().displayName.value,
-        timestamp: Date.now(),
+        type: doc.type,
+        createdBy: displayName.value,
         processedContent: doc.processedContent,
-        renderAsHtml: ['docx', 'xlsx', 'pdf'].includes(doc.type), // Set renderAsHtml based on type
+        renderAsHtml: ['docx', 'xlsx', 'pdf'].includes(doc.type),
       };
-      documents.value = [...documents.value, documentWithMetadata];
-      emit('add-document', { document: documentWithMetadata });
-    } else if (doc.status === 'error') {
-      console.error(`Failed to process file ${file.name}:`, doc);
+      const payload = {
+        id,
+        userUuid: userUuid.value,
+        data,
+        timestamp: Date.now(),
+      };
+      documents.value.push(payload);
+      documents.value = [...documents.value];
+      emit('add-document', payload);
     }
     return doc;
   }
 
   function removeDocument(id) {
+    const payload = {
+      id,
+      userUuid: userUuid.value,
+      data: null,
+      timestamp: Date.now(),
+    };
     documents.value = documents.value.filter(doc => doc.id !== id);
-    emit('remove-document', { id });
+    documents.value = [...documents.value];
+    emit('remove-document', payload);
     if (selectedDocument.value && selectedDocument.value.id === id) {
       selectedDocument.value = null;
     }
   }
 
   function updateDocument(id, name) {
-    const doc = documents.value.find(d => d.id === id);
-    if (doc) {
-      doc.name = name.trim();
+    const index = documents.value.findIndex(d => d.id === id);
+    if (index !== -1) {
+      const data = { ...documents.value[index].data, name };
+      const payload = {
+        id,
+        userUuid: userUuid.value,
+        data: { name },
+        timestamp: Date.now(),
+      };
+      documents.value[index].data.name = name;
+      documents.value = [...documents.value];
       if (selectedDocument.value && selectedDocument.value.id === id) {
-        selectedDocument.value.name = name.trim();
+        selectedDocument.value.data.name = name;
       }
-      emit('rename-document', { id, name: name.trim() });
+      emit('rename-document', payload);
     }
   }
 
   function setSelectedDocument(doc) {
-    // Ensure renderAsHtml is set if not provided
-    selectedDocument.value = doc ? {
-      ...doc,
-      renderAsHtml: doc.renderAsHtml || ['docx', 'xlsx', 'pdf'].includes(doc.type),
-    } : null;
+    selectedDocument.value = doc ? { ...doc } : null;
   }
 
   function cleanup() {
@@ -115,9 +120,9 @@ export function useDocuments() {
       off('add-document', handlers.addDocument);
       off('remove-document', handlers.removeDocument);
       off('rename-document', handlers.renameDocument);
-      off('history-snapshot', handlers.snapshot);
       eventHandlers.delete(useDocuments);
     }
+    processedEvents.clear();
   }
 
   return {

@@ -46,9 +46,9 @@ export default {
           @click="selectDocument(doc, $event)"
         >
           <div class="flex items-center space-x-2 flex-1 min-w-0">
-            <i :class="getFileIcon(doc.name)"></i>
+            <i :class="getFileIcon(doc.data.name)"></i>
             <span v-if="!editingDocId || editingDocId !== doc.id" class="text-white truncate flex-1 min-w-0">
-              {{ doc.name }}
+              {{ doc.data.name }}
             </span>
             <input
               v-else
@@ -121,14 +121,14 @@ export default {
       if (!event.target.closest('.pi-pencil') && !event.target.closest('.pi-times') && !editingDocId.value) {
         setSelectedDocument(doc);
         console.log('ViewerUploads calling updateTab:', { tab: 'Documents', subTab: 'Viewer' });
-        props.updateTab('Documents', 'Viewer'); // Directly update tab
-        emit('update-tab', { tab: 'Documents', subTab: 'Viewer' }); // Still emit for other clients
+        props.updateTab('Documents', 'Viewer');
+        emit('update-tab', { tab: 'Documents', subTab: 'Viewer' });
       }
     }
 
     function startEditing(doc) {
       editingDocId.value = doc.id;
-      editName.value = doc.name;
+      editName.value = doc.data.name;
       Vue.nextTick(() => {
         if (editInput.value && editInput.value[0]) {
           editInput.value[0].focus();

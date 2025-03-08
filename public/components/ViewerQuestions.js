@@ -1,3 +1,4 @@
+// components/ViewerQuestions.js
 import { useQuestions } from '../composables/useQuestions.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useClips } from '../composables/useClips.js';
@@ -25,10 +26,10 @@ export default {
             <div
               contenteditable="true"
               @input="updateQuestion(question.id, $event.target.textContent)"
-              @blur="$event.target.textContent = question.text"
+              @blur="$event.target.textContent = question.data.text"
               class="flex-1 text-white break-words"
             >
-              {{ question.text }}
+              {{ question.data.text }}
             </div>
             <button @click.stop="moveQuestionUp(question.id, index)" class="text-blue-400 hover:text-blue-300">
               ↑
@@ -42,41 +43,45 @@ export default {
           </div>
           <div class="space-y-2 ml-4">
             <div
-              v-for="(answer, ansIndex) in question.answers"
+              v-for="(answer, ansIndex) in question.data.answers"
               :key="answer.id"
               class="p-2 bg-gray-600 rounded-lg flex items-center gap-2 transition-transform duration-300"
             >
               <div
                 ref="answerInput"
                 contenteditable="true"
-                @input="updateAnswer(answer.id, question.id, $event.target.textContent)"
+                @input="updateAnswer(answer.id, answer.data.questionId, $event.target.textContent)"
                 @keypress.enter="$event.target.blur()"
-                @blur="$event.target.textContent = answer.text"
+                @blur="$event.target.textContent = answer.data.text"
                 class="flex-1 text-white break-words"
               >
-                {{ answer.text }}
+                {{ answer.data.text }}
               </div>
               <div class="flex gap-2">
-                <button @click="voteAnswer(question.id, answer.id, 'up')" class="text-green-400">↑ {{ answer.votes || 0 }}</button>
-                <button @click="voteAnswer(question.id, answer.id, 'down')" class="text-red-400">↓</button>
-                <button @click.stop="deleteAnswer(answer.id, question.id)" class="text-red-400 hover:text-red-300">
+                <button @click="voteAnswer(answer.data.questionId, answer.id, 'up')" class="text-green-400">↑ {{ answer.data.votes || 0 }}</button>
+                <button @click="voteAnswer(answer.data.questionId, answer.id, 'down')" class="text-red-400">↓</button>
+                <button @click.stop="deleteAnswer(answer.id, answer.data.questionId)" class="text-red-400 hover:text-red-300">
                   <i class="pi pi-times"></i>
                 </button>
               </div>
             </div>
           </div>
           <button @click="addAnswerLocal(question.id)" class="mt-2 py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg">Add Answer</button>
-          <div v-if="!question.answers?.length" class="text-gray-400">No answers yet.</div>
+          <div v-if="!question.data.answers?.length" class="text-gray-400">No answers yet.</div>
         </div>
       </div>
       <div v-if="questionsWithAnswers.length === 0" class="text-gray-400">No questions yet.</div>
     </div>
   `,
   setup() {
-    const { questionsWithAnswers, rawQuestions, rawAnswers, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addAnswer, updateAnswer, deleteAnswer, voteAnswer } = useQuestions();
+
+
+    const { questionsWithAnswers, rawQuestions, rawAnswers, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addAnswer, updateAnswer, deleteAnswer, voteAnswer, addQuestionProgrammatically } = useQuestions();
+    console.log('ViewerQuestions initialized with questionsWithAnswers:', questionsWithAnswers.value);
     const { selectedDocument, documents } = useDocuments();
     const { clips } = useClips();
     const newQuestion = Vue.ref('');
+    const answerInput = Vue.ref([]);
 
     function addQuestionLocal() {
       if (newQuestion.value.trim()) {
@@ -88,11 +93,10 @@ export default {
     function addAnswerLocal(questionId) {
       const answerId = addAnswer(questionId);
       Vue.nextTick(() => {
-        const answerEl = answerInput.value.find(el => el.textContent === '' && rawQuestions.value.find(q => q.id === questionId)?.answers.some(a => a.id === answerId));
+        const answerEl = answerInput.value.find(el => el.textContent === '' && rawAnswers.value.some(a => a.id === answerId && a.data.questionId === questionId));
         if (answerEl) answerEl.focus();
       });
     }
- 
 
     function moveQuestionUp(id, currentIndex) {
       if (currentIndex > 0) {
@@ -106,8 +110,6 @@ export default {
       }
     }
 
-    const answerInput = Vue.ref([]);
-
     return {
       questionsWithAnswers,
       newQuestion,
@@ -120,7 +122,7 @@ export default {
       deleteAnswer,
       voteAnswer,
       answerInput,
-      moveQuestionUp, 
+      moveQuestionUp,
       moveQuestionDown,
     };
   },
