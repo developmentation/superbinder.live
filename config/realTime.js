@@ -1,9 +1,11 @@
-// realTime.js
+// realTime.js (complete updated version)
 const { Server } = require('socket.io');
 const fs = require('fs').promises;
 const path = require('path');
+const { handlePrompt } = require("./handleAiInteractions");
 
 const channels = new Map();
+// Removed pendingLLMStreams Map since accumulation is no longer needed
 
 const entityConfigs = {
   agents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-agent', update: 'update-agent', remove: 'remove-agent', reorder: null } },
@@ -16,6 +18,7 @@ const entityConfigs = {
   answers: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-answer', update: 'update-answer', remove: 'delete-answer', vote: 'vote-answer' } },
   artifacts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-artifact', update: null, remove: 'remove-artifact', reorder: null } },
   transcripts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-transcript', update: null, remove: 'remove-transcript', reorder: null } },
+  llm: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-llm', draft: 'draft-llm' } },
 };
 
 /**
@@ -51,6 +54,13 @@ function validateMessage(data) {
 function isValidChannelName(channelName) {
   if (!channelName || typeof channelName !== 'string') return false;
   return /^[a-zA-Z0-9_]+$/.test(channelName);
+}
+
+function validateLLMData(data) {
+  return data && typeof data.model === 'object' && data.model.provider && data.model.name && data.model.model &&
+         typeof data.temperature === 'number' && data.temperature >= 0 && data.temperature <= 1 &&
+         typeof data.systemPrompt === 'string' && typeof data.userPrompt === 'string' &&
+         Array.isArray(data.messageHistory) && typeof data.useJson === 'boolean';
 }
 
 async function loadStateFromServer(channelName, entityType) {
@@ -162,7 +172,7 @@ function updateCreateState(state, payload, entityType) {
   const entity = {
     id: payload.id,
     userUuid: payload.userUuid,
-    data: { ...payload.data, color: payload.data.color || channels.get(payload.channelName)?.users[payload.userUuid]?.color || '#808080' }, // Add color from user or default
+    data: { ...payload.data, color: payload.data.color || channels.get(payload.channelName)?.users[payload.userUuid]?.color || '#808080' },
     timestamp: payload.timestamp,
   };
   const order = config.orderField ? state.length : undefined;
@@ -206,6 +216,21 @@ function updateVoteState(state, payload) {
   }
 }
 
+async function sendLLMStream(uuid, channelName, session, type, message, isEnd = false) {
+  const payload = {
+    type,
+    id: uuid,
+    userUuid: uuid,
+    data: { content: message, ...(isEnd ? { end: true } : {}) },
+    timestamp: Date.now(),
+    serverTimestamp: Date.now(),
+  };
+  // Removed pendingLLMStreams accumulation logic
+  console.log(`Broadcasting ${type} for UUID ${uuid}:`, payload);
+  broadcastToChannel(channelName, type, payload);
+  // Removed server-side state update and saving logic for llm
+}
+
 async function handleCrudOperation(channelName, userUuid, type, payload, socket) {
   let operation, entityType;
   for (const [et, config] of Object.entries(entityConfigs)) {
@@ -241,6 +266,36 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
 
   const timestamp = payload.timestamp || Date.now();
   const normalizedPayload = { ...payload, userUuid, timestamp, channelName };
+
+  if (entityType === 'llm' && operation === 'add') {
+    if (!validateLLMData(payload.data)) {
+      socket.emit('message', { type: 'error', message: 'Invalid LLM data', timestamp: Date.now() });
+      return;
+    }
+
+    const promptConfig = {
+      model: payload.data.model,
+      uuid: payload.id,
+      session: channelName,
+      temperature: payload.data.temperature,
+      systemPrompt: payload.data.systemPrompt,
+      userPrompt: payload.data.userPrompt,
+      messageHistory: payload.data.messageHistory,
+      useJson: payload.data.useJson,
+    };
+
+    await handlePrompt(promptConfig, async (uuid, session, type, message) => {
+      console.log('Payload from LLM', { uuid, session, type, message });
+      if (type === 'message') {
+        await sendLLMStream(uuid, channelName, session, 'draft-llm', message);
+      } else if (type === 'EOM') {
+        await sendLLMStream(uuid, channelName, session, 'draft-llm', message, true); // Use the message from handlePrompt
+      } else if (type === 'ERROR') {
+        socket.emit('message', { type: 'error', message: message, timestamp: Date.now() });
+      }
+    });
+    return;
+  }
 
   let updateFunc, shouldSave = true;
   switch (operation) {
@@ -283,29 +338,25 @@ function createRealTimeServers(server, corsOptions) {
   io.on('connection', async (socket) => {
     console.log(`Client connected: ${socket.id}`);
 
-
-    // Listen for errors on this specific socket
     socket.on('error', (error) => {
       if (error.message === 'Max buffer size exceeded') {
-          console.error(`Rejected oversized message from ${socket.id}. 
-              Size exceeded limit of ${io.engine.opts.maxHttpBufferSize} bytes`);
-          // Optionally, you could notify the client
-          socket.emit('error', 'Message too large');
+        console.error(`Rejected oversized message from ${socket.id}. Size exceeded limit of ${io.engine.opts.maxHttpBufferSize} bytes`);
+        socket.emit('error', 'Message too large');
       } else {
-          console.error(`Socket error for ${socket.id}: ${error.message}`);
+        console.error(`Socket error for ${socket.id}: ${error.message}`);
       }
-  });
-  
+    });
+
     socket.on('join-channel', async (data) => {
       if (!validateJoinData(data)) {
         socket.emit('message', { type: 'error', message: 'Invalid channel name or data', timestamp: Date.now() });
         return;
       }
-    
+
       const { userUuid, displayName, channelName } = data;
       socket.join(channelName);
       socket.userUuid = userUuid;
-    
+
       if (!channels.has(channelName)) {
         const initialState = {};
         for (const entityType of Object.keys(entityConfigs)) {
@@ -319,17 +370,17 @@ function createRealTimeServers(server, corsOptions) {
         });
         console.log(`Initialized channel ${channelName} with state:`, initialState);
       }
-    
+
       const channel = channels.get(channelName);
       if (channel.locked) {
         socket.emit('message', { type: 'error', message: 'Channel is Locked', timestamp: Date.now() });
         return;
       }
-    
+
       const userColor = generateMutedDarkColor();
       channel.users[userUuid] = { displayName, color: userColor, joinedAt: Date.now() };
       channel.sockets[userUuid] = socket;
-    
+
       const initStateMessage = {
         type: 'init-state',
         id: null,
@@ -340,7 +391,7 @@ function createRealTimeServers(server, corsOptions) {
       };
       console.log(`Sending init-state to ${userUuid} in ${channelName}:`, initStateMessage);
       socket.emit('message', initStateMessage);
-    
+
       broadcastToChannel(channelName, 'user-list', { id: null, userUuid, data: null });
       broadcastToChannel(channelName, 'user-joined', { id: null, userUuid, data: { displayName, color: userColor } });
     });
@@ -391,100 +442,45 @@ async function handleMessage(dataObj, socket) {
     case 'pong':
       break;
     case 'update-tab':
+    case 'scroll-to-page':
       break;
-      case 'scroll-to-page':
-        break;
-      case 'add-chat':
+    case 'add-chat':
       await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data: { ...data, color: userColor } }, socket);
       break;
     case 'draft-chat':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data }, socket);
-      break;
     case 'update-chat':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data }, socket);
-      break;
     case 'delete-chat':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data: null }, socket);
-      break;
     case 'add-goal':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'update-goal':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'remove-goal':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'reorder-goals':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'add-agent':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'update-agent':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'remove-agent':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'add-clip':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'remove-clip':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'add-bookmark':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
-      case 'update-bookmark':
-        await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-        break;
-      case 'remove-bookmark':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
+    case 'update-bookmark':
+    case 'remove-bookmark':
     case 'add-document':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'remove-document':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'rename-document':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'add-question':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'update-question':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'remove-question':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'reorder-questions':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'add-answer':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'update-answer':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'delete-answer':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'vote-answer':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'add-artifact':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'remove-artifact':
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
     case 'add-transcript':
+    case 'remove-transcript':
       await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
       break;
-    case 'remove-transcript':
+    case 'add-llm':
+    case 'draft-llm':
       await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
       break;
     case 'room-lock-toggle':

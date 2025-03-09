@@ -16,8 +16,6 @@ const createClient = (provider, credentials) => {
     throw new Error(`No API key available for ${provider}`);
   }
 
-  // console.log('LLM Request for ', provider)
-
   switch (provider.toLowerCase()) {
     case 'openai':
       return new OpenAI({ apiKey });
@@ -40,15 +38,14 @@ const createClient = (provider, credentials) => {
       return new GoogleGenerativeAI(apiKey);
     case 'xai':
       return new OpenAI({
-        apiKey:apiKey,
-        baseURL:"https://api.x.ai/v1",
-  });
-      default:
+        apiKey: apiKey,
+        baseURL: "https://api.x.ai/v1",
+      });
+    default:
       throw new Error(`Unsupported provider: ${provider}`);
   }
 };
 
-// Main handler function
 // Validate message format
 const validateMessages = (messages) => {
   return messages.every(msg => 
@@ -61,7 +58,7 @@ const validateMessages = (messages) => {
 
 const handlePrompt = async (promptConfig, sendToClient) => {
   const {
-    model: modelConfig,  // Now expects the full model object
+    model: modelConfig,
     uuid,
     session,
     messageHistory,
@@ -71,42 +68,35 @@ const handlePrompt = async (promptConfig, sendToClient) => {
   } = promptConfig;
 
   try {
-    // Create messages array if not provided in history
     const messages = messageHistory.length ? messageHistory : [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ];
 
-    // Validate message format
     if (!validateMessages(messages)) {
       throw new Error('Invalid message format in conversation history');
     }
 
-    // Create provider-specific client
     const client = createClient(modelConfig.provider, {
       apiKey: modelConfig.apiKey,
       apiEndpoint: modelConfig.apiEndpoint,
     });
 
-    //Create the prompt object to pass forward to the function
-    let promptPayload =       {
+    let promptPayload = {
       model: modelConfig.model,
       messages,
       temperature: Math.max(0, Math.min(1, parseFloat(temperature) || 0.5)),
       stream: true,
-    }
+    };
 
-    //Handle model specific limitations
-    if(modelConfig.model == 'o3-mini-2025-01-31') delete promptPayload.temperature;
+    if (modelConfig.model === 'o3-mini-2025-01-31') delete promptPayload.temperature;
 
-    // Handle provider-specific prompts
     const responseStream = await handleProviderPrompt(
       client,
       modelConfig.provider,
       promptPayload
     );
 
-    // Process the response stream
     await handleProviderResponse(
       responseStream,
       modelConfig.provider,
@@ -127,32 +117,24 @@ const handlePrompt = async (promptConfig, sendToClient) => {
 const handleProviderPrompt = async (client, provider, config) => {
   switch (provider.toLowerCase()) {
     case 'openai':
-      // console.log("handleProviderPrompt, openAI",{client,provider,config})
       return client.chat.completions.create(config);
-
     case 'anthropic':
       const anthropicConfig = prepareAnthropicConfig(config);
       return client.messages.create(anthropicConfig);
-
     case 'azureai':
       return client.streamChatCompletions(
         config.model,
         config.messages,
         { temperature: config.temperature }
       );
-
     case 'mistral':
       return client.chat.stream(config);
-
     case 'groq':
       return client.chat.completions.create(config);
-
     case 'gemini':
       return handleGeminiPrompt(client, config);
-
-      case 'xai': //uses same as OpenAI
-        return client.chat.completions.create(config);
-  
+    case 'xai':
+      return client.chat.completions.create(config);
     default:
       throw new Error(`Unsupported provider: ${provider}`);
   }
@@ -210,12 +192,6 @@ const handleGeminiPrompt = async (client, config) => {
     })
   };
 
-  // Filter out empty messages and system messages after using for system instruction
-  const filteredMessages = config.messages
-    .filter((msg, index) => 
-      msg?.content?.length && 
-      !(index === 0 && msg.role === "system"));
-
   const messages = config.messages
     .filter(msg => msg.role !== "system" && msg?.content?.length)
     .map(msg => ({
@@ -233,26 +209,22 @@ const handleGeminiPrompt = async (client, config) => {
 
 // Handle provider responses
 const handleProviderResponse = async (responseStream, provider, uuid, session, sendToClient) => {
-  // Normalize provider name to lowercase
   provider = provider.toLowerCase();
 
-  // Handle Gemini separately
   if (provider === "gemini") {
     for await (const chunk of responseStream.stream) {
       sendToClient(uuid, session, "message", chunk.text());
     }
-    sendToClient(uuid, session, "EOM", null);
+    sendToClient(uuid, session, "EOM", { end: true }); // Signal end with attribute
     return;
   }
 
-  // Handle Azure separately
   if (provider === "azureai") {
     const stream = Readable.from(responseStream);
-    handleAzureStream(stream, uuid, session, sendToClient);
+    handleAzureStream(stream, uuid, session, sendToClient); // Fixed typo here
     return;
   }
 
-  // Handle other providers
   let messageEnded = false;
   for await (const part of responseStream) {
     try {
@@ -278,21 +250,18 @@ const handleProviderResponse = async (responseStream, provider, uuid, session, s
           content = part?.choices?.[0]?.delta?.content;
           messageEnded = part?.choices?.[0]?.finish_reason === "stop";
           break;
-
         case "xai":
           content = part?.choices?.[0]?.delta?.content;
           messageEnded = part?.choices?.[0]?.finish_reason === "stop";
           break;
-  
       }
 
       if (content) {
         sendToClient(uuid, session, "message", content);
       }
-      
-      // Send EOM if we've reached the end of the message
+
       if (messageEnded) {
-        sendToClient(uuid, session, "EOM", null);
+        sendToClient(uuid, session, "EOM", { end: true }); // Signal end with attribute
       }
     } catch (error) {
       console.error(`Error processing ${provider} stream message:`, error);
@@ -304,11 +273,11 @@ const handleProviderResponse = async (responseStream, provider, uuid, session, s
     }
   }
 
-  // Send final EOM if not already sent
   if (!messageEnded) {
-    sendToClient(uuid, session, "EOM", null);
+    sendToClient(uuid, session, "EOM", { end: true }); // Ensure end is signaled
   }
 };
+
 // Handle AzureAI specific stream
 const handleAzureStream = (stream, uuid, session, sendToClient) => {
   stream.on("data", (event) => {
@@ -319,7 +288,7 @@ const handleAzureStream = (stream, uuid, session, sendToClient) => {
     });
   });
 
-  stream.on("end", () => sendToClient(uuid, session, "EOM", null));
+  stream.on("end", () => sendToClient(uuid, session, "EOM", { end: true })); // Signal end with attribute
   stream.on("error", (error) => {
     sendToClient(uuid, session, "ERROR", JSON.stringify({
       message: "Stream error.",

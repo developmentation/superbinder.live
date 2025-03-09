@@ -1,4 +1,5 @@
 // components/Viewer.js
+import LLMInteraction from './LLMInteraction.js';
 import ViewerGoals from './ViewerGoals.js';
 import ViewerAgents from './ViewerAgents.js';
 import ViewerDocuments from './ViewerDocuments.js';
@@ -14,6 +15,7 @@ import { useRealTime } from '../composables/useRealTime.js';
 export default {
   name: 'Viewer',
   components: {
+    LLMInteraction,
     ViewerGoals,
     ViewerAgents,
     ViewerDocuments,
@@ -60,6 +62,7 @@ export default {
   },
   template: `
     <div class="h-auto p-4">
+   <!-- <LLMInteraction></LLMInteraction> -->
       <viewer-dashboard v-show="activeTab === 'Dashboard'" :update-tab="updateTab" />
       <viewer-goals v-show="activeTab === 'Goals'" />
       <viewer-agents v-show="activeTab === 'Agents'" />
