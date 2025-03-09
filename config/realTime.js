@@ -9,7 +9,7 @@ const entityConfigs = {
   agents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-agent', update: 'update-agent', remove: 'remove-agent', reorder: null } },
   chat: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-chat', update: 'update-chat', remove: 'delete-chat', draft: 'draft-chat' } },
   clips: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-clip', update: null, remove: 'remove-clip', reorder: null } },
-  bookmarks: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-bookmark', update: null, remove: 'remove-bookmark', reorder: null } },
+  bookmarks: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-bookmark', update: 'update-bookmark', remove: 'remove-bookmark', reorder: null } },
   documents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-document', update: 'rename-document', remove: 'remove-document', reorder: null } },
   goals: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-goal', update: 'update-goal', remove: 'remove-goal', reorder: 'reorder-goals' } },
   questions: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-question', update: 'update-question', remove: 'remove-question', reorder: 'reorder-questions' } },
@@ -277,12 +277,25 @@ function createRealTimeServers(server, corsOptions) {
     cors: corsOptions || { origin: '*' },
     pingInterval: 5000,
     pingTimeout: 10000,
-    maxHttpBufferSize: 1e12,
+    maxHttpBufferSize: 1e9,
   });
 
   io.on('connection', async (socket) => {
     console.log(`Client connected: ${socket.id}`);
 
+
+    // Listen for errors on this specific socket
+    socket.on('error', (error) => {
+      if (error.message === 'Max buffer size exceeded') {
+          console.error(`Rejected oversized message from ${socket.id}. 
+              Size exceeded limit of ${io.engine.opts.maxHttpBufferSize} bytes`);
+          // Optionally, you could notify the client
+          socket.emit('error', 'Message too large');
+      } else {
+          console.error(`Socket error for ${socket.id}: ${error.message}`);
+      }
+  });
+  
     socket.on('join-channel', async (data) => {
       if (!validateJoinData(data)) {
         socket.emit('message', { type: 'error', message: 'Invalid channel name or data', timestamp: Date.now() });
@@ -423,7 +436,10 @@ async function handleMessage(dataObj, socket) {
     case 'add-bookmark':
       await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
       break;
-    case 'remove-bookmark':
+      case 'update-bookmark':
+        await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
+        break;
+      case 'remove-bookmark':
       await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
       break;
     case 'add-document':
