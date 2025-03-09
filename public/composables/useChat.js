@@ -3,6 +3,7 @@ import { useRealTime } from './useRealTime.js';
 
 const messages = Vue.ref([]);
 const draftMessages = Vue.ref({});
+const draftInitialTimestamps = Vue.ref({}); // Track initial timestamps for drafts
 const { emit, on, off, activeUsers, userUuid, userColor } = useRealTime();
 const eventHandlers = new WeakMap();
 const processedEvents = new Set();
@@ -21,10 +22,13 @@ export function useChat() {
         }
         const finalColor = data.color || (senderUuid === userUuid.value ? userColor.value : getUserColor(senderUuid)) || '#808080';
         if (draftMessages.value[senderUuid]) delete draftMessages.value[senderUuid];
+        // Reset the initial timestamp for this user to ensure next draft starts at the bottom
+        delete draftInitialTimestamps.value[senderUuid];
+        console.log(`Processed add-chat for ${senderUuid} on device ${userUuid.value}, reset initial timestamp`);
         messages.value.push({
           id,
           userUuid: senderUuid,
-          data: { text: data.text.trim(), color: finalColor },
+          data: { text: data.text, color: finalColor }, // Preserve newlines
           timestamp: timestamp || Date.now(),
         });
         messages.value = [...messages.value];
@@ -37,19 +41,31 @@ export function useChat() {
         console.warn('Invalid text in draft-chat event, expected string:', data.text);
         return;
       }
-      if (data.text.trim() || data.text === '') {
+      // Only create or update draft if text has meaningful content after trimming
+      if (data.text.trim().length > 0) {
+        // Check if this is a new draft session (new id or no existing timestamp)
+        const currentDraftId = draftMessages.value[senderUuid]?.id;
+        if (!draftInitialTimestamps.value[senderUuid] || (currentDraftId && currentDraftId !== id)) {
+          draftInitialTimestamps.value[senderUuid] = timestamp || Date.now();
+          console.log(`New draft session for ${senderUuid} on device ${userUuid.value}: Initial timestamp set to ${draftInitialTimestamps.value[senderUuid]}, ID = ${id}`);
+        } else {
+          console.log(`Existing draft for ${senderUuid} on device ${userUuid.value}: Reusing initial timestamp ${draftInitialTimestamps.value[senderUuid]}, ID = ${id}`);
+        }
         const draftMsg = {
           id,
           userUuid: senderUuid,
-          data: { text: data.text.trim() },
+          data: { text: data.text }, // Preserve newlines for draft rendering
           isDraft: true,
-          timestamp: timestamp || Date.now(),
+          timestamp: draftInitialTimestamps.value[senderUuid], // Use the stable initial timestamp
           color: '#4B5563',
           displayNameSuffix: '(typing)',
         };
         draftMessages.value[senderUuid] = draftMsg;
-      } else if (!data.text) {
+      } else if (data.text === '' || data.text == null) {
+        // Remove draft if text is empty or null
         delete draftMessages.value[senderUuid];
+        delete draftInitialTimestamps.value[senderUuid]; // Clean up initial timestamp
+        console.log(`Removed draft for ${senderUuid} on device ${userUuid.value}, cleaned up timestamp`);
       }
       draftMessages.value = { ...draftMessages.value };
     };
@@ -61,7 +77,7 @@ export function useChat() {
       }
       const message = messages.value.find(m => m.id === id && m.userUuid === senderUuid);
       if (message) {
-        message.data.text = data.text.trim();
+        message.data.text = data.text; // Preserve newlines
         message.timestamp = timestamp || Date.now();
         messages.value = [...messages.value];
       }
@@ -75,7 +91,7 @@ export function useChat() {
     handlers.addChat = on('add-chat', handlers.handleAddChat);
     handlers.draftChat = on('draft-chat', handlers.handleDraftChat);
     handlers.updateChat = on('update-chat', handlers.handleUpdateChat);
-    handlers.deleteChat = on('delete-chat', handlers.handleDeleteChat);
+    handlers.deleteChat = on('delete-chat', handlers.deleteChat);
     eventHandlers.set(useChat, handlers);
   }
 
@@ -87,10 +103,13 @@ export function useChat() {
       return;
     }
     const id = uuidv4();
-    const data = { text: text.trim(), color: userColor.value || '#808080' }; // Use server-assigned color
+    const data = { text: text, color: userColor.value || '#808080' }; // Preserve newlines
+    console.log('Sending message with newlines:', data.text); // Debug log
     handlers.handleAddChat({ id, userUuid: userUuid.value, data });
     emit('add-chat', { id, userUuid: userUuid.value, data, timestamp: Date.now() });
     if (draftMessages.value[userUuid.value]) delete draftMessages.value[userUuid.value];
+    delete draftInitialTimestamps.value[userUuid.value]; // Reset initial timestamp for new session
+    console.log(`Sent message for ${userUuid.value}, reset initial timestamp`);
     draftMessages.value = { ...draftMessages.value };
   }
 
@@ -99,7 +118,9 @@ export function useChat() {
       console.warn('Invalid text in updateDraft, expected string:', text);
       return;
     }
-    let draftId = draftMessages.value[userUuid.value]?.id || uuidv4();
+    // Generate a new draftId for each new drafting session after sending
+    let draftId = draftMessages.value[userUuid.value]?.id || uuidv4(); // Reuse during session, new ID after send
+    console.log(`Update draft for ${userUuid.value}: Draft ID = ${draftId}, Text = "${text}"`);
     handlers.handleDraftChat({ id: draftId, userUuid: userUuid.value, data: { text: text || '' } });
     emit('draft-chat', { id: draftId, userUuid: userUuid.value, data: { text: text || '' }, timestamp: Date.now() });
   }
@@ -109,7 +130,7 @@ export function useChat() {
       console.warn('Invalid parameters in updateChat, expected non-empty string id and text:', { id, text });
       return;
     }
-    emit('update-chat', { id, userUuid: userUuid.value, data: { text: text.trim() }, timestamp: Date.now() });
+    emit('update-chat', { id, userUuid: userUuid.value, data: { text: text }, timestamp: Date.now() }); // Preserve newlines
   }
 
   function deleteChat(id) {
@@ -139,11 +160,13 @@ export function useChat() {
       eventHandlers.delete(useChat);
     }
     processedEvents.clear();
+    draftInitialTimestamps.value = {}; // Clean up initial timestamps
   }
 
   return {
     messages,
     draftMessages,
+    draftInitialTimestamps, // Expose for debugging if needed
     sendMessage,
     updateDraft,
     updateChat,

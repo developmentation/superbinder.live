@@ -7,28 +7,24 @@ export default {
   template: `
     <div
       v-if="isOpen"
-      class="chat-panel fixed right-0 bg-gray-900 border-l border-gray-700 shadow-lg flex flex-col transform transition-transform duration-300"
-      :class="{ 'translate-x-full': !isOpen, 'z-50 inset-0 bg-black bg-opacity-50 flex justify-end': isMobile, 'absolute top-0': !isMobile }"
-      :style="{
-        width: isMobile ? '100%' : width + 'px',
-        height: isMobile ? 'calc(100vh - 96px)' : 'calc(100vh - 200px)',   
-        maxHeight: isMobile ? 'calc(100vh - 96px)' : 'calc(100vh - 200px)'  
-      }"
+      class="chat-panel"
+      :class="{ 'mobile': isMobile, 'translate-x-full': !isOpen }"
+      :style="{ width: !isMobile ? width + 'px' : undefined, zIndex: 100 }"
     >
       <!-- Mobile Inner Container -->
-      <div v-if="isMobile" class="bg-gray-900 h-full w-full border-l border-gray-700 shadow-lg flex flex-col">
-        <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+      <div v-if="isMobile" class="bg-gray-900 w-full flex flex-col h-full">
+        <div class="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
           <h3 class="text-lg font-semibold text-purple-400">Chat</h3>
           <button @click="closeChat" class="text-white hover:text-red-400">
             <i class="pi pi-times text-xl"></i>
           </button>
         </div>
-        <div ref="chatContainer" class="flex-1 overflow-y-auto p-4" @scroll.passive="handleScroll">
+        <div ref="chatContainer" class="flex-1 overflow-y-auto p-4 scrollbar-hide" @scroll.passive="handleScroll">
           <div
             v-for="msg in allMessages"
             :key="msg.id"
             :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg?.data?.color ? msg.data.color + '33' : '#80808033') }" 
-            class="p-2 mb-2 rounded-lg flex flex-col relative"
+            class="p-2 mb-2 rounded-lg flex flex-col relative message-text"
           >
             <button
               v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid" 
@@ -42,31 +38,25 @@ export default {
             <span class="font-semibold text-white">
               {{ getDisplayName(msg) }}:
             </span>
-            <span class="text-white">{{ msg.data.text }}</span>
+            <span class="text-white message-content">{{ msg.data.text }}</span>
             <span class="text-gray-400 text-xs">{{ formatTime(msg.timestamp) }}</span>
           </div>
           <div v-if="!allMessages.length" class="text-gray-400">No messages yet.</div>
         </div>
-        <div class="p-4 border-t border-gray-700 flex gap-2 items-center">
-          <input
+        <div class="p-4 border-t border-gray-700 flex gap-2 items-center flex-shrink-0">
+          <textarea
             v-model="draft"
             @input="updateDraft"
-            @keypress.enter="sendFinalMessage"
-            type="text"
-            class="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500"
+            @keypress.enter="handleEnterKey"
+            rows="3"
+            class="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 textarea-input"
             placeholder="Type a message..."
-          />
-          <button
-            @click="sendFinalMessage"
-            class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
-          >
-            Send
-          </button>
+          ></textarea>
         </div>
       </div>
       <!-- Desktop Content -->
       <template v-else>
-        <div class="p-2 border-b border-gray-700 flex justify-between items-center relative">
+        <div class="p-2 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
           <h3 class="text-lg font-semibold text-purple-400">Chat</h3>
           <button @click="closeChat" class="text-white hover:text-red-400">
             <i class="pi pi-times text-xl"></i>
@@ -77,12 +67,12 @@ export default {
             @touchstart.passive="startResize"
           ></div>
         </div>
-        <div ref="chatContainer" class="flex-1 overflow-y-auto p-2" @scroll.passive="handleScroll">
+        <div ref="chatContainer" class="flex-1 overflow-y-auto p-2 scrollbar-hide" @scroll.passive="handleScroll">
           <div
             v-for="msg in allMessages"
             :key="msg.id"
             :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg?.data?.color ? msg.data.color + '33' : '#80808033') }"  
-            class="p-2 mb-2 rounded-lg flex flex-col relative"
+            class="p-2 mb-2 rounded-lg flex flex-col relative message-text"
           >
             <button
               v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid"  
@@ -96,26 +86,20 @@ export default {
             <span class="font-semibold text-white">
               {{ getDisplayName(msg) }}:
             </span>
-            <span class="text-white">{{ msg.data.text }}</span>
+            <span class="text-white message-content">{{ msg.data.text }}</span>
             <span class="text-gray-400 text-xs">{{ formatTime(msg.timestamp) }}</span>
           </div>
           <div v-if="!allMessages.length" class="text-gray-400">No messages yet.</div>
         </div>
-        <div class="p-2 border-t border-gray-700 flex gap-2 items-center">
-          <input
+        <div class="p-4 border-t border-gray-700 flex gap-2 items-center flex-shrink-0">
+          <textarea
             v-model="draft"
             @input="updateDraft"
-            @keypress.enter="sendFinalMessage"
-            type="text"
-            class="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500"
+            @keypress.enter="handleEnterKey"
+            rows="3"
+            class="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 textarea-input"
             placeholder="Type a message..."
-          />
-          <button
-            @click="sendFinalMessage"
-            class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
-          >
-            Send
-          </button>
+          ></textarea>
         </div>
       </template>
     </div>
@@ -133,10 +117,15 @@ export default {
     const chatContainer = Vue.ref(null);
     const isAutoScrollEnabled = Vue.ref(true);
 
-    const allMessages = Vue.computed(() => [
-      ...messages.value.map(msg => ({ ...msg, isDraft: false })),
-      ...Object.values(draftMessages.value || {}).map(msg => ({ ...msg, isDraft: true })),
-    ].sort((a, b) => a.timestamp - b.timestamp));
+    const allMessages = Vue.computed(() => {
+      // Combine messages and drafts
+      const combined = [
+        ...messages.value.map(msg => ({ ...msg, isDraft: false })),
+        ...Object.values(draftMessages.value || {}).map(msg => ({ ...msg, isDraft: true })),
+      ];
+      // Sort by timestamp, ensuring drafts maintain their initial order during a session
+      return combined.sort((a, b) => a.timestamp - b.timestamp);
+    });
 
     function getDisplayName(msg) {
       const user = activeUsers.value.find(user => user.userUuid === msg.userUuid);
@@ -160,22 +149,59 @@ export default {
       isAutoScrollEnabled.value = isAtBottom;
     }
 
+    // Watch for changes in allMessages and only scroll if the user is at the bottom
     Vue.watch(allMessages, () => {
       if (chatContainer.value && isAutoScrollEnabled.value) {
         Vue.nextTick(() => {
-          chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+          const container = chatContainer.value;
+          container.scrollTop = container.scrollHeight;
         });
       }
     }, { deep: true });
 
+    // Scroll to bottom when ChatPanel opens
+    Vue.watch(
+      () => props.isOpen,
+      (newIsOpen) => {
+        if (newIsOpen) {
+          Vue.nextTick(() => {
+            if (chatContainer.value) {
+              const container = chatContainer.value;
+              container.scrollTop = container.scrollHeight;
+              console.log('Scrolled to bottom on open, container:', chatContainer.value);
+            } else {
+              console.warn('chatContainer is null on open');
+            }
+          });
+          // Fallback delay to ensure DOM is ready
+          setTimeout(() => {
+            if (chatContainer.value) {
+              const container = chatContainer.value;
+              container.scrollTop = container.scrollHeight;
+              console.log('Scrolled to bottom on open (fallback delay)');
+            }
+          }, 100); // 100ms delay as a fallback
+        }
+      }
+    );
+
     function updateDraftLocally(event) {
       const text = event.target.value || '';
-      updateDraft(text);
+      updateDraft(text); // Preserve newlines as they are captured by the textarea
+      console.log('Draft text with newlines:', text); // Debug log
+    }
+
+    function handleEnterKey(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault(); // Prevent default newline in textarea
+        sendFinalMessage();
+      }
     }
 
     function sendFinalMessage() {
       if (draft.value && typeof draft.value === 'string' && draft.value.trim()) {
-        sendMessage(draft.value.trim());
+        console.log('Sending message with newlines:', draft.value); // Debug log
+        sendMessage(draft.value); // Send the text with newlines preserved
         draft.value = '';
       } else {
         console.warn('No valid text to send in draft:', draft.value);
@@ -220,6 +246,7 @@ export default {
       draft,
       sendFinalMessage,
       updateDraft: updateDraftLocally,
+      handleEnterKey,
       deleteChat,
       activeUsers,
       formatTime,

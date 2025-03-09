@@ -93,58 +93,81 @@
 
   <!-- Include Main Script -->
   <script type="module" src="/main.js"></script>
-
   <style>
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, and Opera */
-}
-.scrollbar-hide {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
-}
-.chat-panel {
-  height: auto; /* Default to auto to allow content to determine height, but constrained by :style */
-  max-height: calc(100vh - 200px); /* Prevent overflow beyond viewport for desktop */
-  overflow-y: auto; /* Allow scrolling if content exceeds height */
-}
-
-/* On mobile, override to use calculated viewport height minus header and input */
-.chat-panel.mobile {
-  height: calc(100vh - 96px); /* Subtract header (48px) + input (48px) */
-  width: 100% !important; /* Ensure full width on mobile */
-  margin: 0 !important;
-  padding: 0 !important;
-  position: fixed; /* Ensure it’s fixed to the viewport */
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-}
-
-/* Ensure the desktop version uses absolute positioning and calculated height */
-.chat-panel:not(.mobile) {
-  position: absolute;
-  top: 0;
-  bottom: 0; /* Stretch to bottom of viewport, but constrained by :style */
-  right: 0;
-  height: calc(100vh - 200px); /* Subtract header height (adjust if needed) */
-  max-height: calc(100vh - 200px);
-}
-
-/* Ensure flex children in chat-panel expand correctly */
-.chat-panel .flex-1 {
-  flex: 1;
-  min-height: 0; /* Prevent flex children from overflowing */
-  overflow-y: auto; /* Allow scrolling within the message area */
-}
-
-/* Ensure the input area stays visible at the bottom */
-.chat-panel .p-2:last-child {
-  flex-shrink: 0; /* Prevent the input area from shrinking */
-}
-  </style>
- 
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none; /* Chrome, Safari, and Opera */
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none; /* IE and Edge */
+      scrollbar-width: none; /* Firefox */
+    }
+    
+    .chat-panel {
+      height: auto; /* Default to auto to allow content to determine height */
+      max-height: calc(100vh - 200px); /* Default max height for desktop */
+      overflow-y: auto; /* Allow scrolling if content exceeds height */
+      background-color: #1f2937; /* Match your dark theme */
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Mobile mode: Full viewport height and width, header always at top */
+    .chat-panel.mobile {
+      height: 100vh; /* Full viewport height */
+      min-height: 100vh; /* Ensure it stretches even with browser chrome */
+      width: 100vw !important; /* Full viewport width */
+      margin: 0 !important;
+      padding: 0 !important;
+      position: fixed; /* Fixed to the viewport */
+      top: 0; /* Align to the top of the viewport */
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 100; /* Ensure it’s above everything else */
+    }
+    
+    /* Desktop mode: Sidebar with full height, header and input always visible */
+    .chat-panel:not(.mobile) {
+      position: absolute;
+      top: 0;
+      bottom: 0; /* Stretch to bottom of viewport */
+      right: 0;
+      height: calc(100vh - 100px); /* Subtract header height */
+      max-height: calc(100vh - 100px);
+      border-left: 1px solid #374151; /* Match your border style */
+      box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1); /* Match your shadow */
+      z-index: 50; /* Ensure it’s above other content */
+    }
+    
+    /* Ensure flex children in chat-panel expand correctly */
+    .chat-panel .flex-1 {
+      flex: 1 1 0; /* Ensure it grows and shrinks properly */
+      min-height: 0; /* Prevent flex children from overflowing */
+      overflow-y: auto; /* Allow scrolling within the message area */
+    }
+    
+    /* Ensure the header and input area don't shrink */
+    .chat-panel .flex-shrink-0 {
+      flex-shrink: 0; /* Prevent shrinking */
+    }
+    
+    /* Preserve carriage returns in message text and apply Arial font */
+    .message-text .message-content {
+      white-space: pre-wrap; /* Preserves line breaks and wraps text */
+      word-break: break-word; /* Ensures long words break appropriately */
+      font-family: Arial, sans-serif; /* Apply Arial font */
+    }
+    
+    /* Style the textarea for multiline input with scrolling */
+    .textarea-input {
+      resize: none; /* Prevent manual resizing by user */
+      min-height: 60px; /* Approximate height for 3 lines (adjust based on font size) */
+      max-height: 120px; /* Limit to about 6 lines for scrolling */
+      overflow-y: auto; /* Enable vertical scrolling when content exceeds 3 lines */
+      line-height: 1.5; /* Adjust based on your font size for accurate line count */
+      font-family: Arial, sans-serif; /* Apply Arial font to textarea for consistency */
+    }
+    </style>
  <style>
 
 .pdf-viewer {

@@ -25,7 +25,7 @@ export default {
     ViewerDashboard,
   },
   template: `
-    <div class="flex flex-col min-h-screen bg-gray-950 text-white p-2 overflow-x-hidden" style="height: 100vh;">
+    <div class="flex flex-col min-h-screen bg-gray-950 text-white p-2 overflow-x-hidden" style="height: 100vh; position: relative;">
       <session-setup v-if="!sessionReady" @setup-complete="handleSetupComplete" />
 
       <div v-if="sessionReady" class="flex flex-col h-full relative">
@@ -42,9 +42,6 @@ export default {
               <i v-if="!isRoomLocked" class="pi pi-unlock text-xl"></i>
               <i v-if="isRoomLocked" class="pi pi-lock text-xl"></i>
             </button>
-           <!-- <button @click="downloadFromCloud" class="p-2 text-white hover:text-purple-400" title="Download from Cloud">
-              <i class="pi pi-cloud-download text-xl"></i>
-            </button> -->
             <span :class="connectionStatusClass" class="inline-block w-4 h-4 rounded-full mr-2" title="Connection Status"></span>
           </div>
         </div>
@@ -73,33 +70,36 @@ export default {
 
         <!-- Main Content -->
         <div class="flex flex-1 flex-col overflow-hidden relative" style="height: 100%;">
-          <!-- Document Sub-Tabs (only when Documents tab is active) -->
-          <div v-show="activeTab === 'Documents'" class="bg-gray-900 border-b border-gray-700 px-4 py-2">
-            <div class="flex gap-2 overflow-x-auto scrollbar-hide">
-              <button
-                v-for="subTab in documentSubTabs"
-                :key="subTab"
-                @click="activeDocumentSubTab = subTab; updateActiveTab('Documents')"
-                class="px-4 py-2 rounded-t-lg font-semibold transition-colors whitespace-nowrap"
-                :class="[activeDocumentSubTab === subTab ? 'bg-gray-800 text-purple-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600']"
-              >
-                {{ subTab }}
-              </button>
+          <!-- Conditionally show main content only when chat is not open on mobile -->
+          <div v-show="!isMobile || !isChatOpen" class="flex-1 flex flex-col overflow-hidden">
+            <!-- Document Sub-Tabs (only when Documents tab is active) -->
+            <div v-show="activeTab === 'Documents'" class="bg-gray-900 border-b border-gray-700 px-4 py-2">
+              <div class="flex gap-2 overflow-x-auto scrollbar-hide">
+                <button
+                  v-for="subTab in documentSubTabs"
+                  :key="subTab"
+                  @click="activeDocumentSubTab = subTab; updateActiveTab('Documents')"
+                  class="px-4 py-2 rounded-t-lg font-semibold transition-colors whitespace-nowrap"
+                  :class="[activeDocumentSubTab === subTab ? 'bg-gray-800 text-purple-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600']"
+                >
+                  {{ subTab }}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <!-- Viewer -->
-          <div 
-            class="flex-1 overflow-y-auto" 
-            :style="{ maxHeight: activeTab === 'Documents' ? 'calc(100vh - 300px)' : 'calc(100vh - 200px)' }"
-          >
-            <viewer
-              :active-tab="activeTab"
-              :active-document-sub-tab="activeDocumentSubTab"
-              :update-tab="updateActiveTab"
-              v-show="true"
-              class="w-full h-full"
-            />
+            <!-- Viewer -->
+            <div 
+              class="flex-1 overflow-y-auto" 
+              :style="{ maxHeight: activeTab === 'Documents' ? 'calc(100vh - 300px)' : 'calc(100vh - 200px)' }"
+            >
+              <viewer
+                :active-tab="activeTab"
+                :active-document-sub-tab="activeDocumentSubTab"
+                :update-tab="updateActiveTab"
+                v-show="true"
+                class="w-full h-full"
+              />
+            </div>
           </div>
 
           <!-- Chat Button (Always visible on mobile, hidden on desktop) -->
@@ -110,19 +110,20 @@ export default {
           >
             <i class="pi pi-comments text-xl"></i>
           </button>
-
-          <chat-panel
-            v-show="isChatOpen"
-            :is-open="isChatOpen"
-            :is-mobile="isMobile"
-            :width="chatWidth"
-            @close="toggleChat"
-            @update:width="updateChatWidth"
-            class="z-50"
-            :class="{ 'fixed inset-0 bg-gray-900 bg-opacity-95': isMobile, 'absolute right-0 top-0': !isMobile }"
-            :style="{ 'width': isMobile ? '100%' : \`\${chatWidth}px\`, 'height': 'calc(100vh - 200px)' }"
-          />
         </div>
+
+        <!-- Chat Panel (Moved to Binder.js level) -->
+        <chat-panel
+          v-show="isChatOpen"
+          :is-open="isChatOpen"
+          :is-mobile="isMobile"
+          :width="chatWidth"
+          @close="toggleChat"
+          @update:width="updateChatWidth"
+          class="chat-panel"
+          :class="{ 'mobile': isMobile }"
+          :style="{ width: !isMobile ? \`\${chatWidth}px\` : undefined, zIndex: 100 }"
+        />
       </div>
     </div>
   `,
@@ -144,7 +145,7 @@ export default {
     const sessionReady = Vue.ref(false);
     const activeTab = Vue.ref("Dashboard");
     const activeDocumentSubTab = Vue.ref("Uploads");
-    const tabs = ["Dashboard", "Documents", "Goals", "Agents", "Q&A" ]; //"Chat", "Artifacts", "Transcriptions"
+    const tabs = ["Dashboard", "Documents", "Goals", "Agents", "Q&A"];
     const documentSubTabs = ["Uploads", "Viewer", "Clips", "Bookmarks"];
     const isRoomLocked = Vue.ref(false);
     const isChatOpen = Vue.ref(false);
@@ -171,10 +172,8 @@ export default {
     let disconnectTimeout = null;
     const DISCONNECT_DELAY = 2 * 1000;
 
-    // Compute history dynamically
     const history = Vue.ref(gatherLocalHistory());
 
-    // Computed properties for each entity count
     const goalCount = Vue.computed(() => (history.value.goals || []).length);
     const agentCount = Vue.computed(() => (history.value.agents || []).length);
     const documentCount = Vue.computed(() => (history.value.documents || []).length);
@@ -183,10 +182,9 @@ export default {
     const transcriptCount = Vue.computed(() => (history.value.transcripts || []).length);
     const questionCount = Vue.computed(() => (history.value.questions || []).length);
     const answerCount = Vue.computed(() => (history.value.answers || []).length);
-    const chatCount = Vue.computed(() => (history.value.chat || []).length); // Note: uses 'chat' key
+    const chatCount = Vue.computed(() => (history.value.chat || []).length);
     const artifactCount = Vue.computed(() => (history.value.artifacts || []).length);
 
-    // Watch for history changes
     Vue.watch(
       () => gatherLocalHistory(),
       (newHistory) => {
@@ -329,8 +327,6 @@ export default {
         case 'Bookmarks': return `Bookmarks (${bookmarkCount.value})`;
         case 'Transcriptions': return `Transcriptions (${transcriptCount.value})`;
         case 'Q&A': return `Q&A (${questionCount.value} / ${answerCount.value})`;
-        // case 'Chat': return `Chat (${chatCount.value})`;
-        // case 'Artifacts': return `Artifacts (${artifactCount.value})`;
         default: return tab;
       }
     }
