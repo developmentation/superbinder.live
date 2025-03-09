@@ -66,9 +66,9 @@ function validateLLMData(data) {
 async function loadStateFromServer(channelName, entityType) {
   try {
     const filePath = equityFilePath(channelName, entityType);
-    console.log(`Attempting to load ${entityType} from ${filePath}`);
+    //console.log(`Attempting to load ${entityType} from ${filePath}`);
     const data = await fs.readFile(filePath, 'utf8').then(JSON.parse).catch(() => []);
-    console.log(`Loaded ${entityType} for ${channelName}:`, JSON.stringify(data, null, 2));
+    //console.log(`Loaded ${entityType} for ${channelName}:`, JSON.stringify(data, null, 2));
     return data;
   } catch (error) {
     console.error(`Error loading ${entityType} for ${channelName}:`, error);
@@ -81,7 +81,7 @@ async function saveStateToServer(channelName, entityType, state) {
     const filePath = equityFilePath(channelName, entityType);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, JSON.stringify(state, null, 2));
-    console.log(`Channel ${channelName} ${entityType} state saved to ${filePath}`);
+    //console.log(`Channel ${channelName} ${entityType} state saved to ${filePath}`);
   } catch (error) {
     console.error(`Error saving ${entityType} state to server for channel ${channelName}:`, error);
   }
@@ -131,7 +131,7 @@ function broadcastToChannel(channelName, type, payload, excludeUuid = null) {
       };
     }
 
-    console.log(`Broadcasting ${type} to ${channelName}:`, message);
+    //console.log(`Broadcasting ${type} to ${channelName}:`, message);
     for (const userUuid in channel.sockets) {
       if (userUuid !== excludeUuid) {
         channel.sockets[userUuid].emit('message', message);
@@ -150,12 +150,12 @@ function cleanupUser(channelName, userUuid, socket) {
 
       if (Object.keys(channel.users).length === 0) {
         channels.delete(channelName);
-        console.log(`Channel ${channelName} deleted (empty)`);
+        //console.log(`Channel ${channelName} deleted (empty)`);
       } else {
         broadcastToChannel(channelName, 'user-left', { userUuid });
         broadcastToChannel(channelName, 'user-list', { id: null, userUuid, data: null });
       }
-      console.log(`${userUuid} left channel ${channelName}`);
+      //console.log(`${userUuid} left channel ${channelName}`);
     }
   }
 }
@@ -226,7 +226,7 @@ async function sendLLMStream(uuid, channelName, session, type, message, isEnd = 
     serverTimestamp: Date.now(),
   };
   // Removed pendingLLMStreams accumulation logic
-  console.log(`Broadcasting ${type} for UUID ${uuid}:`, payload);
+  //console.log(`Broadcasting ${type} for UUID ${uuid}:`, payload);
   broadcastToChannel(channelName, type, payload);
   // Removed server-side state update and saving logic for llm
 }
@@ -285,7 +285,7 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
     };
 
     await handlePrompt(promptConfig, async (uuid, session, type, message) => {
-      console.log('Payload from LLM', { uuid, session, type, message });
+      //console.log('Payload from LLM', { uuid, session, type, message });
       if (type === 'message') {
         await sendLLMStream(uuid, channelName, session, 'draft-llm', message);
       } else if (type === 'EOM') {
@@ -336,7 +336,7 @@ function createRealTimeServers(server, corsOptions) {
   });
 
   io.on('connection', async (socket) => {
-    console.log(`Client connected: ${socket.id}`);
+    //console.log(`Client connected: ${socket.id}`);
 
     socket.on('error', (error) => {
       if (error.message === 'Max buffer size exceeded') {
@@ -368,7 +368,7 @@ function createRealTimeServers(server, corsOptions) {
           state: initialState,
           locked: false,
         });
-        console.log(`Initialized channel ${channelName} with state:`, initialState);
+        //console.log(`Initialized channel ${channelName} with state:`, initialState);
       }
 
       const channel = channels.get(channelName);
@@ -389,7 +389,7 @@ function createRealTimeServers(server, corsOptions) {
         timestamp: Date.now(),
         serverTimestamp: Date.now(),
       };
-      console.log(`Sending init-state to ${userUuid} in ${channelName}:`, initStateMessage);
+      //console.log(`Sending init-state to ${userUuid} in ${channelName}:`, initStateMessage);
       socket.emit('message', initStateMessage);
 
       broadcastToChannel(channelName, 'user-list', { id: null, userUuid, data: null });
@@ -408,7 +408,7 @@ function createRealTimeServers(server, corsOptions) {
           break;
         }
       }
-      console.log(`Client disconnected: ${socket.id}`);
+      //console.log(`Client disconnected: ${socket.id}`);
     });
 
     socket.on('message', async (data) => {
@@ -491,7 +491,7 @@ async function handleMessage(dataObj, socket) {
       }
       break;
     case 'upload-to-cloud':
-      console.log('Upload to Cloud');
+      //console.log('Upload to Cloud');
       for (const entityType of Object.keys(entityConfigs)) {
         await saveStateToServer(channelName, entityType, channel.state[entityType]);
       }

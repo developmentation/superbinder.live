@@ -179,7 +179,7 @@ async function processPdf(file) {
   const pages = [];
   const textContent = [];
 
-  const scale = 2;
+  const scale = 1.25;
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);

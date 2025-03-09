@@ -4,11 +4,13 @@ import { useClips } from "../composables/useClips.js";
 import { useSearch } from "../composables/useSearch.js";
 import { useScrollNavigation } from "../composables/useScrollNavigation.js";
 import LazyScrollViewer from "./LazyScrollViewer.js";
+import ViewerBookmarks from "./ViewerBookmarks.js";
 
 export default {
   name: "ViewerDocuments",
   components: {
     LazyScrollViewer,
+    ViewerBookmarks,
   },
   props: {
     documents: {
@@ -61,7 +63,7 @@ export default {
         selectedPageIndex.value = pageIndex;
       } else if (attempt < 5) {
         console.log(`Scroll attempt ${attempt}/5 failed, retrying...`);
-        setTimeout(() => scrollToPage(pageIndex, attempt + 1), 100); // Delay retries
+        setTimeout(() => scrollToPage(pageIndex, attempt + 1), 100);
       } else {
         console.error(
           `Scroll failed after 5 attempts: lazyScrollViewer=${!!lazyScrollViewer.value}, pageIndex=${pageIndex}, pages=${
@@ -70,7 +72,6 @@ export default {
         );
       }
     };
-
 
     const jumpToPage = () => {
       const pageNum = parseInt(jumpToPageInput.value, 10);
@@ -95,7 +96,6 @@ export default {
       }
     };
 
-
     Vue.onMounted(() => {
       if (jumpToPageNumber.value) {
         jumpToPageInput.value = jumpToPageNumber.value;
@@ -103,7 +103,7 @@ export default {
       }
       onScrollRequest((pageIndex) => {
         console.log(`Received scroll request for page index: ${pageIndex}`);
-        selectedPageIndex.value = pageIndex; // Set immediately for watcher
+        selectedPageIndex.value = pageIndex;
         scrollToPage(pageIndex);
       });
     });
@@ -111,7 +111,7 @@ export default {
     Vue.watch(
       () => jumpToPageNumber.value,
       (newVal) => {
-        jumpToPageInput.value = jumpToPageNumber.value;
+        jumpToPageInput.value = newVal;
         jumpToPage();
       },
       { immediate: true }
@@ -147,7 +147,6 @@ export default {
       { immediate: true }
     );
 
-    // Watch pageItems to handle delayed scrolls
     Vue.watch(
       () => pageItems.value,
       (newPages) => {
@@ -158,7 +157,7 @@ export default {
           scrollToPage(selectedPageIndex.value);
         }
       },
-      { immediate: true } // Trigger immediately if pageItems is already set
+      { immediate: true }
     );
 
     Vue.onMounted(() => {
@@ -407,13 +406,17 @@ export default {
 
     const handleScroll = (scrollTop) => {
       if (!lazyScrollViewer.value || !pageItems.value.length) return;
-      const pageHeight = lazyScrollViewer.value.firstPageHeight || 1170; // Dynamic fallback
+      const pageHeight = lazyScrollViewer.value.firstPageHeight || 1170;
       const centerIndex = Math.floor(
         (scrollTop + window.innerHeight / 2) / pageHeight
       );
       if (centerIndex >= 0 && centerIndex < pageItems.value.length) {
         selectedPageIndex.value = centerIndex;
       }
+    };
+
+    const updateTab = (tabName, viewerType, data) => {
+      console.log(`Update tab: ${tabName}, ${viewerType}`, data);
     };
 
     return {
@@ -447,11 +450,12 @@ export default {
       clipSelectedTextFromContext,
       handleScroll,
       jumpToPage,
+      updateTab,
     };
   },
   template: `
     <div class="h-full flex flex-col overflow-hidden">
-      <div class="p-2 bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
+    <!--  <div class="p-2 bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
         <input
           v-model="searchQuery"
           @input="performSearch"
@@ -459,117 +463,126 @@ export default {
           class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
           placeholder="Search documents (e.g., 'weather forecast Maine')..."
         />
-      </div>
-      <div v-if="isPdf && selectedDocument.data.pages" class="p-2 bg-gray-800 border-b border-gray-700 sticky top-[60px] z-10 flex items-center gap-2">
-        <span class="text-gray-400">Page:</span>
-        <input
-          type="text"
-          inputmode="numeric"
-          v-model="jumpToPageInput"
-          @keyup.enter="jumpToPage"
-          class="w-16 p-1 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none appearance-none"
-          :placeholder="'1-' + selectedDocument.data.pages.length"
-        />
-        <span class="text-gray-400">of {{ selectedDocument.data.pages.length }}</span>
-        <button
-          @click="jumpToPage"
-          class="py-1 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-        >
-          Go
-        </button>
-      </div>
-      <div class="flex-1 overflow-hidden relative" style="height: calc(100vh - 120px);" ref="scrollContainer">
-        <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg h-full">
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-gray-400">{{ selectedDocument.data.name }}</span>
-          </div>
-          <lazy-scroll-viewer
-            v-show="isPdf && selectedDocument.data.pages"
-            ref="lazyScrollViewer"
-            :pages="pageItems"
-            :buffer="1"
-            class="pdf-viewer"
-            @scroll="handleScroll"
-            @contextmenu="handleContextMenu"
-          />
-          <div
-            v-show = "!isPdf"
-            ref="docContent"
-            v-html="selectedDocument.data.processedContent"
-            class="prose text-gray-300 h-full overflow-y-auto"
-            @contextmenu="handleContextMenu"
-          ></div>
-          <div class="mt-2 flex gap-2">
+      </div> -->
+      <div class="flex-1 flex flex-col md:flex-row overflow-hidden"  >
+        <!-- Document Viewer (Left Column) -->
+        <div class="flex-1 md:w-1/2 overflow-hidden relative" ref="scrollContainer">
+          <div v-if="isPdf && selectedDocument.data.pages" class="p-2 bg-gray-800 border-b border-gray-700 z-10 flex items-center gap-2">
+            <span class="text-gray-400">Page:</span>
+            <input
+              type="text"
+              inputmode="numeric"
+              v-model="jumpToPageInput"
+              @keyup.enter="jumpToPage"
+              class="w-16 p-1 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none appearance-none"
+              :placeholder="'1-' + selectedDocument.data.pages.length"
+            />
+            <span class="text-gray-400">of {{ selectedDocument.data.pages.length }}</span>
             <button
-              v-if="selectedText"
-              @click="clipSelectedText"
-              class="py-1 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
-            >
-              Clip Selected
-            </button>
-            <button
-              v-if="selectedText && !isPdf"
-              @click="addTextBookmark"
+              @click="jumpToPage"
               class="py-1 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
             >
-              Bookmark Selection
+              Go
             </button>
           </div>
-        </div>
-        <div v-if="searchResults.length" class="space-y-4 h-full overflow-y-auto">
-          <div v-for="(result, index) in searchResults" :key="index" class="bg-gray-700 p-4 rounded-lg">
-            <div class="flex justify-between items-center">
-              <span class="text-gray-400">{{ result.documentName }}</span>
-              <button
-                @click="toggleExpand(index)"
-                class="text-purple-400 hover:text-purple-300"
-              >
-                {{ expanded[index] ? 'Collapse' : 'Expand' }}
-              </button>
-            </div>
-            <div v-if="expanded[index]" class="mt-2">
-              <div v-html="highlightMatch(result.segment)" class="text-gray-300"></div>
-              <div class="flex gap-2 mt-2">
+          <div class="h-full overflow-y-hidden">
+            <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg h-full">
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-gray-400">{{ selectedDocument.data.name }}</span>
+              </div>
+              <lazy-scroll-viewer
+                v-show="isPdf && selectedDocument.data.pages"
+                ref="lazyScrollViewer"
+                :pages="pageItems"
+                :buffer="1"
+                class="pdf-viewer"
+                @scroll="handleScroll"
+                @contextmenu="handleContextMenu"
+              />
+              <div
+                v-show="!isPdf"
+                ref="docContent"
+                v-html="selectedDocument.data.processedContent"
+                class="prose text-gray-300 h-full overflow-y-auto"
+                @contextmenu="handleContextMenu"
+              ></div>
+              <div class="mt-2 flex gap-2">
                 <button
-                  @click="viewFullDoc(result.id, result.segment)"
-                  class="py-1 px-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg"
+                  v-if="selectedText"
+                  @click="clipSelectedText"
+                  class="py-1 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
                 >
-                  View Full
+                  Clip Selected
                 </button>
                 <button
-                  @click="addClip(result.segment, result.id)"
-                  class="py-1 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center"
+                  v-if="selectedText && !isPdf"
+                  @click="addTextBookmark"
+                  class="py-1 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
                 >
-                  <i class="pi pi-cut mr-2"></i> Clip
+                  Bookmark Selection
                 </button>
               </div>
             </div>
-            <div v-else class="text-gray-300 truncate">{{ result.segment.substring(0, 100) }}...</div>
+            <div v-if="searchResults.length" class="space-y-4 h-full overflow-y-auto">
+              <div v-for="(result, index) in searchResults" :key="index" class="bg-gray-700 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-400">{{ result.documentName }}</span>
+                  <button
+                    @click="toggleExpand(index)"
+                    class="text-purple-400 hover:text-purple-300"
+                  >
+                    {{ expanded[index] ? 'Collapse' : 'Expand' }}
+                  </button>
+                </div>
+                <div v-if="expanded[index]" class="mt-2">
+                  <div v-html="highlightMatch(result.segment)" class="text-gray-300"></div>
+                  <div class="flex gap-2 mt-2">
+                    <button
+                      @click="viewFullDoc(result.id, result.segment)"
+                      class="py-1 px-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg"
+                    >
+                      View Full
+                    </button>
+                    <button
+                      @click="addClip(result.segment, result.id)"
+                      class="py-1 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center"
+                    >
+                      <i class="pi pi-cut mr-2"></i> Clip
+                    </button>
+                  </div>
+                </div>
+                <div v-else class="text-gray-300 truncate">{{ result.segment.substring(0, 100) }}...</div>
+              </div>
+            </div>
+            <div v-if="!selectedDocument && !searchResults.length" class="text-gray-400 h-full flex items-center justify-center">
+              Select a document or search to begin.
+            </div>
+          </div>
+          <div
+            v-if="showContextMenu"
+            :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
+            class="fixed bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20"
+            @click.stop
+          >
+            <div
+              v-if="contextMenuOptions.includes('Create Bookmark')"
+              class="px-4 py-2 text-white hover:bg-gray-700 cursor-pointer"
+              @click="addBookmarkFromContext"
+            >
+              Create Bookmark
+            </div>
+            <div
+              v-if="contextMenuOptions.includes('Create Clip')"
+              class="px-4 py-2 text-white hover:bg-gray-700 cursor-pointer"
+              @click="clipSelectedTextFromContext"
+            >
+              Create Clip
+            </div>
           </div>
         </div>
-        <div v-if="!selectedDocument && !searchResults.length" class="text-gray-400 h-full flex items-center justify-center">
-          Select a document or search to begin.
-        </div>
-        <div
-          v-if="showContextMenu"
-          :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
-          class="fixed bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20"
-          @click.stop
-        >
-          <div
-            v-if="contextMenuOptions.includes('Create Bookmark')"
-            class="px-4 py-2 text-white hover:bg-gray-700 cursor-pointer"
-            @click="addBookmarkFromContext"
-          >
-            Create Bookmark
-          </div>
-          <div
-            v-if="contextMenuOptions.includes('Create Clip')"
-            class="px-4 py-2 text-white hover:bg-gray-700 cursor-pointer"
-            @click="clipSelectedTextFromContext"
-          >
-            Create Clip
-          </div>
+        <!-- Bookmarks (Right Column) -->
+        <div class="hidden md:block md:w-1/2 border-l border-gray-700 h-full overflow-hidden">
+          <viewer-bookmarks :bookmarks="bookmarks" :update-tab="updateTab" />
         </div>
       </div>
     </div>

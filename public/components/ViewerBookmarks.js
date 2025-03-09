@@ -76,7 +76,25 @@ export default {
     const editingBookmark = Vue.ref(null);
 
     const sortedBookmarks = Vue.computed(() => {
-      return [...bookmarks.value].sort((a, b) => b.timestamp - a.timestamp);
+      // Create a copy of bookmarks to avoid mutating the original
+      return [...bookmarks.value].sort((a, b) => {
+        // Get document names for both bookmarks
+        const docA = documents.value.find(d => d.id === a.data.documentId);
+        const docB = documents.value.find(d => d.id === b.data.documentId);
+        const nameA = docA?.data?.name || '';
+        const nameB = docB?.data?.name || '';
+
+        // First sort by document name (ascending)
+        if (nameA < nameB) return -1;
+        if (nameA > nameB) return 1;
+
+        // If document names are equal, sort by page number (ascending)
+        // For PDF bookmarks, use pageIndex + 1; for text bookmarks, use a default (e.g., 0)
+        const pageA = a.data.type === 'pdf-page' ? a.data.pageIndex + 1 : 0;
+        const pageB = b.data.type === 'pdf-page' ? b.data.pageIndex + 1 : 0;
+
+        return pageA - pageB;
+      });
     });
 
     function navigateToBookmark(bookmark) {
