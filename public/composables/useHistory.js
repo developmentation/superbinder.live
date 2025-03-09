@@ -23,7 +23,7 @@ export function useHistory() {
       artifacts: [...(useArtifacts().artifacts.value || [])],
       transcripts: [...(useTranscripts().transcripts.value || [])],
     };
-    console.log('Gathered local history in useHistory:', JSON.stringify(history, null, 2));
+    // console.log('Gathered local history in useHistory:', JSON.stringify(history, null, 2));
     return history;
   }
 
@@ -33,7 +33,7 @@ export function useHistory() {
       return;
     }
     const historyData = data.data || data;
-    console.log('Syncing channel data received:', JSON.stringify(historyData, null, 2));
+    // console.log('Syncing channel data received:', JSON.stringify(historyData, null, 2));
     const hasData = Object.keys(historyData).some(key => Array.isArray(historyData[key]) && historyData[key].length > 0);
     if (hasData) {
       useAgents().agents.value = historyData.agents || [];
@@ -46,10 +46,10 @@ export function useHistory() {
       useQuestions().answers.value = historyData.answers || [];
       useArtifacts().artifacts.value = historyData.artifacts || [];
       useTranscripts().transcripts.value = historyData.transcripts || [];
-      console.log('Channel data synced:', {
-        questions: useQuestions().questions.value,
-        answers: useQuestions().answers.value,
-      });
+      // console.log('Channel data synced:', {
+      //   questions: useQuestions().questions.value,
+      //   answers: useQuestions().answers.value,
+      // });
     } else {
       console.warn('No meaningful data in history, skipping sync:', historyData);
     }
@@ -57,12 +57,12 @@ export function useHistory() {
 
   eventBus.$on('request-history-data', (callback) => {
     const history = gatherLocalHistory();
-    console.log('History requested via eventBus, returning:', JSON.stringify(history, null, 2));
+    // console.log('History requested via eventBus, returning:', JSON.stringify(history, null, 2));
     callback(history);
   });
 
   eventBus.$on('sync-history-data', (data) => {
-    console.log('Received sync-history-data event:', JSON.stringify(data, null, 2));
+    // console.log('Received sync-history-data event:', JSON.stringify(data, null, 2));
     syncChannelData(data);
   });
 

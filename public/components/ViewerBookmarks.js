@@ -1,9 +1,10 @@
 // components/ViewerBookmarks.js
-import { useClips } from '../composables/useClips.js';
-import { useDocuments } from '../composables/useDocuments.js';
+import { useClips } from "../composables/useClips.js";
+import { useDocuments } from "../composables/useDocuments.js";
+import { useScrollNavigation } from "../composables/useScrollNavigation.js";
 
 export default {
-  name: 'ViewerBookmarks',
+  name: "ViewerBookmarks",
   props: {
     updateTab: {
       type: Function,
@@ -46,31 +47,44 @@ export default {
   setup(props) {
     const { bookmarks, removeBookmark } = useClips();
     const { documents, setSelectedDocument } = useDocuments();
+    const { jumpToPageNumber } = useScrollNavigation();
 
     const sortedBookmarks = Vue.computed(() => {
       return [...bookmarks.value].sort((a, b) => b.timestamp - a.timestamp);
     });
 
     function navigateToBookmark(bookmark) {
-      const doc = documents.value.find(d => d.id === bookmark.data.documentId);
+      const doc = documents.value.find(
+        (d) => d.id === bookmark.data.documentId
+      );
       if (doc) {
         setSelectedDocument(doc);
         if (props.updateTab) {
-          props.updateTab('Documents', 'Viewer', { documents: documents.value, bookmarks: bookmarks.value });
+          props.updateTab("Documents", "Viewer", {
+            documents: documents.value,
+            bookmarks: bookmarks.value,
+          });
         }
         Vue.nextTick(() => {
-          const contentEl = document.querySelector('.pdf-viewer') || document.querySelector('pre');
-          if (contentEl) {
-            if (bookmark.data.type === 'pdf-page') {
-              const pageEl = contentEl.querySelectorAll('.pdf-page')[bookmark.data.pageIndex];
-              if (pageEl) {
-                pageEl.scrollIntoView({ behavior: 'smooth' });
-              }
-            } else if (bookmark.data.type === 'text') {
-              contentEl.scrollTop = bookmark.data.offset / doc.data.processedContent.length * contentEl.scrollHeight;
+          if (doc.data.type === "pdf" && bookmark.data.type === "pdf-page") {
+            const pageIndex = bookmark.data.pageIndex;
+
+            jumpToPageNumber.value = pageIndex + 1;
+          } else if (bookmark.data.type === "text") {
+            const contentEl = document.querySelector("pre");
+            if (contentEl) {
+              contentEl.scrollTop =
+                (bookmark.data.offset / doc.data.processedContent.length) *
+                contentEl.scrollHeight;
+            } else {
+              console.error("Text content element not found for scrolling");
             }
           }
         });
+      } else {
+        console.error(
+          `Document not found for bookmark: ${bookmark.data.documentId}`
+        );
       }
     }
 

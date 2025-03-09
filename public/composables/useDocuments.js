@@ -6,7 +6,7 @@ const documents = Vue.ref([]);
 const selectedDocument = Vue.ref(null);
 const { userUuid, displayName, emit, on, off } = useRealTime();
 const eventHandlers = new WeakMap();
-const processedEvents = new Set(); // Add deduplication
+const processedEvents = new Set();
 
 export function useDocuments() {
   function handleAddDocument(eventObj) {
@@ -53,27 +53,20 @@ export function useDocuments() {
   });
 
   async function addDocument(file) {
-    const doc = await processFile(file);
-    if (doc.status === 'complete') {
-      const id = doc.id;
-      const data = {
-        name: doc.name,
-        type: doc.type,
-        createdBy: displayName.value,
-        processedContent: doc.processedContent,
-        renderAsHtml: ['docx', 'xlsx', 'pdf'].includes(doc.type),
-      };
+    const processedDoc = await processFile(file);
+    if (processedDoc.data.status === 'complete') {
+      const id = processedDoc.id;
       const payload = {
         id,
         userUuid: userUuid.value,
-        data,
+        data: processedDoc.data, // Include all processed data
         timestamp: Date.now(),
       };
       documents.value.push(payload);
       documents.value = [...documents.value];
-      emit('add-document', payload);
+      emit('add-document', payload); // Emit the full payload
     }
-    return doc;
+    return processedDoc;
   }
 
   function removeDocument(id) {

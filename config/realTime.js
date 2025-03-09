@@ -277,7 +277,7 @@ function createRealTimeServers(server, corsOptions) {
     cors: corsOptions || { origin: '*' },
     pingInterval: 5000,
     pingTimeout: 10000,
-    maxHttpBufferSize: 1e8,
+    maxHttpBufferSize: 1e12,
   });
 
   io.on('connection', async (socket) => {
@@ -379,7 +379,9 @@ async function handleMessage(dataObj, socket) {
       break;
     case 'update-tab':
       break;
-    case 'add-chat':
+      case 'scroll-to-page':
+        break;
+      case 'add-chat':
       await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data: { ...data, color: userColor } }, socket);
       break;
     case 'draft-chat':

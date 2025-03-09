@@ -1,3 +1,4 @@
+// components/Viewer.js
 import ViewerGoals from './ViewerGoals.js';
 import ViewerAgents from './ViewerAgents.js';
 import ViewerDocuments from './ViewerDocuments.js';
@@ -58,7 +59,7 @@ export default {
     };
   },
   template: `
-    <div class="h-auto overflow-y-auto p-4">
+    <div class="h-auto p-4">
       <viewer-dashboard v-show="activeTab === 'Dashboard'" :update-tab="updateTab" />
       <viewer-goals v-show="activeTab === 'Goals'" />
       <viewer-agents v-show="activeTab === 'Agents'" />

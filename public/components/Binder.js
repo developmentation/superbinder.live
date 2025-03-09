@@ -25,7 +25,7 @@ export default {
     ViewerDashboard,
   },
   template: `
-    <div class="flex flex-col min-h-screen bg-gray-950 text-white p-2 overflow-x-hidden" style="height: 100vh; position: relative;">
+    <div class="flex flex-col min-h-screen text-white p-2 overflow-x-hidden" style="height: 100vh; position: relative;">
       <session-setup v-if="!sessionReady" @setup-complete="handleSetupComplete" />
 
       <div v-if="sessionReady" class="flex flex-col h-full relative">
@@ -90,8 +90,8 @@ export default {
             <!-- Viewer -->
             <div 
               class="flex-1 overflow-y-auto" 
-              :style="{ maxHeight: activeTab === 'Documents' ? 'calc(100vh - 300px)' : 'calc(100vh - 200px)' }"
-            >
+            
+            > <!--   :style="{ maxHeight: activeTab === 'Documents' ? 'calc(100vh - 300px)' : 'calc(100vh - 200px)' }"-->
               <viewer
                 :active-tab="activeTab"
                 :active-document-sub-tab="activeDocumentSubTab"
@@ -402,7 +402,7 @@ export default {
 
     Vue.watch(isConnected, (connected) => {
       if (!connected && sessionReady.value) {
-        console.warn("Connection lost:", connectionError.value);
+        // console.warn("Connection lost:", connectionError.value);
       }
     });
 

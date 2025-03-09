@@ -63,6 +63,10 @@ const wordStyles = `
 `;
 
 export async function processFile(file) {
+  if (!file || typeof file.name !== 'string') {
+    throw new Error('Invalid file object: missing or invalid name');
+  }
+
   const uuid = uuidv4();
   const extension = file.name.split('.').pop().toLowerCase();
   const originalMetadata = {
@@ -74,12 +78,12 @@ export async function processFile(file) {
   const newMetadata = {
     id: uuid,
     name: file.name,
-    type: extension, // Ensure type is included
+    type: extension,
   };
   let status = 'pending';
-  let originalContent = '';
   let processedContent = '';
-  let pages = []; // Track pages for navigation
+  let pages = [];
+  let pagesText = [];
   let analysisContent = {
     summary: null,
     knowledgeGraph: { edges: [], nodes: [] },
@@ -88,60 +92,54 @@ export async function processFile(file) {
   };
 
   try {
-    // Read file content
-    originalContent = await readFileContent(file);
+    const content = await readFileContent(file);
 
-    // Process based on file type
-    switch (extension) {
-      case 'docx':
-        const docxResult = await processDocx(originalContent);
-        processedContent = docxResult.html; // Ensure HTML is not escaped
-        if (processedContent.includes('<')) {
-          processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
-        }
-        pages = docxResult.pages || [];
-        break;
-        case 'pdf':
-          const pdfResult = await processPdf(file);
-          processedContent = pdfResult.html;
+    if (extension === 'pdf') {
+      const pdfResult = await processPdf(file);
+      pages = pdfResult.pages;
+      pagesText = pdfResult.textContent || [];
+      console.log('PDF pagesText:', pagesText);
+    } else {
+      switch (extension) {
+        case 'docx':
+          const docxResult = await processDocx(content);
+          processedContent = docxResult.html;
           if (processedContent.includes('<')) {
-            processedContent = `${wordStyles}<div class="pdf-container">${processedContent}</div>`;
+            processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
           }
-          pages = pdfResult.pages || [];
           break;
-      case 'md':
-        processedContent = await processMarkdown(originalContent);
-        break;
-      case 'xlsx':
-        processedContent = await processExcel(file);
-        if (processedContent.includes('<')) {
-          processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
-        }
-        break;
-      case 'json':
-        processedContent = await processJson(originalContent);
-        break;
-      case 'txt':
-      case 'js':
-      case 'html':
-      case 'css':
-        // Render as plain text without HTML interpretation
-        processedContent = escapeHtml(originalContent);
-        break;
-      default:
-        if (isTextFile(file)) {
-          processedContent = escapeHtml(originalContent); // Plain text rendering
-        } else {
-          throw new Error('Unsupported file type');
-        }
+        case 'md':
+          processedContent = await processMarkdown(content);
+          break;
+        case 'xlsx':
+          processedContent = await processExcel(file);
+          if (processedContent.includes('<')) {
+            processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
+          }
+          break;
+        case 'json':
+          processedContent = await processJson(content);
+          break;
+        case 'txt':
+        case 'js':
+        case 'html':
+        case 'css':
+          processedContent = escapeHtml(content);
+          break;
+        default:
+          if (isTextFile(file)) {
+            processedContent = escapeHtml(content);
+          } else {
+            throw new Error('Unsupported file type');
+          }
+      }
     }
 
-    // Placeholder AI analysis (implement later)
     analysisContent = {
       summary: 'AI summary placeholder (to be implemented)',
       knowledgeGraph: { edges: [], nodes: [] },
-      keywords: ['keyword1', 'keyword2'], // Placeholder keywords
-      vectors: null, // Placeholder for embeddings
+      keywords: ['keyword1', 'keyword2'],
+      vectors: null,
     };
 
     status = 'complete';
@@ -149,81 +147,28 @@ export async function processFile(file) {
     console.error(`Error processing file ${file.name}:`, error);
     status = 'error';
     processedContent = `<p>Error processing file: ${error.message}</p>`;
+    pages = [];
+    pagesText = [];
   }
 
-  return {
+  const processedData = {
     ...originalMetadata,
     ...newMetadata,
-    originalContent,
     processedContent,
+    pages,
+    pagesText,
     analysisContent,
     status,
     timestamp: Date.now(),
-    pages, // Include pages for navigation
+    renderAsHtml: extension === 'pdf' ? true : processedContent.includes('<'),
   };
-}
 
-// Helper functions (unchanged except for context)
-function readFileContent(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    if (file.type.startsWith('text/') || file.name.endsWith('.json')) {
-      reader.readAsText(file);
-    } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      reader.readAsArrayBuffer(file);
-    } else if (file.type === 'application/pdf') {
-      reader.readAsArrayBuffer(file);
-    } else if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-      reader.readAsArrayBuffer(file); // For .xlsx
-    } else {
-      reader.readAsText(file);
-    }
-  });
-}
+  console.log('Processed Data:', processedData);
 
-async function processDocx(buffer) {
-  const result = await mammoth.convertToHtml({
-    arrayBuffer: buffer,
-    options: {
-      styleMap: [
-        'p[style-name="Heading 1"] => h1:fresh',
-        'p[style-name="Heading 2"] => h2:fresh',
-        'table => table.mammoth-table:fresh',
-        'tr => tr:fresh',
-        'td => td:fresh',
-        'th => th:fresh',
-        'p[w:valign="center"] => p.mammoth-center:fresh',
-        'p[w:shd="clear" w:fill="..." w:themeFill="..."] => p.mammoth-shading:fresh',
-      ],
-      transformDocument: (element) => {
-        if (element.children && element.children.some(child => child.type === 'sectionBreak')) {
-          return {
-            type: 'tag',
-            name: 'div',
-            children: element.children,
-            attributes: { class: 'mammoth-page-break' },
-          };
-        }
-        return element;
-      },
-    },
-  });
-
-  const pages = [];
-  let currentPageContent = '';
-  result.value.split('<div class="mammoth-page-break">').forEach((section, index) => {
-    if (index > 0) {
-      pages.push(currentPageContent);
-      currentPageContent = section;
-    } else {
-      currentPageContent = section;
-    }
-  });
-  if (currentPageContent) pages.push(currentPageContent);
-
-  return { html: result.value, pages }; // Ensure the HTML is returned as is, not escaped
+  return {
+    id: uuid,
+    data: processedData,
+  };
 }
 
 async function processPdf(file) {
@@ -232,33 +177,41 @@ async function processPdf(file) {
 
   let html = '';
   const pages = [];
+  const textContent = [];
 
-  // Set scale for 300 DPI (300 / 72 = ~4.1667)
-  const scale = 4.1667;
+  const scale = 2;
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale });
 
-    // Create a canvas for rendering
+    // Extract text content
+    const textContentItems = await page.getTextContent({
+      includeMarkedContent: true,
+      disableCombineTextItems: false,
+    });
+    const pageText = textContentItems.items
+      .map(item => item.str || '')
+      .join(' ')
+      .trim();
+    textContent.push(pageText);
+    console.log(`Page ${i} Text Content:`, pageText);
+
+    // Render page to canvas
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
 
-    // Render the page to the canvas
     const renderTask = page.render({
       canvasContext: context,
       viewport: viewport,
-      enableWebGL: true, // Optional: improves performance if supported
+      enableWebGL: true,
     });
 
     await renderTask.promise;
+    const dataUrl = canvas.toDataURL('image/png', 0.95);
 
-    // Convert canvas to image data URL
-    const dataUrl = canvas.toDataURL('image/png', 0.95); // 0.95 quality for PNG
-
-    // Build HTML for the page
     const pageContent = `
       <div class="pdf-page" style="position: relative; width: ${viewport.width}px; height: ${viewport.height}px; margin: 20px 0;">
         <img src="${dataUrl}" style="width: 100%; height: 100%; user-select: none;" alt="Page ${i}" />
@@ -268,13 +221,14 @@ async function processPdf(file) {
     pages.push(pageContent);
     html += pageContent;
 
-    // Clean up canvas
     canvas.remove();
   }
 
-  return { html, pages };
+  console.log('Text Content Array:', textContent);
+  return { pages, textContent };
 }
-// Helper function for images (updated to include positioning)
+
+// Helper function for images (unchanged)
 async function getPageImages(page, pageNumber) {
   const images = [];
   try {
@@ -323,7 +277,7 @@ async function getPageImages(page, pageNumber) {
         if (!imageData) continue;
 
         const canvas = document.createElement('canvas');
-        let x = 0, y = 0; // Default position (to be refined)
+        let x = 0, y = 0;
         if (fn === pdfjsLib.OPS.paintFormXObject) {
           const formViewport = page.getViewport({ scale: 1.0 });
           canvas.width = formViewport.width;
@@ -331,13 +285,13 @@ async function getPageImages(page, pageNumber) {
           const ctx = canvas.getContext('2d');
           const renderContext = { canvasContext: ctx, viewport: formViewport, enableWebGL: true };
           await page.render(renderContext).promise;
-          x = 0; y = 0; // Adjust based on form position if available
+          x = 0; y = 0;
         } else if (imageData.bitmap) {
           canvas.width = imageData.bitmap.width;
           canvas.height = imageData.bitmap.height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(imageData.bitmap, 0, 0);
-          x = 0; y = 0; // Adjust based on position in PDF (if available)
+          x = 0; y = 0;
         } else if (imageData.data) {
           canvas.width = imageData.width;
           canvas.height = imageData.height;
@@ -357,7 +311,7 @@ async function getPageImages(page, pageNumber) {
             imgData = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
           }
           ctx.putImageData(imgData, 0, 0);
-          x = 0; y = 0; // Adjust based on position in PDF (if available)
+          x = 0; y = 0;
         }
 
         const dataUrl = canvas.toDataURL('image/png', 0.95);
@@ -370,8 +324,8 @@ async function getPageImages(page, pageNumber) {
             height: canvas.height,
             pageNumber,
             id: imgKey,
-            x: x, // Position X (to be refined)
-            y: y, // Position Y (to be refined)
+            x: x,
+            y: y,
             viewport: { width: viewport.width, height: viewport.height },
           });
         }
@@ -399,8 +353,8 @@ async function getPageImages(page, pageNumber) {
             height: scaledViewport.height,
             pageNumber,
             id: `page-${pageNumber}`,
-            x: 0, // Default position
-            y: 0, // Default position
+            x: 0,
+            y: 0,
             viewport: { width: viewport.width, height: viewport.height },
           });
         }
@@ -419,6 +373,68 @@ async function hasTextContent(page) {
     disableCombineTextItems: false,
   });
   return textContent.items.some((item) => (item.str || "").trim().length > 0);
+}
+
+function readFileContent(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    if (file.type.startsWith('text/') || file.name.endsWith('.json')) {
+      reader.readAsText(file);
+    } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      reader.readAsArrayBuffer(file);
+    } else if (file.type === 'application/pdf') {
+      reader.readAsArrayBuffer(file);
+    } else if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
+  });
+}
+
+async function processDocx(buffer) {
+  const result = await mammoth.convertToHtml({
+    arrayBuffer: buffer,
+    options: {
+      styleMap: [
+        'p[style-name="Heading 1"] => h1:fresh',
+        'p[style-name="Heading 2"] => h2:fresh',
+        'table => table.mammoth-table:fresh',
+        'tr => tr:fresh',
+        'td => td:fresh',
+        'th => th:fresh',
+        'p[w:valign="center"] => p.mammoth-center:fresh',
+        'p[w:shd="clear" w:fill="..." w:themeFill="..."] => p.mammoth-shading:fresh',
+      ],
+      transformDocument: (element) => {
+        if (element.children && element.children.some(child => child.type === 'sectionBreak')) {
+          return {
+            type: 'tag',
+            name: 'div',
+            children: element.children,
+            attributes: { class: 'mammoth-page-break' },
+          };
+        }
+        return element;
+      },
+    },
+  });
+
+  const pages = [];
+  let currentPageContent = '';
+  result.value.split('<div class="mammoth-page-break">').forEach((section, index) => {
+    if (index > 0) {
+      pages.push(currentPageContent);
+      currentPageContent = section;
+    } else {
+      currentPageContent = section;
+    }
+  });
+  if (currentPageContent) pages.push(currentPageContent);
+
+  return { html: result.value, pages };
 }
 
 async function processMarkdown(text) {

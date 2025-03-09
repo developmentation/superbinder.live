@@ -17,8 +17,8 @@ const url = require("url");
 const { createRealTimeServers } = require("./realTime");
 
 //Process JSON and urlencoded parameters
-app.use(express.json({ extended: true, limit: "100mb" }));
-app.use(express.urlencoded({ extended: true, limit: "100mb" })); //The largest incoming payload
+app.use(express.json({ extended: true, limit: "1000mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1000mb" })); //The largest incoming payload
 
 //Select the default port
 const port = process.env.PORT || 3000;
