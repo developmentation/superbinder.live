@@ -2,6 +2,7 @@
 import { useQuestions } from '../composables/useQuestions.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useClips } from '../composables/useClips.js';
+import { useLLM } from '../composables/useLLM.js';
 
 export default {
   name: 'ViewerQuestions',
@@ -47,15 +48,24 @@ export default {
               :key="answer.id"
               class="p-2 bg-gray-600 rounded-lg flex items-center gap-2 transition-transform duration-300"
             >
-              <div
-                ref="answerInput"
-                contenteditable="true"
-                @input="updateAnswer(answer.id, answer.data.questionId, $event.target.textContent)"
-                @keypress.enter="$event.target.blur()"
-                @blur="$event.target.textContent = answer.data.text"
-                class="flex-1 text-white break-words"
-              >
-                {{ answer.data.text }}
+              <div class="flex-1 text-white break-words min-h-[1.5em]">
+                <div
+                  v-if="!editingAnswer[answer.id]"
+                  class="markdown-body"
+                  @click="startEditing(answer.id)"
+                  v-html="renderMarkdown(answer.data.text) || '&nbsp;'"
+                ></div>
+                <div
+                  v-else
+                  ref="answerInput"
+                  contenteditable="true"
+                  @input="updateAnswer(answer.id, answer.data.questionId, $event.target.textContent)"
+                  @blur="stopEditing(answer.id, answer.data.questionId, $event.target.textContent)"
+                  @keypress.enter.prevent="stopEditing(answer.id, answer.data.questionId, $event.target.textContent)"
+                  class="flex-1 text-white break-words"
+                >
+                  {{ answer.data.text }}
+                </div>
               </div>
               <div class="flex gap-2">
                 <button @click="voteAnswer(answer.data.questionId, answer.id, 'up')" class="text-green-400">↑ {{ answer.data.votes || 0 }}</button>
@@ -66,7 +76,10 @@ export default {
               </div>
             </div>
           </div>
-          <button @click="addAnswerLocal(question.id)" class="mt-2 py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg">Add Answer</button>
+          <div class="mt-2 flex gap-2">
+            <button @click="addAnswerLocal(question.id)" class="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg">Add Answer</button>
+            <button @click="answerWithAI(question.id)" class="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg">Answer with AI</button>
+          </div>
           <div v-if="!question.data.answers?.length" class="text-gray-400">No answers yet.</div>
         </div>
       </div>
@@ -74,14 +87,62 @@ export default {
     </div>
   `,
   setup() {
-
-
     const { questionsWithAnswers, rawQuestions, rawAnswers, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addAnswer, updateAnswer, deleteAnswer, voteAnswer, addQuestionProgrammatically } = useQuestions();
-    console.log('ViewerQuestions initialized with questionsWithAnswers:', questionsWithAnswers.value);
     const { selectedDocument, documents } = useDocuments();
     const { clips } = useClips();
+    const { llmRequests, triggerLLM } = useLLM();
     const newQuestion = Vue.ref('');
     const answerInput = Vue.ref([]);
+    const answerLLMMap = Vue.ref({}); // { llmId: answerId }
+    const editingAnswer = Vue.ref({}); // { answerId: true/false }
+
+    const renderMarkdown = (content) => {
+      if (!content) return "";
+
+      try {
+        let textContent =
+          typeof content === "object"
+            ? JSON.stringify(content, null, 2)
+            : String(content);
+
+        if (
+          textContent.trim().startsWith("{") ||
+          textContent.trim().startsWith("[")
+        ) {
+          try {
+            const parsed = JSON.parse(textContent);
+            textContent =
+              "```json\n" + JSON.stringify(parsed, null, 2) + "\n```";
+          } catch (e) {
+            textContent = "```json\n" + textContent + "\n```";
+          }
+        }
+
+        const md = markdownit({
+          html: true,
+          breaks: true,
+          linkify: true,
+          typographer: true,
+          highlight: function (str, lang) {
+            if (lang === "json") {
+              try {
+                const parsed = JSON.parse(str);
+                str = JSON.stringify(parsed, null, 2);
+              } catch (e) {
+                // Keep original string if parsing fails
+              }
+            }
+            return '<pre class="hljs"><code>' + str + "</code></pre>";
+          },
+        });
+
+        md.enable("table");
+        return md.render(textContent);
+      } catch (error) {
+        console.error("Error in renderMarkdown:", error);
+        return `<pre class="hljs"><code>${content}</code></pre>`;
+      }
+    };
 
     function addQuestionLocal() {
       if (newQuestion.value.trim()) {
@@ -93,9 +154,25 @@ export default {
     function addAnswerLocal(questionId) {
       const answerId = addAnswer(questionId);
       Vue.nextTick(() => {
-        const answerEl = answerInput.value.find(el => el.textContent === '' && rawAnswers.value.some(a => a.id === answerId && a.data.questionId === questionId));
+        editingAnswer.value[answerId] = true;
+        Vue.nextTick(() => {
+          const answerEl = answerInput.value.find(el => rawAnswers.value.some(a => a.id === answerId && a.data.questionId === questionId));
+          if (answerEl) answerEl.focus();
+        });
+      });
+    }
+
+    function startEditing(answerId) {
+      editingAnswer.value[answerId] = true;
+      Vue.nextTick(() => {
+        const answerEl = answerInput.value.find(el => rawAnswers.value.some(a => a.id === answerId));
         if (answerEl) answerEl.focus();
       });
+    }
+
+    function stopEditing(answerId, questionId, text) {
+      updateAnswer(answerId, questionId, text);
+      editingAnswer.value[answerId] = false;
     }
 
     function moveQuestionUp(id, currentIndex) {
@@ -109,6 +186,39 @@ export default {
         reorderQuestions(id, currentIndex + 1);
       }
     }
+
+    function answerWithAI(questionId) {
+      const answerId = addAnswer(questionId);
+      const llmId = uuidv4();
+      answerLLMMap.value[llmId] = answerId;
+
+      const question = rawQuestions.value.find(q => q.id === questionId);
+      const questionText = question ? question.data.text : '';
+      const materials = documents.value.map(doc => doc.data.pagesText || '').join('\n');
+      const userPrompt = `attempt to answer this question using the attached materials: "${questionText}"\n\nHere are the materials to reference:\n${materials}`;
+
+      triggerLLM(
+        llmId,
+        { provider: 'gemini', model: 'gemini-2.0-flash-exp', name: "gemini-2.0-flash-exp" },
+        0.5,
+        'You will answer this question clearly, and provide a clear summary. Do not invent any information, just reference only what is provided.',
+        userPrompt,
+        [],
+        false
+      );
+    }
+
+    Vue.watch(llmRequests, (newRequests) => {
+      Object.entries(newRequests).forEach(([llmId, request]) => {
+        const answerId = answerLLMMap.value[llmId];
+        if (answerId && request.llmResponse) {
+          const answer = rawAnswers.value.find(a => a.id === answerId);
+          if (answer && answer.data.text !== request.llmResponse) {
+            updateAnswer(answerId, answer.data.questionId, request.llmResponse);
+          }
+        }
+      });
+    }, { deep: true });
 
     return {
       questionsWithAnswers,
@@ -124,6 +234,11 @@ export default {
       answerInput,
       moveQuestionUp,
       moveQuestionDown,
+      answerWithAI,
+      renderMarkdown,
+      editingAnswer,
+      startEditing,
+      stopEditing,
     };
   },
 };
