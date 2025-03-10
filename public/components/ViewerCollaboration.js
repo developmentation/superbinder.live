@@ -235,9 +235,9 @@ export default {
       editing.value = { ...editing.value };
     }
 
-    if (!breakouts.value.length) {
-      addBreakout();
-    }
+    // if (!breakouts.value.length) {
+    //   addBreakout();
+    // }
 
     return {
       breakouts,

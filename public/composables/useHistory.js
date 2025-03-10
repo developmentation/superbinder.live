@@ -26,7 +26,6 @@ export function useHistory() {
       breakout: [...(useCollaboration().breakouts.value || [])],
       collab: [...(useCollaboration().collabs.value || [])],
     };
-    // console.log('Gathered local history in useHistory:', JSON.stringify(history, null, 2));
     return history;
   }
 
@@ -36,25 +35,30 @@ export function useHistory() {
       return;
     }
     const historyData = data.data || data;
-    // console.log('Syncing channel data received:', JSON.stringify(historyData, null, 2));
     const hasData = Object.keys(historyData).some(key => Array.isArray(historyData[key]) && historyData[key].length > 0);
+
     if (hasData) {
-      useAgents().agents.value = historyData.agents || [];
-      useChat().messages.value = historyData.chat || [];
-      useClips().clips.value = historyData.clips || [];
-      useClips().bookmarks.value = historyData.bookmarks || [];
-      useDocuments().documents.value = historyData.documents || [];
-      useGoals().goals.value = historyData.goals || [];
-      useQuestions().questions.value = historyData.questions || [];
-      useQuestions().answers.value = historyData.answers || [];
-      useArtifacts().artifacts.value = historyData.artifacts || [];
-      useTranscripts().transcripts.value = historyData.transcripts || [];
-      useCollaboration().breakouts.value = historyData.breakout || [];
-      useCollaboration().collabs.value = historyData.collab || [];
-      // console.log('Channel data synced:', {
-      //   questions: useQuestions().questions.value,
-      //   answers: useQuestions().answers.value,
-      // });
+      // Merge function that preserves local data and adds unique incoming items
+      const mergeArrays = (existing, incoming) => {
+        const existingIds = new Set(existing.map(item => item.id)); // Track local IDs
+        // Filter incoming items to only include those not already in existing
+        const uniqueIncoming = (incoming || []).filter(item => !existingIds.has(item.id));
+        // Return local items first, followed by unique incoming items
+        return [...existing, ...uniqueIncoming];
+      };
+
+      useAgents().agents.value = mergeArrays(useAgents().agents.value, historyData.agents);
+      useChat().messages.value = mergeArrays(useChat().messages.value, historyData.chat);
+      useClips().clips.value = mergeArrays(useClips().clips.value, historyData.clips);
+      useClips().bookmarks.value = mergeArrays(useClips().bookmarks.value, historyData.bookmarks);
+      useDocuments().documents.value = mergeArrays(useDocuments().documents.value, historyData.documents);
+      useGoals().goals.value = mergeArrays(useGoals().goals.value, historyData.goals);
+      useQuestions().questions.value = mergeArrays(useQuestions().questions.value, historyData.questions);
+      useQuestions().answers.value = mergeArrays(useQuestions().answers.value, historyData.answers);
+      useArtifacts().artifacts.value = mergeArrays(useArtifacts().artifacts.value || [], historyData.artifacts);
+      useTranscripts().transcripts.value = mergeArrays(useTranscripts().transcripts.value || [], historyData.transcripts);
+      useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakout);
+      useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
     } else {
       console.warn('No meaningful data in history, skipping sync:', historyData);
     }
@@ -62,12 +66,10 @@ export function useHistory() {
 
   eventBus.$on('request-history-data', (callback) => {
     const history = gatherLocalHistory();
-    // console.log('History requested via eventBus, returning:', JSON.stringify(history, null, 2));
     callback(history);
   });
 
   eventBus.$on('sync-history-data', (data) => {
-    // console.log('Received sync-history-data event:', JSON.stringify(data, null, 2));
     syncChannelData(data);
   });
 
