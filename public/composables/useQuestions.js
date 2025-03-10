@@ -8,7 +8,7 @@ const eventHandlers = new WeakMap();
 const processedEvents = new Set();
 
 export function useQuestions() {
-
+  // Event Handlers
   const handleAddQuestion = (eventObj) => {
     const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
     const eventKey = `add-question-${id}-${timestamp}`;
@@ -26,7 +26,7 @@ export function useQuestions() {
     const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
     const question = questions.value.find(q => q.id === id);
     if (question) {
-      question.data.text = data.text;
+      question.data = { ...question.data, ...data };
       questions.value = [...questions.value];
     }
   };
@@ -34,7 +34,7 @@ export function useQuestions() {
   const handleDeleteQuestion = (eventObj) => {
     const { id, timestamp } = eventObj;
     questions.value = questions.value.filter(q => q.id !== id);
-    answers.value = answers.value.filter(a => a.data.questionId !== id); // Clean up answers
+    answers.value = answers.value.filter(a => a.data.questionId !== id);
     questions.value = [...questions.value];
   };
 
@@ -64,7 +64,7 @@ export function useQuestions() {
     const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
     const answer = answers.value.find(a => a.id === id);
     if (answer) {
-      answer.data.text = data.text;
+      answer.data = { ...answer.data, ...data };
       answers.value = [...answers.value];
     }
   };
@@ -112,19 +112,19 @@ export function useQuestions() {
 
   const addQuestion = (text) => {
     const id = uuidv4();
-    const data = { text, order: questions.value.length };
+    const data = { text, order: questions.value.length, answered: null, collapsed: false };
     const payload = { id, userUuid: userUuid.value, data, timestamp: Date.now() };
     questions.value.push(payload);
     questions.value = [...questions.value];
     emit('add-question', payload);
   };
 
-  const updateQuestion = (id, text) => {
+  const updateQuestion = (id, updates) => {
     const question = questions.value.find(q => q.id === id);
     if (question) {
-      question.data.text = text;
+      question.data = { ...question.data, ...updates };
       questions.value = [...questions.value];
-      emit('update-question', { id, userUuid: userUuid.value, data: { text }, timestamp: Date.now() });
+      emit('update-question', { id, userUuid: userUuid.value, data: updates, timestamp: Date.now() });
     }
   };
 
@@ -148,7 +148,7 @@ export function useQuestions() {
 
   const addAnswer = (questionId) => {
     const id = uuidv4();
-    const data = { questionId, text: '', votes: 0 };
+    const data = { questionId, text: '', votes: 0, links: [] };
     const payload = { id, userUuid: userUuid.value, data, timestamp: Date.now() };
     answers.value.push(payload);
     answers.value = [...answers.value];
@@ -156,12 +156,12 @@ export function useQuestions() {
     return id;
   };
 
-  const updateAnswer = (id, questionId, text) => {
+  const updateAnswer = (id, questionId, updates) => {
     const answer = answers.value.find(a => a.id === id);
     if (answer) {
-      answer.data.text = text;
+      answer.data = { ...answer.data, ...updates };
       answers.value = [...answers.value];
-      emit('update-answer', { id, userUuid: userUuid.value, data: { questionId, text }, timestamp: Date.now() });
+      emit('update-answer', { id, userUuid: userUuid.value, data: { ...updates, questionId }, timestamp: Date.now() });
     }
   };
 
@@ -176,15 +176,25 @@ export function useQuestions() {
     if (answer) {
       answer.data.votes = (answer.data.votes || 0) + (vote === 'up' ? 1 : -1);
       answers.value = [...answers.value];
-      emit('vote-answer', { 
-        id, 
-        userUuid: userUuid.value, 
-        data: { questionId, vote, votes: answer.data.votes }, 
-        timestamp: Date.now() 
+      emit('vote-answer', {
+        id,
+        userUuid: userUuid.value,
+        data: { questionId, vote, votes: answer.data.votes },
+        timestamp: Date.now(),
       });
     }
   };
-  
+
+  const addLinkProgrammatically = (answerId, documentId, page) => {
+    const answer = answers.value.find(a => a.id === answerId);
+    if (answer) {
+      const links = answer.data.links || [];
+      const link = { id: documentId, page };
+      links.push(link);
+      updateAnswer(answerId, answer.data.questionId, { links });
+    }
+  };
+
   const addQuestionProgrammatically = (text) => {
     addQuestion(text);
   };
@@ -216,6 +226,7 @@ export function useQuestions() {
     deleteAnswer,
     voteAnswer,
     addQuestionProgrammatically,
+    addLinkProgrammatically,
     cleanup,
   };
 }

@@ -2,17 +2,14 @@
 import { useRealTime } from './useRealTime.js';
 import eventBus from './eventBus.js';
 
-// Track all LLM requests by ID
 const llmRequests = Vue.ref({}); // { id: { llmResponse, isStreaming, llmError, status } }
-
 const processedEvents = new Set();
 const eventHandlers = new WeakMap();
-let messageCounter = 0; // Unique counter to avoid timestamp duplicates
+let messageCounter = 0;
 
 export function useLLM() {
   const { emit, on, off, userUuid, channelName } = useRealTime();
 
-  // Initialize or update an LLM request entry
   function initializeLLMRequest(id, isSelfInitiated = false) {
     if (!llmRequests.value[id]) {
       llmRequests.value[id] = {
@@ -27,25 +24,34 @@ export function useLLM() {
 
   function handleDraftLLM(eventObj) {
     const { id, data, timestamp } = eventObj;
-    messageCounter++; // Increment counter for uniqueness
+    messageCounter++;
     const eventKey = `draft-llm-${id}-${timestamp}-${messageCounter}`;
-    console.log("Received draft-llm message:", { id, data, timestamp, eventKey }); // Debug all messages
+    console.log("Received draft-llm chunk (raw):", { id, data, timestamp, eventKey });
+
     if (!processedEvents.has(eventKey)) {
       processedEvents.add(eventKey);
 
       initializeLLMRequest(id);
 
       const request = llmRequests.value[id];
-      // Ensure data.content is a string and avoid object concatenation
       const content = typeof data.content === 'string' ? data.content : '';
-      request.llmResponse += content;
-      request.isStreaming = true;
-      request.status = 'streaming';
+      const lastContent = request.llmResponse.slice(-content.length);
+
+      // Skip if the chunk is a duplicate of the last appended content
+      if (content.length > 0 && content !== lastContent) {
+        console.log('Appending chunk (trimmed):', JSON.stringify(content));
+        request.llmResponse += content;
+        request.isStreaming = true;
+        request.status = 'streaming';
+      } else {
+        console.warn('Skipping duplicate or empty chunk for ID:', id, content);
+      }
 
       if (data.end) {
+        // request.llmResponse = request.llmResponse; // Final trim
         request.isStreaming = false;
         request.status = 'completed';
-        console.log(`Stream completed for ID ${id} with content:`, request.llmResponse); // Debug completion
+        console.log(`Stream completed for ID ${id} with full response:`, JSON.stringify(request.llmResponse));
       }
 
       llmRequests.value = { ...llmRequests.value };
@@ -60,7 +66,7 @@ export function useLLM() {
     const { id, message, timestamp } = eventObj;
     messageCounter++;
     const eventKey = `error-${id}-${timestamp}-${messageCounter}`;
-    console.log("Received error message:", { id, message, timestamp, eventKey }); // Debug error messages
+    console.log("Received error message:", { id, message, timestamp, eventKey });
     if (!processedEvents.has(eventKey)) {
       processedEvents.add(eventKey);
 
@@ -113,8 +119,8 @@ export function useLLM() {
       eventHandlers.delete(useLLM);
     }
     processedEvents.clear();
-    llmRequests.value = {}; // Reset all requests
-    messageCounter = 0; // Reset counter on cleanup
+    llmRequests.value = {};
+    messageCounter = 0;
   }
 
   return {
