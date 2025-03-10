@@ -19,6 +19,8 @@ const entityConfigs = {
   artifacts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-artifact', update: null, remove: 'remove-artifact', reorder: null } },
   transcripts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-transcript', update: null, remove: 'remove-transcript', reorder: null } },
   llm: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-llm', draft: 'draft-llm' } },
+  collab: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-collab', update: 'update-collab', remove: 'delete-collab', draft: 'draft-collab' } },
+  breakout: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-breakout', update: 'update-breakout', remove: 'delete-breakout', reorder: null } },
 };
 
 /**
@@ -441,6 +443,7 @@ async function handleMessage(dataObj, socket) {
       break;
     case 'pong':
       break;
+    case 'leave-channel':
     case 'update-tab':
     case 'scroll-to-page':
       break;
@@ -477,6 +480,13 @@ async function handleMessage(dataObj, socket) {
     case 'remove-artifact':
     case 'add-transcript':
     case 'remove-transcript':
+      case 'add-collab':
+        case 'draft-collab':
+          case 'update-collab':
+            case 'delete-collab':
+        case 'add-breakout':
+          case 'update-breakout':
+            case 'delete-breakout':  
       await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
       break;
     case 'add-llm':

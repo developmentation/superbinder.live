@@ -1,4 +1,4 @@
-// composables/useHistory.js (reiterated with focus)
+// composables/useHistory.js
 import { useAgents } from './useAgents.js';
 import { useChat } from './useChat.js';
 import { useClips } from './useClips.js';
@@ -7,6 +7,7 @@ import { useGoals } from './useGoals.js';
 import { useQuestions } from './useQuestions.js';
 import { useArtifacts } from './useArtifacts.js';
 import { useTranscripts } from './useTranscripts.js';
+import { useCollaboration } from './useCollaboration.js';
 import eventBus from './eventBus.js';
 
 export function useHistory() {
@@ -22,6 +23,8 @@ export function useHistory() {
       answers: [...useQuestions().answers.value],
       artifacts: [...(useArtifacts().artifacts.value || [])],
       transcripts: [...(useTranscripts().transcripts.value || [])],
+      breakout: [...(useCollaboration().breakouts.value || [])],
+      collab: [...(useCollaboration().collabs.value || [])],
     };
     // console.log('Gathered local history in useHistory:', JSON.stringify(history, null, 2));
     return history;
@@ -46,6 +49,8 @@ export function useHistory() {
       useQuestions().answers.value = historyData.answers || [];
       useArtifacts().artifacts.value = historyData.artifacts || [];
       useTranscripts().transcripts.value = historyData.transcripts || [];
+      useCollaboration().breakouts.value = historyData.breakout || [];
+      useCollaboration().collabs.value = historyData.collab || [];
       // console.log('Channel data synced:', {
       //   questions: useQuestions().questions.value,
       //   answers: useQuestions().answers.value,

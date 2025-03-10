@@ -239,6 +239,15 @@ export function useRealTime() {
     off('remove-artifact');
     off('add-transcript');
     off('remove-transcript');
+
+    off('add-collab');
+    off('draft-collab');
+    off('delete-collab');
+    off('update-collab');
+    off('add-breakout');
+    off('update-breakout');
+    off('delete-breakout');
+    
   }
 
   return {

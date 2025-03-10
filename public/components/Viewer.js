@@ -10,6 +10,7 @@ import ViewerQuestions from './ViewerQuestions.js';
 import ViewerArtifacts from './ViewerArtifacts.js';
 import ViewerUploads from './ViewerUploads.js';
 import ViewerDashboard from './ViewerDashboard.js';
+import ViewerCollaboration from './ViewerCollaboration.js';
 import { useRealTime } from '../composables/useRealTime.js';
 
 export default {
@@ -26,6 +27,7 @@ export default {
     ViewerArtifacts,
     ViewerUploads,
     ViewerDashboard,
+    ViewerCollaboration,
   },
   props: {
     activeTab: {
@@ -81,6 +83,7 @@ export default {
       />
       <viewer-transcribe v-show="activeTab === 'Transcriptions'" />
       <viewer-questions v-show="activeTab === 'Q&A'" :bookmarks="bookmarks" />
+      <viewer-collaboration v-show="activeTab === 'Collaboration'" />
       <viewer-artifacts v-show="activeTab === 'Artifacts'" />
       <viewer-uploads 
         v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Uploads'" 
