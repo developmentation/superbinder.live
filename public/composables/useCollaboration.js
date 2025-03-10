@@ -342,6 +342,8 @@ export function useCollaboration() {
     const roomMessages = collabs.value.filter(m => m.data.breakoutId === breakoutId);
     const messageHistory = [];
 
+    messageHistory.push({ role: 'system', content: `You are participating in a multiperson chat with humans and other AI agents. Your name is @${agent.data.name}, but you don't need to write it unless you are asked your name.` });
+
     const systemText = agent.data.systemPrompts.find(p => p.type === 'text')?.content;
     if (systemText) {
       messageHistory.push({ role: 'system', content: systemText });

@@ -301,9 +301,10 @@ export default {
     }
 
     function openDocumentModal(docId, page) {
-      modalDocuments.value = JSON.parse(JSON.stringify(documents.value)); // Deep clone using JSON
-      modalSelectedDocument.value = JSON.parse(JSON.stringify(documents.value.find(d => d.id === docId) || null));
-      modalJumpToPageNumber.value = page;
+      
+      // modalDocuments.value = JSON.parse(JSON.stringify(documents.value)); // Deep clone using JSON
+      selectedDocument.value = JSON.parse(JSON.stringify(documents.value.find(d => d.id === docId) || null));
+      jumpToPageNumber.value = page;
       modalKey.value += 1; // Force re-render
       showDocumentModal.value = true;
     }
@@ -359,6 +360,8 @@ export default {
                 if (Array.isArray(parsed) && parsed.every(l => l.id && l.page)) {
                   links = parsed;
                   responseText = responseText.replace(lastJsonStr, '').trim();
+                  responseText = responseText.replaceAll("```json", '').trim();
+                  responseText = responseText.replaceAll("```", '').trim();
                 }
               } catch (e) {
                 console.error('Failed to parse JSON from LLM response:', e, lastJsonStr);

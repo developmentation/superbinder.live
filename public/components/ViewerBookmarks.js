@@ -17,8 +17,8 @@ export default {
         <h2 class="text-lg font-semibold text-white">Bookmarks</h2>
       </div>
       <div class="flex-1 overflow-y-auto p-4">
-        <div v-if="bookmarks.length === 0" class="text-gray-400">
-          No bookmarks available.
+        <div v-if="filteredBookmarks.length === 0" class="text-gray-400">
+          No bookmarks available for this document.
         </div>
         <div v-else class="space-y-4">
           <div
@@ -70,29 +70,25 @@ export default {
   `,
   setup(props) {
     const { bookmarks, removeBookmark, updateBookmark } = useClips();
-    const { documents, setSelectedDocument } = useDocuments();
+    const { documents, setSelectedDocument, selectedDocument } = useDocuments();
     const { jumpToPageNumber } = useScrollNavigation();
 
     const editingBookmark = Vue.ref(null);
 
+    // Filter bookmarks to only show those for the selected document
+    const filteredBookmarks = Vue.computed(() => {
+      if (!selectedDocument.value) return [];
+      return bookmarks.value.filter(
+        bookmark => bookmark.data.documentId === selectedDocument.value.id
+      );
+    });
+
     const sortedBookmarks = Vue.computed(() => {
-      // Create a copy of bookmarks to avoid mutating the original
-      return [...bookmarks.value].sort((a, b) => {
-        // Get document names for both bookmarks
-        const docA = documents.value.find(d => d.id === a.data.documentId);
-        const docB = documents.value.find(d => d.id === b.data.documentId);
-        const nameA = docA?.data?.name || '';
-        const nameB = docB?.data?.name || '';
-
-        // First sort by document name (ascending)
-        if (nameA < nameB) return -1;
-        if (nameA > nameB) return 1;
-
-        // If document names are equal, sort by page number (ascending)
-        // For PDF bookmarks, use pageIndex + 1; for text bookmarks, use a default (e.g., 0)
-        const pageA = a.data.type === 'pdf-page' ? a.data.pageIndex + 1 : 0;
-        const pageB = b.data.type === 'pdf-page' ? b.data.pageIndex + 1 : 0;
-
+      return [...filteredBookmarks.value].sort((a, b) => {
+        // Since we're only showing bookmarks for one document,
+        // we can skip document name sorting and sort by page number/position
+        const pageA = a.data.type === 'pdf-page' ? a.data.pageIndex + 1 : (a.data.offset || 0);
+        const pageB = b.data.type === 'pdf-page' ? b.data.pageIndex + 1 : (b.data.offset || 0);
         return pageA - pageB;
       });
     });
@@ -162,6 +158,7 @@ export default {
 
     return {
       bookmarks,
+      filteredBookmarks,
       sortedBookmarks,
       removeBookmark,
       navigateToBookmark,

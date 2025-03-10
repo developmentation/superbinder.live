@@ -66,9 +66,7 @@ export default {
         setTimeout(() => scrollToPage(pageIndex, attempt + 1), 100);
       } else {
         console.error(
-          `Scroll failed after 5 attempts: lazyScrollViewer=${!!lazyScrollViewer.value}, pageIndex=${pageIndex}, pages=${
-            pageItems.value.length
-          }`
+          `Scroll failed after 5 attempts: lazyScrollViewer=${!!lazyScrollViewer.value}, pageIndex=${pageIndex}, pages=${pageItems.value.length}`
         );
       }
     };
@@ -129,9 +127,7 @@ export default {
           pageItems.value = newDoc.data.pages;
           Vue.nextTick(() => {
             console.log(
-              `LazyScrollViewer initialized: ${!!lazyScrollViewer.value}, Pages: ${
-                pageItems.value.length
-              }`
+              `LazyScrollViewer initialized: ${!!lazyScrollViewer.value}, Pages: ${pageItems.value.length}`
             );
             if (selectedPageIndex.value !== null) {
               console.log(
@@ -455,19 +451,10 @@ export default {
   },
   template: `
     <div class="h-full flex flex-col overflow-hidden">
-    <!--  <div class="p-2 bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
-        <input
-          v-model="searchQuery"
-          @input="performSearch"
-          type="text"
-          class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
-          placeholder="Search documents (e.g., 'weather forecast Maine')..."
-        />
-      </div> -->
-      <div class="flex-1 flex flex-col md:flex-row overflow-hidden"  >
+      <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
         <!-- Document Viewer (Left Column) -->
         <div class="flex-1 md:w-1/2 overflow-hidden relative" ref="scrollContainer">
-          <div v-if="isPdf && selectedDocument.data.pages" class="p-2 bg-gray-800 border-b border-gray-700 z-10 flex items-center gap-2">
+          <div v-if="isPdf && selectedDocument.data.pages" class="p-2 bg-gray-800 border-b border-gray-700 sticky top-0 z-20 flex items-center gap-2">
             <span class="text-gray-400">Page:</span>
             <input
               type="text"
@@ -485,7 +472,7 @@ export default {
               Go
             </button>
           </div>
-          <div class="h-full overflow-y-hidden">
+          <div class="h-full overflow-y-auto">
             <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg h-full">
               <div class="flex justify-between items-center mb-2">
                 <span class="text-gray-400">{{ selectedDocument.data.name }}</span>
