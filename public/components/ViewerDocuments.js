@@ -5,6 +5,7 @@ import { useSearch } from "../composables/useSearch.js";
 import { useScrollNavigation } from "../composables/useScrollNavigation.js";
 import LazyScrollViewer from "./LazyScrollViewer.js";
 import ViewerBookmarks from "./ViewerBookmarks.js";
+import { regeneratePdfPages } from '../utils/files/fileProcessor.js';
 
 export default {
   name: "ViewerDocuments",
@@ -38,6 +39,7 @@ export default {
     const docContent = Vue.ref(null);
     const lazyScrollViewer = Vue.ref(null);
     const scrollContainer = Vue.ref(null);
+    const actualScrollContainer = Vue.ref(null);
     const showContextMenu = Vue.ref(false);
     const contextMenuX = Vue.ref(0);
     const contextMenuY = Vue.ref(0);
@@ -45,6 +47,20 @@ export default {
     const storedSelection = Vue.ref(null);
     const pageItems = Vue.ref([]);
     const jumpToPageInput = Vue.ref("");
+    const isLoadingPages = Vue.ref(false);
+
+    // Custom debounce function
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
 
     const isPdf = Vue.computed(() => {
       return (
@@ -94,6 +110,47 @@ export default {
       }
     };
 
+    async function regeneratePages() {
+      if (
+        selectedDocument.value &&
+        !selectedDocument.value.data.pages &&
+        selectedDocument.value.data.originalContent
+      ) {
+        isLoadingPages.value = true;
+        try {
+          const { pages, textContent } = await regeneratePdfPages(selectedDocument.value.data.originalContent);
+          selectedDocument.value.data.pages = pages;
+          selectedDocument.value.data.pagesText = textContent;
+          pageItems.value = pages;
+          console.log("Pages regenerated:", selectedDocument.value);
+        } catch (error) {
+          console.error("Error regenerating pages:", error);
+        } finally {
+          isLoadingPages.value = false;
+        }
+      }
+    }
+
+    const attachScrollListener = debounce(() => {
+      if (actualScrollContainer.value) {
+        // Remove existing listeners to prevent duplicates
+        actualScrollContainer.value.removeEventListener('scroll', handleScrollListener);
+        actualScrollContainer.value.addEventListener('scroll', handleScrollListener);
+        console.log('Scroll listener attached to actualScrollContainer');
+      } else {
+        console.warn('actualScrollContainer not found, retrying...');
+        Vue.nextTick(() => attachScrollListener());
+      }
+    }, 100);
+
+    const handleScrollListener = (event) => {
+      const scrollTop = event.target.scrollTop;
+      if (lazyScrollViewer.value) {
+        lazyScrollViewer.value.handleScroll(scrollTop);
+      }
+      handleScroll(scrollTop);
+    };
+
     Vue.onMounted(() => {
       if (jumpToPageNumber.value) {
         jumpToPageInput.value = jumpToPageNumber.value;
@@ -103,6 +160,28 @@ export default {
         console.log(`Received scroll request for page index: ${pageIndex}`);
         selectedPageIndex.value = pageIndex;
         scrollToPage(pageIndex);
+      });
+
+      if (props.documents && props.documents.length > 0) {
+        documents.value = props.documents.map((doc) => ({
+          id: doc.id,
+          userUuid: doc.userUuid,
+          data: { ...doc.data, type: doc.data.type || doc.type || "unknown" },
+        }));
+      }
+      document.addEventListener("click", hideContextMenu);
+      const checkAndAddListener = () => {
+        if (docContent.value || scrollContainer.value) {
+          document.removeEventListener("selectionchange", handleSelectionChange);
+          document.addEventListener("selectionchange", handleSelectionChange);
+        } else {
+          Vue.nextTick(() => setTimeout(checkAndAddListener, 100));
+        }
+      };
+      checkAndAddListener();
+
+      Vue.nextTick(() => {
+        attachScrollListener();
       });
     });
 
@@ -135,7 +214,15 @@ export default {
               );
               scrollToPage(selectedPageIndex.value);
             }
+            attachScrollListener();
+            // Force initial scroll update
+            if (actualScrollContainer.value && lazyScrollViewer.value) {
+              const scrollTop = actualScrollContainer.value.scrollTop;
+              lazyScrollViewer.value.handleScroll(scrollTop);
+            }
           });
+        } else if (newDoc && newDoc.data.type === "pdf" && !newDoc.data.pages) {
+          regeneratePages();
         } else {
           pageItems.value = [];
         }
@@ -152,32 +239,17 @@ export default {
           );
           scrollToPage(selectedPageIndex.value);
         }
+        Vue.nextTick(() => {
+          attachScrollListener();
+          // Force initial scroll update
+          if (actualScrollContainer.value && lazyScrollViewer.value) {
+            const scrollTop = actualScrollContainer.value.scrollTop;
+            lazyScrollViewer.value.handleScroll(scrollTop);
+          }
+        });
       },
       { immediate: true }
     );
-
-    Vue.onMounted(() => {
-      if (props.documents && props.documents.length > 0) {
-        documents.value = props.documents.map((doc) => ({
-          id: doc.id,
-          userUuid: doc.userUuid,
-          data: { ...doc.data, type: doc.data.type || doc.type || "unknown" },
-        }));
-      }
-      document.addEventListener("click", hideContextMenu);
-      const checkAndAddListener = () => {
-        if (docContent.value || scrollContainer.value) {
-          document.removeEventListener(
-            "selectionchange",
-            handleSelectionChange
-          );
-          document.addEventListener("selectionchange", handleSelectionChange);
-        } else {
-          Vue.nextTick(() => setTimeout(checkAndAddListener, 100));
-        }
-      };
-      checkAndAddListener();
-    });
 
     Vue.watch(
       () => props.documents,
@@ -196,6 +268,9 @@ export default {
     Vue.onUnmounted(() => {
       document.removeEventListener("click", hideContextMenu);
       document.removeEventListener("selectionchange", handleSelectionChange);
+      if (actualScrollContainer.value) {
+        actualScrollContainer.value.removeEventListener('scroll', handleScrollListener);
+      }
       cleanupScrollNavigation();
     });
 
@@ -424,6 +499,7 @@ export default {
       docContent,
       lazyScrollViewer,
       scrollContainer,
+      actualScrollContainer,
       selectedText,
       selectedPageIndex,
       showContextMenu,
@@ -433,6 +509,7 @@ export default {
       isPdf,
       pageItems,
       jumpToPageInput,
+      isLoadingPages,
       performSearch,
       highlightMatch,
       toggleExpand,
@@ -451,6 +528,9 @@ export default {
   },
   template: `
     <div class="h-full flex flex-col overflow-hidden">
+      <div v-if="isLoadingPages" class="p-2 bg-yellow-500 text-white text-center">
+        Pages are loading, please wait. This only happens on the initial load.
+      </div>
       <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
         <!-- Document Viewer (Left Column) -->
         <div class="flex-1 md:w-1/2 overflow-hidden relative" ref="scrollContainer">
@@ -472,13 +552,13 @@ export default {
               Go
             </button>
           </div>
-          <div class="h-full overflow-y-auto">
+          <div class="h-full overflow-y-auto" ref="actualScrollContainer">
             <div v-if="selectedDocument && !searchResults.length" class="bg-gray-700 p-4 rounded-lg h-full">
               <div class="flex justify-between items-center mb-2">
                 <span class="text-gray-400">{{ selectedDocument.data.name }}</span>
               </div>
               <lazy-scroll-viewer
-                v-show="isPdf && selectedDocument.data.pages"
+                v-if="isPdf && selectedDocument.data.pages"
                 ref="lazyScrollViewer"
                 :pages="pageItems"
                 :buffer="1"

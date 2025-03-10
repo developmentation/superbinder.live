@@ -56,15 +56,20 @@ export function useDocuments() {
     const processedDoc = await processFile(file);
     if (processedDoc.data.status === 'complete') {
       const id = processedDoc.id;
-      const payload = {
+      // Prepare payload for server (exclude pages)
+      const serverPayload = {
         id,
         userUuid: userUuid.value,
-        data: processedDoc.data, // Include all processed data
+        data: {
+          ...processedDoc.data,
+          pages: undefined, // Explicitly exclude pages
+        },
         timestamp: Date.now(),
       };
-      documents.value.push(payload);
+      // Keep full data locally, including pages
+      documents.value.push({ id, userUuid: userUuid.value, data: processedDoc.data });
       documents.value = [...documents.value];
-      emit('add-document', payload); // Emit the full payload
+      emit('add-document', serverPayload); // Emit payload without pages
     }
     return processedDoc;
   }

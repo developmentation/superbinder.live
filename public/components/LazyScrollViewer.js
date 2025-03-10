@@ -14,19 +14,19 @@ export default {
     emits: ['scroll', 'contextmenu', 'page-visible'],
     setup(props, { emit }) {
       const scrollContainer = Vue.ref(null);
-      const pageRefs = Vue.ref([]); // Refs for all pages (placeholders or content)
+      const pageRefs = Vue.ref([]);
       const scrollTop = Vue.ref(0);
       const visibleRange = Vue.ref({ start: 0, end: 0 });
-      const firstPageHeight = Vue.ref(null); // Height of the first page
+      const firstPageHeight = Vue.ref(null);
   
-      // All pages with initial placeholder state
-      const allPages = Vue.reactive(props.pages.map((html, index) => ({
-        index,
-        html: html || '',
-        isLoaded: false, // Tracks if content is loaded
-      })));
+      const allPages = Vue.reactive(
+        props.pages.map((html, index) => ({
+          index,
+          html: html || '',
+          isLoaded: false,
+        }))
+      );
   
-      // Set the height of the first page once rendered
       const setFirstPageHeight = () => {
         if (!firstPageHeight.value && pageRefs.value[0]) {
           firstPageHeight.value = pageRefs.value[0].offsetHeight;
@@ -34,51 +34,59 @@ export default {
         }
       };
   
-      // Update visible range and load content
       const updateVisibleRange = () => {
-        if (!scrollContainer.value) return;
+        if (!scrollContainer.value || allPages.length === 0) return;
   
         const containerHeight = scrollContainer.value.clientHeight;
-        const scrollPosition = scrollContainer.value.scrollTop;
-        const pageHeight = firstPageHeight.value || 1170; // Dynamic fallback
+        const scrollPosition = scrollTop.value;
+        const pageHeight = firstPageHeight.value || 1170;
   
         const startIndex = Math.max(
           0,
           Math.floor(scrollPosition / pageHeight) - props.buffer
         );
         const endIndex = Math.min(
-          props.pages.length - 1,
+          allPages.length - 1,
           Math.ceil((scrollPosition + containerHeight) / pageHeight) + props.buffer
         );
   
-        // Load content for visible range
         for (let i = startIndex; i <= endIndex; i++) {
-          allPages[i].isLoaded = true;
+          if (!allPages[i].isLoaded) {
+            allPages[i].isLoaded = true;
+            console.log(`Loaded page ${i + 1} of ${allPages.length}`);
+          }
         }
   
         visibleRange.value = { start: startIndex, end: endIndex };
   
-        // Emit currently centered page
-        const centerIndex = Math.floor((scrollPosition + containerHeight / 2) / pageHeight);
-        if (centerIndex >= 0 && centerIndex < props.pages.length) {
+        const centerIndex = Math.floor(
+          (scrollPosition + containerHeight / 2) / pageHeight
+        );
+        if (centerIndex >= 0 && centerIndex < allPages.length) {
           emit('page-visible', centerIndex);
         }
   
-        // console.log(`Visible range updated: ${startIndex} to ${endIndex}, firstPageHeight: ${firstPageHeight.value || 'not set'}`);
+        // console.log(
+        //   `Visible range: ${startIndex} to ${endIndex}, scrollTop: ${scrollPosition}, containerHeight: ${containerHeight}`
+        // );
       };
   
-      // Handle scroll event
-      const handleScroll = () => {
-        if (!scrollContainer.value) return;
-        scrollTop.value = scrollContainer.value.scrollTop;
+      const handleScroll = (newScrollTop) => {
+        scrollTop.value = newScrollTop;
+        // console.log(`Scroll event triggered, scrollTop: ${scrollTop.value}`);
         updateVisibleRange();
         emit('scroll', scrollTop.value);
       };
   
-      // Scroll to a specific page, mimicking Jump to Page success
       const scrollToPage = (pageIndex) => {
-        if (!scrollContainer.value || pageIndex < 0 || pageIndex >= props.pages.length) {
-          console.error(`Invalid scroll: pageIndex=${pageIndex}, pages=${props.pages.length}`);
+        if (
+          !scrollContainer.value ||
+          pageIndex < 0 ||
+          pageIndex >= allPages.length
+        ) {
+          console.error(
+            `Invalid scroll: pageIndex=${pageIndex}, pages=${allPages.length}`
+          );
           return;
         }
   
@@ -86,7 +94,6 @@ export default {
   
         const ensureTargetLoaded = () => {
           if (!allPages[pageIndex].isLoaded) {
-            // console.log(`Loading content for page ${pageIndex + 1} before scroll`);
             allPages[pageIndex].isLoaded = true;
             Vue.nextTick(() => scrollToTarget());
           } else {
@@ -97,7 +104,7 @@ export default {
         const scrollToTarget = () => {
           const targetEl = pageRefs.value[pageIndex];
           if (targetEl) {
-            // console.log(`Scrolling to page ${pageIndex + 1} (index: ${pageIndex}), height: ${targetEl.offsetHeight}px`);
+            console.log(`Scrolling to page ${pageIndex + 1}, height: ${targetEl.offsetHeight}px`);
             targetEl.scrollIntoView({ behavior: 'auto', block: 'start' });
             scrollTop.value = scrollContainer.value.scrollTop;
             Vue.nextTick(updateVisibleRange);
@@ -106,11 +113,10 @@ export default {
           }
         };
   
-        // Ensure the target is within the visible range or loaded
         if (pageIndex < visibleRange.value.start || pageIndex > visibleRange.value.end) {
           visibleRange.value = {
             start: Math.max(0, pageIndex - props.buffer),
-            end: Math.min(props.pages.length - 1, pageIndex + props.buffer),
+            end: Math.min(allPages.length - 1, pageIndex + props.buffer),
           };
           ensureTargetLoaded();
         } else {
@@ -118,17 +124,23 @@ export default {
         }
       };
   
-      // Lifecycle hooks
       Vue.onMounted(() => {
         Vue.nextTick(() => {
-          allPages[0].isLoaded = true; // Load first page to get height
-          Vue.nextTick(() => {
-            setFirstPageHeight();
-            updateVisibleRange();
-            if (scrollContainer.value) {
-              scrollContainer.value.addEventListener('scroll', handleScroll);
-            }
-          });
+          if (allPages.length > 0) {
+            allPages[0].isLoaded = true;
+            Vue.nextTick(() => {
+              setFirstPageHeight();
+              updateVisibleRange();
+            });
+          }
+          console.log('LazyScrollViewer mounted');
+          // Fallback scroll listener
+          if (scrollContainer.value) {
+            scrollContainer.value.addEventListener('scroll', () => {
+              const scrollTop = scrollContainer.value.scrollTop;
+              handleScroll(scrollTop);
+            });
+          }
         });
       });
   
@@ -138,22 +150,31 @@ export default {
         }
       });
   
-      Vue.watch(() => props.pages, (newPages) => {
-        allPages.length = 0;
-        newPages.forEach((html, index) => {
-          allPages.push({ index, html: html || '', isLoaded: index === 0 });
-        });
-        Vue.nextTick(() => {
-          setFirstPageHeight();
-          updateVisibleRange();
-        });
-      });
+      Vue.watch(
+        () => props.pages,
+        (newPages) => {
+          console.log(`Pages updated, new length: ${newPages.length}`);
+          allPages.length = 0;
+          if (newPages && newPages.length > 0) {
+            newPages.forEach((html, index) => {
+              allPages.push({
+                index,
+                html: html || '',
+                isLoaded: index === 0,
+              });
+            });
+            Vue.nextTick(() => {
+              setFirstPageHeight();
+              updateVisibleRange();
+            });
+          }
+        },
+        { immediate: true }
+      );
   
-      // Set ref for each page
       const setPageRef = (el, index) => {
         if (el) {
           pageRefs.value[index] = el;
-        //   console.log(`Ref set for page ${index + 1}, height: ${el.offsetHeight}px`);
         }
       };
   
@@ -162,11 +183,12 @@ export default {
         allPages,
         firstPageHeight,
         scrollToPage,
+        handleScroll,
         setPageRef,
       };
     },
     template: `
-      <div class="lazy-scroll-viewer pdf-viewer" ref="scrollContainer" style="overflow-y: auto; height: 100%;">
+      <div class="lazy-scroll-viewer pdf-viewer" ref="scrollContainer" style="height: 100%;">
         <div class="inner-container" style="display: flex; flex-direction: column;">
           <div
             v-for="page in allPages"

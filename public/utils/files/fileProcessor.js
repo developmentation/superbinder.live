@@ -84,6 +84,7 @@ export async function processFile(file) {
   let processedContent = '';
   let pages = [];
   let pagesText = [];
+  let originalContent = null;
   let analysisContent = {
     summary: null,
     knowledgeGraph: { edges: [], nodes: [] },
@@ -95,8 +96,10 @@ export async function processFile(file) {
     const content = await readFileContent(file);
 
     if (extension === 'pdf') {
+      const arrayBuffer = await file.arrayBuffer();
+      originalContent = arrayBufferToBase64(arrayBuffer); // Store as Base64
       const pdfResult = await processPdf(file);
-      pages = pdfResult.pages;
+      pages = pdfResult.pages; // Keep locally
       pagesText = pdfResult.textContent || [];
       console.log('PDF pagesText:', pagesText);
     } else {
@@ -149,14 +152,16 @@ export async function processFile(file) {
     processedContent = `<p>Error processing file: ${error.message}</p>`;
     pages = [];
     pagesText = [];
+    originalContent = null;
   }
 
   const processedData = {
     ...originalMetadata,
     ...newMetadata,
     processedContent,
-    pages,
+    pages, // Kept locally
     pagesText,
+    originalContent, // For PDFs
     analysisContent,
     status,
     timestamp: Date.now(),
@@ -169,6 +174,29 @@ export async function processFile(file) {
     id: uuid,
     data: processedData,
   };
+}
+
+// Helper function to convert ArrayBuffer to Base64
+function arrayBufferToBase64(buffer) {
+  const binary = new Uint8Array(buffer);
+  let base64 = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < binary.length; i += chunkSize) {
+    const chunk = binary.subarray(i, i + chunkSize);
+    base64 += String.fromCharCode.apply(null, chunk);
+  }
+  return btoa(base64);
+}
+
+// Helper function to convert Base64 to ArrayBuffer
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
 }
 
 async function processPdf(file) {
@@ -185,7 +213,6 @@ async function processPdf(file) {
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale });
 
-    // Extract text content
     const textContentItems = await page.getTextContent({
       includeMarkedContent: true,
       disableCombineTextItems: false,
@@ -195,9 +222,8 @@ async function processPdf(file) {
       .join(' ')
       .trim();
     textContent.push(pageText);
-    console.log(`Page ${i} Text Content:`, pageText);
+    // console.log(`Page ${i} Text Content:`, pageText);
 
-    // Render page to canvas
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     canvas.width = viewport.width;
@@ -225,6 +251,59 @@ async function processPdf(file) {
   }
 
   console.log('Text Content Array:', textContent);
+  return { pages, textContent };
+}
+
+// Function to regenerate PDF pages from originalContent
+export async function regeneratePdfPages(originalContent) {
+  if (!originalContent) return { pages: [], textContent: [] };
+
+  const arrayBuffer = base64ToArrayBuffer(originalContent);
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+
+  const pages = [];
+  const textContent = [];
+  const scale = 2;
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale });
+
+    const textContentItems = await page.getTextContent({
+      includeMarkedContent: true,
+      disableCombineTextItems: false,
+    });
+    const pageText = textContentItems.items
+      .map(item => item.str || '')
+      .join(' ')
+      .trim();
+    textContent.push(pageText);
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    const renderTask = page.render({
+      canvasContext: context,
+      viewport: viewport,
+      enableWebGL: true,
+    });
+
+    await renderTask.promise;
+    const dataUrl = canvas.toDataURL('image/png', 0.95);
+
+    const pageContent = `
+      <div class="pdf-page" style="position: relative; width: ${viewport.width}px; height: ${viewport.height}px; margin: 20px 0;">
+        <img src="${dataUrl}" style="width: 100%; height: 100%; user-select: none;" alt="Page ${i}" />
+      </div>
+    `;
+
+    pages.push(pageContent);
+    canvas.remove();
+  }
+
   return { pages, textContent };
 }
 
