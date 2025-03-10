@@ -417,7 +417,7 @@ export function useCollaboration() {
     console.log('User Prompt Goals:', userGoals);
 
     const chatHistory = roomMessages.map(m => ({
-      role: m.data.agentId ? 'system' : 'user',
+      role: m.data.agentId ? 'user' : 'user', //you can change this to system:user 
       content: m.data.text,
     }));
     messageHistory.push(...chatHistory);
