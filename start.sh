@@ -15,4 +15,4 @@ else
 fi
 
 # Start the app (replace with your actual start command)
-npm start
+node index.js
