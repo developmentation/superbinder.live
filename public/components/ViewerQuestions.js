@@ -62,7 +62,8 @@ export default {
               contenteditable="true"
               @input="updateQuestion(question.id, { text: $event.target.textContent })"
               @blur="$event.target.textContent = question.data.text"
-              class="flex-1 text-white break-words"
+              @paste="handlePaste($event)" 
+              class="flex-1 text-white break-words whitespace-pre-wrap"   
             >
               {{ question.data.text }}
             </div>
@@ -76,14 +77,15 @@ export default {
             </button>
           </div>
           <div v-if="!question.data.collapsed" class="space-y-2 ml-4">
-              <div
-                v-for="(answer, ansIndex) in question.data.answers"
-                :key="answer.id"
-                :class="[
-                  'p-2 rounded-lg flex flex-col gap-2 transition-transform duration-300',
-                  topAnswerIds[answer.id] ? 'bg-green-800' : 'bg-gray-600'
-                ]"
-              >
+            <div
+              v-for="(answer, ansIndex) in question.data.answers"
+              :key="answer.id"
+              class="answer-container"  
+              :class="[
+                'p-2 rounded-lg flex flex-col gap-2 transition-transform duration-300',
+                topAnswerIds[answer.id] ? 'bg-green-800' : 'bg-gray-600'
+              ]"
+            >
               <div class="flex items-center gap-2">
                 <div class="flex-1 text-white break-words min-h-[1.5em]">
                   <div
@@ -99,7 +101,8 @@ export default {
                     @input="updateAnswer(answer.id, answer.data.questionId, { text: $event.target.textContent })"
                     @blur="stopEditing(answer.id, answer.data.questionId, $event.target.textContent)"
                     @keypress.enter.prevent="stopEditing(answer.id, answer.data.questionId, $event.target.textContent)"
-                    class="flex-1 text-white break-words"
+                    @paste="handlePaste($event)"  
+                    class="flex-1 text-white break-words whitespace-pre-wrap"
                   >
                     {{ answer.data.text }}
                   </div>
@@ -117,18 +120,15 @@ export default {
                 <div
                   v-for="link in answer.data.links"
                   :key="link.id"
-                  
                   class="cursor-pointer hover:underline"
                 >
-                
-                <button
-      @click="deleteLink(answer.id, answer.data.questionId, link.id, link.page)"
-      class="text-red-400 hover:text-red-300"
-    >
-      <i class="pi pi-trash"></i>
-    </button>
-                
-             <span @click="openDocumentModal(link.id, link.page)" class = "ml-2">   {{ getDocumentName(link.id) }} (Page {{ link.page }}) </span>
+                  <button
+                    @click="deleteLink(answer.id, answer.data.questionId, link.id, link.page)"
+                    class="text-red-400 hover:text-red-300"
+                  >
+                    <i class="pi pi-trash"></i>
+                  </button>
+                  <span @click="openDocumentModal(link.id, link.page)" class="ml-2"> {{ getDocumentName(link.id) }} (Page {{ link.page }}) </span>
                 </div>
               </div>
               <!-- Add Link Button for Each Answer -->
@@ -312,11 +312,9 @@ export default {
     }
 
     function openDocumentModal(docId, page) {
-      
-      // modalDocuments.value = JSON.parse(JSON.stringify(documents.value)); // Deep clone using JSON
       selectedDocument.value = JSON.parse(JSON.stringify(documents.value.find(d => d.id === docId) || null));
       jumpToPageNumber.value = page;
-      modalKey.value += 1; // Force re-render
+      modalKey.value += 1;
       showDocumentModal.value = true;
     }
 
@@ -336,7 +334,7 @@ export default {
       const materials = documents.value.map(doc => ({
         documentId: doc.id,
         name: doc.data.name,
-        pages: JSON.stringify(doc.data.pagesText.map((text, index) => ({id:doc.id,  page: index + 1, text })))
+        pages: JSON.stringify(doc.data.pagesText.map((text, index) => ({id: doc.id, page: index + 1, text })))
       }));
       const userPrompt = `
         Answer the following question using the provided materials, without repeating the question in the response: "${questionText}"
@@ -354,13 +352,19 @@ export default {
         
         Do not include the question or materials in the response.
 
-        At the end, provide exactly one JSON array containing objects with {"id": "documentId", "page": number} where you found the relevant information. The id is found in the json of the refernce materials.
+        At the end, provide exactly one JSON array containing objects with {"id": "documentId", "page": number} where you found the relevant information. The id is found in the json of the reference materials.
         Try to provide at least 3 links per response, which are always in the same JSON array at the end of your response. 
         `,
         userPrompt,
         [],
         false
       );
+    }
+
+    function handlePaste(event) {  // Added handlePaste function
+      event.preventDefault();
+      const text = (event.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, text);
     }
 
     Vue.watch(llmRequests, (newRequests) => {
@@ -401,7 +405,6 @@ export default {
         }
       });
     }, { deep: true });
-
 
     const topAnswerIds = Vue.computed(() => {
       const topIds = {};
@@ -477,6 +480,7 @@ export default {
       modalJumpToPageNumber,
       topAnswerIds,
       deleteLink,
+      handlePaste,  // Added to return
     };
   },
 };
