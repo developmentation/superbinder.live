@@ -38,13 +38,36 @@ export function useHistory() {
     const hasData = Object.keys(historyData).some(key => Array.isArray(historyData[key]) && historyData[key].length > 0);
 
     if (hasData) {
-      // Merge function that preserves local data and adds unique incoming items
+      // Merge function that compares timestamps for matching IDs
       const mergeArrays = (existing, incoming) => {
-        const existingIds = new Set(existing.map(item => item.id)); // Track local IDs
-        // Filter incoming items to only include those not already in existing
-        const uniqueIncoming = (incoming || []).filter(item => !existingIds.has(item.id));
-        // Return local items first, followed by unique incoming items
-        return [...existing, ...uniqueIncoming];
+        const resultMap = new Map();
+
+        // Add all existing items to the map
+        existing.forEach(item => {
+          if (item.id) resultMap.set(item.id, item);
+        });
+
+        // Process incoming items
+        (incoming || []).forEach(item => {
+          if (!item.id) return; // Skip items without IDs
+
+          const existingItem = resultMap.get(item.id);
+          
+          if (existingItem) {
+            // If item exists, compare timestamps and keep the newer one
+            const existingTime = existingItem.timestamp ? new Date(existingItem.timestamp).getTime() : 0;
+            const incomingTime = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+            
+            if (incomingTime > existingTime) {
+              resultMap.set(item.id, item);
+            }
+          } else {
+            // If item doesn't exist, add it
+            resultMap.set(item.id, item);
+          }
+        });
+
+        return Array.from(resultMap.values());
       };
 
       useAgents().agents.value = mergeArrays(useAgents().agents.value, historyData.agents);
