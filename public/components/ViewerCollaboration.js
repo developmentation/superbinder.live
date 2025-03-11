@@ -59,14 +59,34 @@ export default {
             :style="{ backgroundColor: msg.isDraft ? '#4B5563' : (msg?.data?.color ? msg.data.color + '33' : '#80808033') }"
             class="p-2 mb-2 rounded-lg flex flex-col relative message-text"
           >
-            <button
-              v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid"
-              @click.stop="deleteMessage(msg.id)"
-              class="absolute top-1 right-1 text-red-400 hover:text-red-300 rounded-full bg-gray-800"
-              style="width: 24px; height: 24px; line-height: 24px; font-size: 16px;"
-            >
-              <i class="pi pi-times"></i>
-            </button>
+            <div class="absolute top-1 right-1 flex gap-1">
+              <button
+                v-if="!msg.isDraft"
+                @click.stop="copyMessage(msg.data.text)"
+                class="text-gray-400 hover:text-gray-200 rounded-full bg-gray-800"
+                style="width: 24px; height: 24px; line-height: 24px; font-size: 16px;"
+                title="Copy message"
+              >
+                <i class="pi pi-copy"></i>
+              </button>
+              <button
+                v-if="!msg.isDraft"
+                @click.stop="redoMessage(msg.data.text)"
+                class="text-gray-400 hover:text-gray-200 rounded-full bg-gray-800"
+                style="width: 24px; height: 24px; line-height: 24px; font-size: 16px;"
+                title="Redo message"
+              >
+                <i class="pi pi-refresh"></i>
+              </button>
+              <button
+                v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid"
+                @click.stop="deleteMessage(msg.id)"
+                class="text-red-400 hover:text-red-300 rounded-full bg-gray-800"
+                style="width: 24px; height: 24px; line-height: 24px; font-size: 16px;"
+              >
+                <i class="pi pi-times"></i>
+              </button>
+            </div>
             <span class="font-semibold text-white">{{ getDisplayName(msg) }}:</span>
             <span class="text-white message-content">
               {{ msg.data.isStreaming && !msg.data.text ? 'AI is responding...' : msg.data.text }}
@@ -187,6 +207,29 @@ export default {
       }
     }
 
+    function copyMessage(text) {
+      if (text) {
+        navigator.clipboard.writeText(text)
+          .then(() => console.log('Message copied to clipboard'))
+          .catch(err => console.error('Failed to copy message:', err));
+      }
+    }
+
+    function redoMessage(text) {
+      if (text) {
+        // First copy to clipboard
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            // Then update the draft
+            draft.value = text;
+            if (currentBreakoutId.value) {
+              updateDraft(text, currentBreakoutId.value);
+            }
+          })
+          .catch(err => console.error('Failed to redo message:', err));
+      }
+    }
+
     function selectBreakout(breakoutId) {
       console.log('Selecting breakout with id:', breakoutId);
       currentBreakoutId.value = breakoutId;
@@ -235,10 +278,6 @@ export default {
       editing.value = { ...editing.value };
     }
 
-    // if (!breakouts.value.length) {
-    //   addBreakout();
-    // }
-
     return {
       breakouts,
       allMessages,
@@ -262,7 +301,9 @@ export default {
       chatContainer,
       handleScroll,
       currentUserUuid,
-      addBreakoutLocal
+      addBreakoutLocal,
+      copyMessage,
+      redoMessage
     };
   },
 };
