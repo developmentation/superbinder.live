@@ -1,6 +1,7 @@
 // components/ViewerUploads.js
 import { useDocuments } from '../composables/useDocuments.js';
 import { useRealTime } from '../composables/useRealTime.js';
+import { regeneratePdfPages } from '../utils/files/fileProcessor.js';
 
 export default {
   name: 'ViewerUploads',
@@ -37,12 +38,23 @@ export default {
         />
       </div>
 
+      <!-- Render PDF Content Button -->
+      <button 
+        @click="renderAllPdfs"
+        :disabled="isRendering"
+        class="w-full py-2 px-4 mb-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center"
+      >
+        <i class="pi pi-refresh mr-2" v-if="isRendering"></i>
+        {{ isRendering ? 'Rendering PDFs...' : 'Render PDF Content' }}
+      </button>
+
       <!-- Document List -->
       <div v-if="documents.length" class="space-y-2">
         <div 
           v-for="doc in documents" 
           :key="doc.id" 
-          class="flex items-center justify-between p-2 bg-gray-700 rounded-lg hover:bg-gray-600 cursor-pointer w-full overflow-x-hidden"
+          class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-600 cursor-pointer w-full overflow-x-hidden"
+          :class="getDocBackground(doc)"
           @click="selectDocument(doc, $event)"
         >
           <div class="flex items-center space-x-2 flex-1 min-w-0">
@@ -83,6 +95,7 @@ export default {
     const editingDocId = Vue.ref(null);
     const editName = Vue.ref('');
     const editInput = Vue.ref(null);
+    const isRendering = Vue.ref(false);
 
     function onDragOver(event) {
       event.preventDefault();
@@ -115,6 +128,36 @@ export default {
       for (const file of Array.from(files)) {
         await addDocument(file);
       }
+    }
+
+    async function renderAllPdfs() {
+      isRendering.value = true;
+      const pdfDocs = documents.value.filter(doc => 
+        doc.data.type === 'pdf' && 
+        !doc.data.pages && 
+        doc.data.originalContent
+      );
+
+      for (const doc of pdfDocs) {
+        try {
+          const { pages, textContent } = await regeneratePdfPages(doc.data.originalContent);
+          doc.data.pages = pages;
+          doc.data.pagesText = textContent;
+          console.log(`Rendered pages for ${doc.data.name}`);
+        } catch (error) {
+          console.error(`Error rendering ${doc.data.name}:`, error);
+        }
+      }
+      isRendering.value = false;
+    }
+
+    function getDocBackground(doc) {
+      if (doc.data.type === 'pdf') {
+        return doc.data.pages 
+          ? 'bg-green-800' // Rendered PDF: darkmode green
+          : 'bg-yellow-900'; // Unrendered PDF: darkmode yellow
+      }
+      return 'bg-gray-700'; // Default for non-PDFs
     }
 
     function selectDocument(doc, event) {
@@ -195,6 +238,7 @@ export default {
       editingDocId,
       editName,
       editInput,
+      isRendering,
       onDragOver,
       onDragLeave,
       onDrop,
@@ -205,6 +249,8 @@ export default {
       finishEditing,
       removeDocumentLocal,
       getFileIcon,
+      renderAllPdfs,
+      getDocBackground,
     };
   },
 };

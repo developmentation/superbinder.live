@@ -335,10 +335,11 @@ export default {
       const questionText = question ? question.data.text : '';
       const materials = documents.value.map(doc => ({
         documentId: doc.id,
-        pages: JSON.stringify(doc.data.pagesText.map((text, index) => ({ page: index + 1, text })))
+        name: doc.data.name,
+        pages: JSON.stringify(doc.data.pagesText.map((text, index) => ({id:doc.id,  page: index + 1, text })))
       }));
       const userPrompt = `
-        Answer the following question using the provided materials, without repeating the question or materials in the response: "${questionText}"
+        Answer the following question using the provided materials, without repeating the question in the response: "${questionText}"
         Provide a single, clean JSON array of references at the end in the format: [{"id": "documentId", "page": number}]
         Materials: ${JSON.stringify(materials)}
       `;
@@ -347,7 +348,15 @@ export default {
         llmId,
         { provider: 'gemini', model: 'gemini-2.0-flash-exp', name: "gemini-2.0-flash-exp" },
         0.5,
-        'Answer clearly and concisely. At the end, provide exactly one JSON array containing objects with {"id": "documentId", "page": number} where you found the relevant information. Do not include the question or materials in the response.',
+        `
+        Answer the question clearly and provide adequate details.  
+        Where applicable, provide answers from various pages and documents, although only where there is information which clearly relates to the question. 
+        
+        Do not include the question or materials in the response.
+
+        At the end, provide exactly one JSON array containing objects with {"id": "documentId", "page": number} where you found the relevant information. The id is found in the json of the refernce materials.
+        Try to provide at least 3 links per response, which are always in the same JSON array at the end of your response. 
+        `,
         userPrompt,
         [],
         false
