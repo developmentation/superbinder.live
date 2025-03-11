@@ -76,11 +76,14 @@ export default {
             </button>
           </div>
           <div v-if="!question.data.collapsed" class="space-y-2 ml-4">
-            <div
-              v-for="(answer, ansIndex) in question.data.answers"
-              :key="answer.id"
-              class="p-2 bg-gray-600 rounded-lg flex flex-col gap-2 transition-transform duration-300"
-            >
+              <div
+                v-for="(answer, ansIndex) in question.data.answers"
+                :key="answer.id"
+                :class="[
+                  'p-2 rounded-lg flex flex-col gap-2 transition-transform duration-300',
+                  topAnswerIds[answer.id] ? 'bg-green-800' : 'bg-gray-600'
+                ]"
+              >
               <div class="flex items-center gap-2">
                 <div class="flex-1 text-white break-words min-h-[1.5em]">
                   <div
@@ -114,16 +117,24 @@ export default {
                 <div
                   v-for="link in answer.data.links"
                   :key="link.id"
-                  @click="openDocumentModal(link.id, link.page)"
+                  
                   class="cursor-pointer hover:underline"
                 >
-                  {{ getDocumentName(link.id) }} (Page {{ link.page }})
+                
+                <button
+      @click="deleteLink(answer.id, answer.data.questionId, link.id, link.page)"
+      class="text-red-400 hover:text-red-300"
+    >
+      <i class="pi pi-trash"></i>
+    </button>
+                
+             <span @click="openDocumentModal(link.id, link.page)" class = "ml-2">   {{ getDocumentName(link.id) }} (Page {{ link.page }}) </span>
                 </div>
               </div>
               <!-- Add Link Button for Each Answer -->
               <div class="flex items-center gap-2 mt-1">
-                <span class="text-gray-400 text-sm">Links:</span>
-                <button @click="openAddLinkModal(question.id, answer.id)" class="text-gray-500 hover:text-gray-300 text-sm">+</button>
+                <span class="text-gray-400 text-md">Links:</span>
+                <button @click="openAddLinkModal(question.id, answer.id)" class="text-white hover:text-gray-300 text-md">+</button>
               </div>
             </div>
           </div>
@@ -382,6 +393,38 @@ export default {
       });
     }, { deep: true });
 
+
+    const topAnswerIds = Vue.computed(() => {
+      const topIds = {};
+      questionsWithAnswers.value.forEach(question => {
+        const answers = question.data.answers || [];
+        if (answers.length === 0) return;
+    
+        // Find the highest vote count
+        const maxVotes = Math.max(...answers.map(a => a.data.votes || 0));
+        
+        // If maxVotes > 0, mark all answers with maxVotes as top answers
+        if (maxVotes > 0) {
+          answers.forEach(answer => {
+            if ((answer.data.votes || 0) === maxVotes) {
+              topIds[answer.id] = true;
+            }
+          });
+        }
+      });
+      return topIds;
+    });
+
+    function deleteLink(answerId, questionId, linkId, linkPage) {
+      const answer = rawAnswers.value.find(a => a.id === answerId && a.data.questionId === questionId);
+      if (answer && answer.data.links) {
+        // Filter out the link with the matching id and page
+        const updatedLinks = answer.data.links.filter(link => !(link.id === linkId && link.page === linkPage));
+        // Update the answer with the new links array
+        updateAnswer(answerId, questionId, { links: updatedLinks });
+      }
+    }
+
     return {
       questionsWithAnswers,
       newQuestion,
@@ -423,6 +466,8 @@ export default {
       modalDocuments,
       modalSelectedDocument,
       modalJumpToPageNumber,
+      topAnswerIds,
+      deleteLink,
     };
   },
 };
