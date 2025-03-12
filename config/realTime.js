@@ -1,11 +1,70 @@
-// realTime.js (complete updated version)
+// realTime.js (updated to define indexes in schema)
 const { Server } = require('socket.io');
-const fs = require('fs').promises;
-const path = require('path');
+const mongoose = require('mongoose');
+const connectDB = require('./db.js');
 const { handlePrompt } = require("./handleAiInteractions");
 
 const channels = new Map();
-// Removed pendingLLMStreams Map since accumulation is no longer needed
+
+// EntitySet Schema for all entity types with indexes defined
+const entitySetSchema = new mongoose.Schema({
+  id: { type: String, required: true, index: true }, // Entity-specific ID (not _id)
+  channel: { type: String, required: true, index: true },
+  userUuid: { type: String, required: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true }, // Flexible data field
+  timestamp: { type: Number, required: true },
+  serverTimestamp: { type: Number, required: true, index: true },
+}, { timestamps: true });
+
+// Define models for each entity type with unique collections
+const entityModels = {};
+Object.keys({
+  agents: 'agentSet',
+  chat: 'chatSet',
+  clips: 'clipSet',
+  bookmarks: 'bookmarkSet',
+  documents: 'documentSet',
+  goals: 'goalSet',
+  questions: 'questionSet',
+  answers: 'answerSet',
+  artifacts: 'artifactSet',
+  transcripts: 'transcriptSet',
+  llm: 'llmSet',
+  collab: 'collabSet',
+  breakout: 'breakoutSet',
+}).forEach(entityType => {
+  const collectionName = `${entityType}Set`;
+  entityModels[entityType] = mongoose.model(collectionName, entitySetSchema, collectionName);
+});
+
+async function verifyIndexes() {
+  try {
+    for (const [entityType, model] of Object.entries(entityModels)) {
+      const indexes = await model.collection.listIndexes().toArray();
+    //  console.log(`\nIndexes for ${entityType} collection (${model.collection.collectionName}):`);
+      //indexes.forEach(index => {
+     //   console.log(`  - Name: ${index.name}, Keys: ${JSON.stringify(index.key)}`);
+     // });
+      const expectedIndexes = ['id', 'channel', 'userUuid', 'serverTimestamp'];
+      const hasAllIndexes = expectedIndexes.every(key =>
+        indexes.some(index => index.key && Object.keys(index.key).includes(key))
+      );
+      //console.log(`  - All expected indexes present: ${hasAllIndexes}`);
+    }
+  } catch (err) {
+    console.error(`Error verifying indexes: ${err.message}`);
+  }
+}
+
+async function initializeDatabase() {
+  await connectDB(); // Ensure MongoDB is connected
+  await verifyIndexes(); // Verify indexes after connection
+}
+
+initializeDatabase().catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
+});
 
 const entityConfigs = {
   agents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-agent', update: 'update-agent', remove: 'remove-agent', reorder: null } },
@@ -25,18 +84,12 @@ const entityConfigs = {
 
 /**
  * Generates a muted dark color for user identification.
- * @returns {string} Hex color code (e.g., '#4a2b3c').
  */
 function generateMutedDarkColor() {
   const r = Math.floor(Math.random() * 129);
   const g = Math.floor(Math.random() * 129);
   const b = Math.floor(Math.random() * 129);
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
-
-function equityFilePath(channelName, entityType) {
-  const channelDir = path.join(__dirname, '../channels');
-  return path.join(channelDir, `${channelName}_${entityType}.json`);
 }
 
 function validateJoinData(data) {
@@ -67,25 +120,18 @@ function validateLLMData(data) {
 
 async function loadStateFromServer(channelName, entityType) {
   try {
-    const filePath = equityFilePath(channelName, entityType);
-    //console.log(`Attempting to load ${entityType} from ${filePath}`);
-    const data = await fs.readFile(filePath, 'utf8').then(JSON.parse).catch(() => []);
-    //console.log(`Loaded ${entityType} for ${channelName}:`, JSON.stringify(data, null, 2));
-    return data;
+    const model = entityModels[entityType];
+    const state = await model.find({ channel: channelName }).lean();
+    return state.map(doc => ({
+      id: doc.id,
+      userUuid: doc.userUuid,
+      data: doc.data,
+      timestamp: doc.timestamp,
+      serverTimestamp: doc.serverTimestamp,
+    }));
   } catch (error) {
     console.error(`Error loading ${entityType} for ${channelName}:`, error);
     return [];
-  }
-}
-
-async function saveStateToServer(channelName, entityType, state) {
-  try {
-    const filePath = equityFilePath(channelName, entityType);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(state, null, 2));
-    //console.log(`Channel ${channelName} ${entityType} state saved to ${filePath}`);
-  } catch (error) {
-    console.error(`Error saving ${entityType} state to server for channel ${channelName}:`, error);
   }
 }
 
@@ -102,11 +148,7 @@ function broadcastToChannel(channelName, type, payload, excludeUuid = null) {
         color: user.color,
         joinedAt: user.joinedAt,
       }));
-      message = {
-        type,
-        users: usersArray,
-        timestamp: serverTimestamp,
-      };
+      message = { type, users: usersArray, timestamp: serverTimestamp };
     } else if (type === 'user-joined') {
       message = {
         type,
@@ -117,11 +159,7 @@ function broadcastToChannel(channelName, type, payload, excludeUuid = null) {
         timestamp: serverTimestamp,
       };
     } else if (type === 'user-left') {
-      message = {
-        type,
-        userUuid: payload.userUuid,
-        timestamp: serverTimestamp,
-      };
+      message = { type, userUuid: payload.userUuid, timestamp: serverTimestamp };
     } else {
       message = {
         type,
@@ -133,7 +171,6 @@ function broadcastToChannel(channelName, type, payload, excludeUuid = null) {
       };
     }
 
-    //console.log(`Broadcasting ${type} to ${channelName}:`, message);
     for (const userUuid in channel.sockets) {
       if (userUuid !== excludeUuid) {
         channel.sockets[userUuid].emit('message', message);
@@ -152,12 +189,10 @@ function cleanupUser(channelName, userUuid, socket) {
 
       if (Object.keys(channel.users).length === 0) {
         channels.delete(channelName);
-        //console.log(`Channel ${channelName} deleted (empty)`);
       } else {
         broadcastToChannel(channelName, 'user-left', { userUuid });
         broadcastToChannel(channelName, 'user-list', { id: null, userUuid, data: null });
       }
-      //console.log(`${userUuid} left channel ${channelName}`);
     }
   }
 }
@@ -169,53 +204,64 @@ function validateEntity(payload, entityType, operation) {
   return { valid: true, message: '' };
 }
 
-function updateCreateState(state, payload, entityType) {
+async function updateCreateState(channelName, entityType, payload) {
   const config = entityConfigs[entityType];
   const entity = {
     id: payload.id,
+    channel: channelName,
     userUuid: payload.userUuid,
-    data: { ...payload.data, color: payload.data.color || channels.get(payload.channelName)?.users[payload.userUuid]?.color || '#808080' },
+    data: { ...payload.data, color: payload.data.color || channels.get(channelName)?.users[payload.userUuid]?.color || '#808080' },
     timestamp: payload.timestamp,
+    serverTimestamp: Date.now(),
   };
-  const order = config.orderField ? state.length : undefined;
+  const order = config.orderField ? (await entityModels[entityType].countDocuments({ channel: channelName })) : undefined;
   if (order !== undefined) entity.data[config.orderField] = order;
-  state.push(entity);
+  await entityModels[entityType].create(entity);
 }
 
-function updateUpdateState(state, payload, entityType) {
+async function updateUpdateState(channelName, entityType, payload) {
   const config = entityConfigs[entityType];
-  const index = state.findIndex(item => item[config.idKey] === payload.id);
-  if (index !== -1) {
-    state[index].data = { ...state[index].data, ...payload.data };
-    state[index].timestamp = payload.timestamp;
-  }
+  await entityModels[entityType].updateOne(
+    { id: payload.id, channel: channelName },
+    { $set: { data: payload.data, timestamp: payload.timestamp, serverTimestamp: Date.now() } }
+  );
 }
 
-function updateDeleteState(state, payload, entityType) {
+async function updateDeleteState(channelName, entityType, payload) {
   const config = entityConfigs[entityType];
-  const newState = state.filter(item => item[config.idKey] !== payload.id);
+  await entityModels[entityType].deleteOne({ id: payload.id, channel: channelName });
   if (config.orderField) {
-    newState.forEach((item, index) => { item.data[config.orderField] = index; });
+    const remaining = await entityModels[entityType].find({ channel: channelName }).sort({ 'data.order': 1 });
+    await Promise.all(remaining.map((item, index) =>
+      entityModels[entityType].updateOne(
+        { _id: item._id },
+        { $set: { 'data.order': index, serverTimestamp: Date.now() } }
+      )
+    ));
   }
-  return newState;
 }
 
-function updateReorderState(state, payload, entityType) {
+async function updateReorderState(channelName, entityType, payload) {
   const config = entityConfigs[entityType];
   const order = payload.data.order;
-  const newState = order.map(id => state.find(item => item[config.idKey] === id)).filter(Boolean);
-  if (config.orderField) {
-    newState.forEach((item, index) => { item.data[config.orderField] = index; });
-  }
-  return newState;
+  const entities = await entityModels[entityType].find({ channel: channelName, id: { $in: order } });
+  await Promise.all(order.map((id, index) => {
+    const entity = entities.find(e => e.id === id);
+    if (entity) {
+      entity.data[config.orderField] = index;
+      return entityModels[entityType].updateOne(
+        { id, channel: channelName },
+        { $set: { 'data.order': index, serverTimestamp: Date.now() } }
+      );
+    }
+  }));
 }
 
-function updateVoteState(state, payload) {
-  const answer = state.find(a => a.id === payload.id);
-  if (answer) {
-    answer.data = { ...answer.data, ...payload.data };
-    answer.timestamp = payload.timestamp;
-  }
+async function updateVoteState(channelName, entityType, payload) {
+  await entityModels[entityType].updateOne(
+    { id: payload.id, channel: channelName },
+    { $set: { data: payload.data, timestamp: payload.timestamp, serverTimestamp: Date.now() } }
+  );
 }
 
 async function sendLLMStream(uuid, channelName, session, type, message, isEnd = false) {
@@ -227,10 +273,7 @@ async function sendLLMStream(uuid, channelName, session, type, message, isEnd = 
     timestamp: Date.now(),
     serverTimestamp: Date.now(),
   };
-  // Removed pendingLLMStreams accumulation logic
-  //console.log(`Broadcasting ${type} for UUID ${uuid}:`, payload);
   broadcastToChannel(channelName, type, payload);
-  // Removed server-side state update and saving logic for llm
 }
 
 async function handleCrudOperation(channelName, userUuid, type, payload, socket) {
@@ -260,12 +303,6 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
     return;
   }
 
-  const channel = channels.get(channelName);
-  if (!Array.isArray(channel.state[entityType])) {
-    channel.state[entityType] = [];
-  }
-  let state = channel.state[entityType];
-
   const timestamp = payload.timestamp || Date.now();
   const normalizedPayload = { ...payload, userUuid, timestamp, channelName };
 
@@ -287,11 +324,10 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
     };
 
     await handlePrompt(promptConfig, async (uuid, session, type, message) => {
-      //console.log('Payload from LLM', { uuid, session, type, message });
       if (type === 'message') {
         await sendLLMStream(uuid, channelName, session, 'draft-llm', message);
       } else if (type === 'EOM') {
-        await sendLLMStream(uuid, channelName, session, 'draft-llm', message, true); // Use the message from handlePrompt
+        await sendLLMStream(uuid, channelName, session, 'draft-llm', message, true);
       } else if (type === 'ERROR') {
         socket.emit('message', { type: 'error', message: message, timestamp: Date.now() });
       }
@@ -299,14 +335,14 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
     return;
   }
 
-  let updateFunc, shouldSave = true;
+  let updateFunc, shouldPersist = true;
   switch (operation) {
     case 'add': updateFunc = updateCreateState; break;
     case 'update': updateFunc = updateUpdateState; break;
     case 'remove': updateFunc = updateDeleteState; break;
     case 'reorder': updateFunc = updateReorderState; break;
     case 'vote': updateFunc = updateVoteState; break;
-    case 'draft': updateFunc = null; shouldSave = false; break;
+    case 'draft': updateFunc = null; shouldPersist = false; break;
     default:
       socket.emit('message', { type: 'error', message: `Unknown operation: ${operation}`, timestamp: Date.now() });
       return;
@@ -317,16 +353,8 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
     return;
   }
 
-  const newState = updateFunc ? updateFunc(state, normalizedPayload, entityType) : state;
-  if (newState !== undefined) {
-    channel.state[entityType] = newState;
-    state = newState;
-  }
-
+  await updateFunc(channelName, entityType, normalizedPayload);
   broadcastToChannel(channelName, type, normalizedPayload, userUuid);
-  if (shouldSave) {
-    await saveStateToServer(channelName, entityType, state);
-  }
 }
 
 function createRealTimeServers(server, corsOptions) {
@@ -338,8 +366,6 @@ function createRealTimeServers(server, corsOptions) {
   });
 
   io.on('connection', async (socket) => {
-    //console.log(`Client connected: ${socket.id}`);
-
     socket.on('error', (error) => {
       if (error.message === 'Max buffer size exceeded') {
         console.error(`Rejected oversized message from ${socket.id}. Size exceeded limit of ${io.engine.opts.maxHttpBufferSize} bytes`);
@@ -370,7 +396,6 @@ function createRealTimeServers(server, corsOptions) {
           state: initialState,
           locked: false,
         });
-        //console.log(`Initialized channel ${channelName} with state:`, initialState);
       }
 
       const channel = channels.get(channelName);
@@ -391,7 +416,6 @@ function createRealTimeServers(server, corsOptions) {
         timestamp: Date.now(),
         serverTimestamp: Date.now(),
       };
-      //console.log(`Sending init-state to ${userUuid} in ${channelName}:`, initStateMessage);
       socket.emit('message', initStateMessage);
 
       broadcastToChannel(channelName, 'user-list', { id: null, userUuid, data: null });
@@ -410,7 +434,6 @@ function createRealTimeServers(server, corsOptions) {
           break;
         }
       }
-      //console.log(`Client disconnected: ${socket.id}`);
     });
 
     socket.on('message', async (data) => {
@@ -480,15 +503,13 @@ async function handleMessage(dataObj, socket) {
     case 'remove-artifact':
     case 'add-transcript':
     case 'remove-transcript':
-      case 'add-collab':
-        case 'draft-collab':
-          case 'update-collab':
-            case 'delete-collab':
-        case 'add-breakout':
-          case 'update-breakout':
-            case 'delete-breakout':  
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
-      break;
+    case 'add-collab':
+    case 'draft-collab':
+    case 'update-collab':
+    case 'delete-collab':
+    case 'add-breakout':
+    case 'update-breakout':
+    case 'delete-breakout':
     case 'add-llm':
     case 'draft-llm':
       await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data, timestamp: dataObj.timestamp }, socket);
@@ -497,13 +518,14 @@ async function handleMessage(dataObj, socket) {
       channel.locked = data.locked;
       broadcastToChannel(channelName, type, { id: null, userUuid, data: { locked: data.locked }, timestamp: dataObj.timestamp });
       for (const entityType of Object.keys(entityConfigs)) {
-        await saveStateToServer(channelName, entityType, channel.state[entityType]);
+        const state = await loadStateFromServer(channelName, entityType);
+        channel.state[entityType] = state;
       }
       break;
     case 'upload-to-cloud':
-      //console.log('Upload to Cloud');
       for (const entityType of Object.keys(entityConfigs)) {
-        await saveStateToServer(channelName, entityType, channel.state[entityType]);
+        const state = await loadStateFromServer(channelName, entityType);
+        channel.state[entityType] = state;
       }
       break;
     case 'error':

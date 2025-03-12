@@ -1,10 +1,12 @@
-// composables/useDocuments.js
+// ./composables/useDocuments.js
 import { useRealTime } from './useRealTime.js';
+import { useFiles } from './useFiles.js';
 import { processFile } from '../utils/files/fileProcessor.js';
 
 const documents = Vue.ref([]);
 const selectedDocument = Vue.ref(null);
 const { userUuid, displayName, emit, on, off } = useRealTime();
+const { retrieveFiles, getFile } = useFiles();
 const eventHandlers = new WeakMap();
 const processedEvents = new Set();
 
@@ -53,25 +55,24 @@ export function useDocuments() {
   });
 
   async function addDocument(file) {
-    const processedDoc = await processFile(file);
-    if (processedDoc.data.status === 'complete') {
-      const id = processedDoc.id;
-      // Prepare payload for server (exclude pages)
-      const serverPayload = {
-        id,
-        userUuid: userUuid.value,
-        data: {
-          ...processedDoc.data,
-          pages: undefined, // Explicitly exclude pages
-        },
-        timestamp: Date.now(),
-      };
-      // Keep full data locally, including pages
-      documents.value.push({ id, userUuid: userUuid.value, data: processedDoc.data });
-      documents.value = [...documents.value];
-      emit('add-document', serverPayload); // Emit payload without pages
-    }
-    return processedDoc;
+    const uuid = crypto.randomUUID();
+    const serverPayload = {
+      id: uuid,
+      userUuid: userUuid.value,
+      data: {
+        name: file.name,
+        type: file.name.split('.').pop().toLowerCase(),
+        mimeType: file.type,
+        size: file.size,
+        lastModified: file.lastModified,
+        status: 'pending',
+      },
+      timestamp: Date.now(),
+    };
+    documents.value.push({ id: uuid, userUuid: userUuid.value, data: serverPayload.data });
+    documents.value = [...documents.value];
+    emit('add-document', serverPayload);
+    return { id: uuid, status: 'pending' };
   }
 
   function removeDocument(id) {
@@ -112,6 +113,45 @@ export function useDocuments() {
     selectedDocument.value = doc ? { ...doc } : null;
   }
 
+  async function retrieveAndRenderFiles() {
+    const unprocessedDocs = documents.value.filter(doc => !doc.data.pages && !doc.data.processedContent); // Process all unprocessed files
+    if (unprocessedDocs.length === 0) return;
+
+    const uuids = unprocessedDocs.map(doc => doc.id);
+    const retrievedFiles = await retrieveFiles(uuids);
+
+    for (const file of retrievedFiles) {
+      if (file.data && !file.error) {
+        const docIndex = documents.value.findIndex(d => d.id === file.uuid);
+        if (docIndex !== -1) {
+          const doc = documents.value[docIndex];
+          const storedFile = getFile(file.uuid);
+          if (storedFile && storedFile.data) {
+            const mimeType = doc.data.mimeType || `application/${doc.data.type}`;
+            const processed = await processFile(storedFile.data, mimeType);
+            doc.data = { 
+              ...doc.data, 
+              pages: processed.data.pages, 
+              pagesText: processed.data.pagesText, 
+              processedContent: processed.data.processedContent,
+              originalContent: storedFile.data,
+              status: processed.data.status,
+              renderAsHtml: processed.data.renderAsHtml,
+            };
+            documents.value = [...documents.value];
+            if (selectedDocument.value && selectedDocument.value.id === file.uuid) {
+              selectedDocument.value.data = { ...selectedDocument.value.data, ...doc.data };
+            }
+          } else {
+            console.error(`File not found in files.value for UUID ${file.uuid}`);
+          }
+        }
+      } else {
+        console.error(`Retrieval error for UUID ${file.uuid}:`, file.error);
+      }
+    }
+  }
+
   function cleanup() {
     const handlers = eventHandlers.get(useDocuments);
     if (handlers) {
@@ -130,6 +170,7 @@ export function useDocuments() {
     removeDocument,
     updateDocument,
     setSelectedDocument,
+    retrieveAndRenderFiles, // Renamed from retrieveAndRenderPdfs
     cleanup,
   };
 }

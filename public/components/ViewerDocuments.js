@@ -24,7 +24,7 @@ export default {
     },
   },
   setup(props) {
-    const { selectedDocument, documents, setSelectedDocument } = useDocuments();
+    const { selectedDocument, documents, setSelectedDocument, retrieveAndRenderPdfs } = useDocuments();
     const { addClip, addBookmark } = useClips();
     const { searchQuery, searchResults, searchDocuments } = useSearch();
     const {
@@ -113,8 +113,9 @@ export default {
     async function regeneratePages() {
       if (
         selectedDocument.value &&
-        !selectedDocument.value.data.pages &&
-        selectedDocument.value.data.originalContent
+        selectedDocument.value.data.type === "pdf" &&
+        selectedDocument.value.data.originalContent &&
+        !selectedDocument.value.data.pages
       ) {
         isLoadingPages.value = true;
         try {
@@ -133,7 +134,6 @@ export default {
 
     const attachScrollListener = debounce(() => {
       if (actualScrollContainer.value) {
-        // Remove existing listeners to prevent duplicates
         actualScrollContainer.value.removeEventListener('scroll', handleScrollListener);
         actualScrollContainer.value.addEventListener('scroll', handleScrollListener);
         console.log('Scroll listener attached to actualScrollContainer');
@@ -215,13 +215,12 @@ export default {
               scrollToPage(selectedPageIndex.value);
             }
             attachScrollListener();
-            // Force initial scroll update
             if (actualScrollContainer.value && lazyScrollViewer.value) {
               const scrollTop = actualScrollContainer.value.scrollTop;
               lazyScrollViewer.value.handleScroll(scrollTop);
             }
           });
-        } else if (newDoc && newDoc.data.type === "pdf" && !newDoc.data.pages) {
+        } else if (newDoc && newDoc.data.type === "pdf" && newDoc.data.originalContent && !newDoc.data.pages) {
           regeneratePages();
         } else {
           pageItems.value = [];
@@ -241,7 +240,6 @@ export default {
         }
         Vue.nextTick(() => {
           attachScrollListener();
-          // Force initial scroll update
           if (actualScrollContainer.value && lazyScrollViewer.value) {
             const scrollTop = actualScrollContainer.value.scrollTop;
             lazyScrollViewer.value.handleScroll(scrollTop);
@@ -524,6 +522,7 @@ export default {
       handleScroll,
       jumpToPage,
       updateTab,
+      retrieveAndRenderPdfs, // Expose for manual triggering if needed
     };
   },
   template: `

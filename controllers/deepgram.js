@@ -1,5 +1,5 @@
 const { transcribeFile } = require("../tools/deepgram.js");
-const { upload } = require('../tools/upload.js');
+const { upload } = require('../tools/uploads.js');
 const fs = require("fs");
 const path = require("path");
 

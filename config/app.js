@@ -27,8 +27,21 @@ const apiUrl = process.env.API_URL || 'http://localhost:3000';
 //const expressLogger = require("../middleware/expressLogger");
 //app.use(expressLogger);
 
+
+// Import MongoDB connection
+// const connectDB = require('./db.js');
+
+
 //Create HTTP Server
 const server = http.createServer(app);
+
+
+// connectDB().then(() => {
+//   server.listen(port, '0.0.0.0', () =>
+//     console.log(`SuperBinder.Live - Node.js service listening at ${apiUrl}`)
+//   );
+// });
+
 server.listen( port, '0.0.0.0', () =>
   console.log(`SuperBinder.live - Node.js service listening at ${apiUrl}`)
 );

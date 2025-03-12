@@ -1,6 +1,6 @@
 {
   "name": "superbinder-ai",
-  "version": "0.0.45",
+  "version": "0.0.46",
   "description": "Multi-person multi-agent AI interactions",
   "main": "index.js",
   "scripts": {
@@ -32,6 +32,7 @@
     "groq-sdk": "^0.9.1",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.12.1",
     "multer": "^1.4.5-lts.1",
     "openai": "^4.76.0",
     "pdfjs-dist": "^4.10.38",

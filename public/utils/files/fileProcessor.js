@@ -36,7 +36,6 @@ const configurePdfWorker = () => {
 // Configure worker immediately
 configurePdfWorker();
 
-// Initialize markdown parser (using your syntax)
 const md = markdownit({
   html: true,
   linkify: true,
@@ -45,7 +44,6 @@ const md = markdownit({
   references: {},
 });
 
-// Custom CSS for styled Word/PDF output
 const wordStyles = `
   <style>
     table { border-collapse: collapse; width: 100%; }
@@ -62,29 +60,38 @@ const wordStyles = `
   </style>
 `;
 
-export async function processFile(file) {
-  if (!file || typeof file.name !== 'string') {
-    throw new Error('Invalid file object: missing or invalid name');
+// Map MIME types to extensions for processing
+const mimeTypeToExtension = {
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'text/plain': 'txt',
+  'text/html': 'html',
+  'text/css': 'css',
+  'application/javascript': 'js',
+  'application/json': 'json',
+  'text/markdown': 'md',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+};
+
+export async function processFile(arrayBuffer, mimeType) {
+  if (!arrayBuffer || !mimeType) {
+    throw new Error('Invalid input: missing arrayBuffer or mimeType');
   }
 
-  const uuid = uuidv4();
-  const extension = file.name.split('.').pop().toLowerCase();
+  const uuid = crypto.randomUUID();
+  const extension = mimeTypeToExtension[mimeType] || mimeType.split('/')[1] || 'bin'; // Use mapped extension or fallback
   const originalMetadata = {
-    name: file.name,
-    type: file.type,
-    size: file.size,
-    lastModified: file.lastModified,
+    type: extension,
+    size: arrayBuffer.byteLength,
   };
   const newMetadata = {
     id: uuid,
-    name: file.name,
-    type: extension,
   };
   let status = 'pending';
   let processedContent = '';
   let pages = [];
   let pagesText = [];
-  let originalContent = null;
+  let originalContent = arrayBuffer;
   let analysisContent = {
     summary: null,
     knowledgeGraph: { edges: [], nodes: [] },
@@ -93,49 +100,26 @@ export async function processFile(file) {
   };
 
   try {
-    const content = await readFileContent(file);
+    const content = new Uint8Array(arrayBuffer);
 
     if (extension === 'pdf') {
-      const arrayBuffer = await file.arrayBuffer();
-      originalContent = arrayBufferToBase64(arrayBuffer); // Store as Base64
-      const pdfResult = await processPdf(file);
-      pages = pdfResult.pages; // Keep locally
+      const pdfResult = await processPdf(content.buffer);
+      pages = pdfResult.pages;
       pagesText = pdfResult.textContent || [];
       console.log('PDF pagesText:', pagesText);
-    } else {
-      switch (extension) {
-        case 'docx':
-          const docxResult = await processDocx(content);
-          processedContent = docxResult.html;
-          if (processedContent.includes('<')) {
-            processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
-          }
-          break;
-        case 'md':
-          processedContent = await processMarkdown(content);
-          break;
-        case 'xlsx':
-          processedContent = await processExcel(file);
-          if (processedContent.includes('<')) {
-            processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
-          }
-          break;
-        case 'json':
-          processedContent = await processJson(content);
-          break;
-        case 'txt':
-        case 'js':
-        case 'html':
-        case 'css':
-          processedContent = escapeHtml(content);
-          break;
-        default:
-          if (isTextFile(file)) {
-            processedContent = escapeHtml(content);
-          } else {
-            throw new Error('Unsupported file type');
-          }
+    } else if (extension === 'docx') {
+      const docxResult = await processDocx(content.buffer);
+      processedContent = docxResult.html;
+      if (processedContent.includes('<')) {
+        processedContent = `${wordStyles}<div class="document-content">${processedContent}</div>`;
       }
+      pagesText = docxResult.pages; // Treat sections as pages (future enhancement for true page breaking)
+    } else if (isTextBased(mimeType)) {
+      const text = new TextDecoder().decode(content);
+      processedContent = processTextContent(text, extension);
+      pagesText = [text]; // Single page for text-based files
+    } else {
+      throw new Error('Unsupported file type for processing');
     }
 
     analysisContent = {
@@ -147,21 +131,20 @@ export async function processFile(file) {
 
     status = 'complete';
   } catch (error) {
-    console.error(`Error processing file ${file.name}:`, error);
+    console.error(`Error processing file:`, error);
     status = 'error';
     processedContent = `<p>Error processing file: ${error.message}</p>`;
     pages = [];
     pagesText = [];
-    originalContent = null;
   }
 
   const processedData = {
     ...originalMetadata,
     ...newMetadata,
     processedContent,
-    pages, // Kept locally
+    pages,
     pagesText,
-    originalContent, // For PDFs
+    originalContent,
     analysisContent,
     status,
     timestamp: Date.now(),
@@ -176,89 +159,10 @@ export async function processFile(file) {
   };
 }
 
-// Helper function to convert ArrayBuffer to Base64
-function arrayBufferToBase64(buffer) {
-  const binary = new Uint8Array(buffer);
-  let base64 = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < binary.length; i += chunkSize) {
-    const chunk = binary.subarray(i, i + chunkSize);
-    base64 += String.fromCharCode.apply(null, chunk);
-  }
-  return btoa(base64);
-}
-
-// Helper function to convert Base64 to ArrayBuffer
-function base64ToArrayBuffer(base64) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-async function processPdf(file) {
-  const loadingTask = pdfjsLib.getDocument({ data: await file.arrayBuffer() });
-  const pdf = await loadingTask.promise;
-
-  let html = '';
-  const pages = [];
-  const textContent = [];
-
-  const scale = 1.25;
-
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale });
-
-    const textContentItems = await page.getTextContent({
-      includeMarkedContent: true,
-      disableCombineTextItems: false,
-    });
-    const pageText = textContentItems.items
-      .map(item => item.str || '')
-      .join(' ')
-      .trim();
-    textContent.push(pageText);
-    // console.log(`Page ${i} Text Content:`, pageText);
-
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    const renderTask = page.render({
-      canvasContext: context,
-      viewport: viewport,
-      enableWebGL: true,
-    });
-
-    await renderTask.promise;
-    const dataUrl = canvas.toDataURL('image/png', 0.95);
-
-    const pageContent = `
-      <div class="pdf-page" style="position: relative; width: ${viewport.width}px; height: ${viewport.height}px; margin: 20px 0;">
-        <img src="${dataUrl}" style="width: 100%; height: 100%; user-select: none;" alt="Page ${i}" />
-      </div>
-    `;
-
-    pages.push(pageContent);
-    html += pageContent;
-
-    canvas.remove();
-  }
-
-  console.log('Text Content Array:', textContent);
-  return { pages, textContent };
-}
-
 // Function to regenerate PDF pages from originalContent
-export async function regeneratePdfPages(originalContent) {
-  if (!originalContent) return { pages: [], textContent: [] };
+export async function regeneratePdfPages(arrayBuffer) {
+  if (!arrayBuffer) return { pages: [], textContent: [] };
 
-  const arrayBuffer = base64ToArrayBuffer(originalContent);
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
 
@@ -307,170 +211,58 @@ export async function regeneratePdfPages(originalContent) {
   return { pages, textContent };
 }
 
-// Helper function for images (unchanged)
-async function getPageImages(page, pageNumber) {
-  const images = [];
-  try {
-    const opList = await page.getOperatorList();
-    const viewport = page.getViewport({ scale: 1.0 });
-    const fns = opList.fnArray;
-    const args = opList.argsArray;
-    const processedRefs = new Set();
+// Helper functions
+async function processPdf(arrayBuffer) {
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
 
-    for (let i = 0; i < fns.length; i++) {
-      const fn = fns[i];
-      const arg = args[i];
+  let html = '';
+  const pages = [];
+  const textContent = [];
 
-      if ([
-        pdfjsLib.OPS.paintJpegXObject,
-        pdfjsLib.OPS.paintImageXObject,
-        pdfjsLib.OPS.paintImageMaskXObject,
-        pdfjsLib.OPS.paintInlineImageXObject,
-        pdfjsLib.OPS.paintFormXObject,
-        pdfjsLib.OPS.beginInlineImage,
-      ].includes(fn)) {
-        let imgKey = arg[0];
-        if (fn === pdfjsLib.OPS.beginInlineImage) {
-          imgKey = `inline_${pageNumber}_${i}`;
-        }
+  const scale = 1.25;
 
-        if (processedRefs.has(imgKey)) continue;
-        processedRefs.add(imgKey);
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale });
 
-        let imageData;
-        if (fn === pdfjsLib.OPS.beginInlineImage) {
-          const imageDict = arg[0];
-          const imageBytes = arg[1];
-          imageData = {
-            width: imageDict.width,
-            height: imageDict.height,
-            data: imageBytes,
-            kind: imageDict.colorSpace ? 'RGB' : 'RGBA',
-          };
-        } else {
-          imageData = await new Promise((resolve) => {
-            page.objs.get(imgKey, (img) => resolve(img));
-          });
-        }
+    const textContentItems = await page.getTextContent({
+      includeMarkedContent: true,
+      disableCombineTextItems: false,
+    });
+    const pageText = textContentItems.items
+      .map(item => item.str || '')
+      .join(' ')
+      .trim();
+    textContent.push(pageText);
 
-        if (!imageData) continue;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
 
-        const canvas = document.createElement('canvas');
-        let x = 0, y = 0;
-        if (fn === pdfjsLib.OPS.paintFormXObject) {
-          const formViewport = page.getViewport({ scale: 1.0 });
-          canvas.width = formViewport.width;
-          canvas.height = formViewport.height;
-          const ctx = canvas.getContext('2d');
-          const renderContext = { canvasContext: ctx, viewport: formViewport, enableWebGL: true };
-          await page.render(renderContext).promise;
-          x = 0; y = 0;
-        } else if (imageData.bitmap) {
-          canvas.width = imageData.bitmap.width;
-          canvas.height = imageData.bitmap.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(imageData.bitmap, 0, 0);
-          x = 0; y = 0;
-        } else if (imageData.data) {
-          canvas.width = imageData.width;
-          canvas.height = imageData.height;
-          const ctx = canvas.getContext('2d');
-          let imgData;
-          if (imageData.kind === 'RGB') {
-            const rgba = new Uint8ClampedArray(imageData.width * imageData.height * 4);
-            for (let j = 0; j < imageData.data.length; j += 3) {
-              const k = (j / 3) * 4;
-              rgba[k] = imageData.data[j];
-              rgba[k + 1] = imageData.data[j + 1];
-              rgba[k + 2] = imageData.data[j + 2];
-              rgba[k + 3] = 255;
-            }
-            imgData = new ImageData(rgba, imageData.width, imageData.height);
-          } else {
-            imgData = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
-          }
-          ctx.putImageData(imgData, 0, 0);
-          x = 0; y = 0;
-        }
+    const renderTask = page.render({
+      canvasContext: context,
+      viewport: viewport,
+      enableWebGL: true,
+    });
 
-        const dataUrl = canvas.toDataURL('image/png', 0.95);
-        const blob = await new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/png', 0.95));
+    await renderTask.promise;
+    const dataUrl = canvas.toDataURL('image/png', 0.95);
 
-        if (dataUrl) {
-          images.push({
-            dataUrl,
-            width: canvas.width,
-            height: canvas.height,
-            pageNumber,
-            id: imgKey,
-            x: x,
-            y: y,
-            viewport: { width: viewport.width, height: viewport.height },
-          });
-        }
-      }
-    }
+    const pageContent = `
+      <div class="pdf-page" style="position: relative; width: ${viewport.width}px; height: ${viewport.height}px; margin: 20px 0;">
+        <img src="${dataUrl}" style="width: 100%; height: 100%; user-select: none;" alt="Page ${i}" />
+      </div>
+    `;
 
-    if (images.length === 0) {
-      const hasText = await hasTextContent(page);
-      if (!hasText) {
-        const scale = 2.0;
-        const scaledViewport = page.getViewport({ scale });
-        const canvas = document.createElement('canvas');
-        canvas.width = scaledViewport.width;
-        canvas.height = scaledViewport.height;
-        const ctx = canvas.getContext('2d');
-        const renderContext = { canvasContext: ctx, viewport: scaledViewport, enableWebGL: true };
-        await page.render(renderContext).promise;
-        const dataUrl = canvas.toDataURL('image/png', 0.95);
-        const blob = await new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/png', 0.95));
+    pages.push(pageContent);
+    html += pageContent;
 
-        if (dataUrl) {
-          images.push({
-            dataUrl,
-            width: scaledViewport.width,
-            height: scaledViewport.height,
-            pageNumber,
-            id: `page-${pageNumber}`,
-            x: 0,
-            y: 0,
-            viewport: { width: viewport.width, height: viewport.height },
-          });
-        }
-      }
-    }
-
-    return images;
-  } catch (error) {
-    console.log("Parsing error", error);
+    canvas.remove();
   }
-}
 
-async function hasTextContent(page) {
-  const textContent = await page.getTextContent({
-    includeMarkedContent: true,
-    disableCombineTextItems: false,
-  });
-  return textContent.items.some((item) => (item.str || "").trim().length > 0);
-}
-
-function readFileContent(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    if (file.type.startsWith('text/') || file.name.endsWith('.json')) {
-      reader.readAsText(file);
-    } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      reader.readAsArrayBuffer(file);
-    } else if (file.type === 'application/pdf') {
-      reader.readAsArrayBuffer(file);
-    } else if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-      reader.readAsArrayBuffer(file);
-    } else {
-      reader.readAsText(file);
-    }
-  });
+  return { pages, textContent };
 }
 
 async function processDocx(buffer) {
@@ -516,39 +308,32 @@ async function processDocx(buffer) {
   return { html: result.value, pages };
 }
 
-async function processMarkdown(text) {
-  return md.render(text);
-}
-
-async function processExcel(file) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(file);
-  let html = '<table class="border-collapse border border-gray-500">';
-  workbook.eachSheet((worksheet) => {
-    html += `<tr><th colspan="${worksheet.columnCount}" class="bg-gray-600 text-white p-2">${worksheet.name}</th></tr>`;
-    worksheet.eachRow({ includeEmpty: false }, (row) => {
-      html += '<tr>';
-      row.eachCell({ includeEmpty: false }, (cell) => {
-        html += `<td class="border border-gray-500 p-2">${cell.value || ''}</td>`;
-      });
-      html += '</tr>';
-    });
-  });
-  html += '</table>';
-  return html;
-}
-
-async function processJson(text) {
-  try {
-    const data = JSON5.parse(text);
-    return `<pre class="bg-gray-800 p-2 rounded-lg">${JSON.stringify(data, null, 2)}</pre>`;
-  } catch (error) {
-    return `<p>Invalid JSON: ${error.message}</p>`;
+function processTextContent(text, extension) {
+  switch (extension) {
+    case 'docx':
+      // Note: Page breaking for DOCX is not supported yet; future enhancement
+      return `${wordStyles}<div class="document-content">${escapeHtml(text)}</div>`;
+    case 'md':
+      return md.render(text);
+    case 'txt':
+    case 'js':
+    case 'html':
+    case 'css':
+      return escapeHtml(text);
+    case 'json':
+      try {
+        const data = JSON5.parse(text);
+        return `<pre class="bg-gray-800 p-2 rounded-lg">${JSON.stringify(data, null, 2)}</pre>`;
+      } catch (error) {
+        return `<p>Invalid JSON: ${error.message}</p>`;
+      }
+    default:
+      return escapeHtml(text);
   }
 }
 
-function isTextFile(file) {
-  return file.type.startsWith('text/') || ['.js', '.css', '.html', '.txt'].some(ext => file.name.endsWith(ext));
+function isTextBased(mimeType) {
+  return mimeType.startsWith('text/') || ['application/json', 'application/javascript', 'text/markdown'].includes(mimeType);
 }
 
 function escapeHtml(unsafe) {

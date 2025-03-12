@@ -10,7 +10,13 @@
       "channels/",
       "channels/*",
       "channels/**",
-      "channels/*.json"
+      "channels/*.json",
+
+      "files/",
+      "files/*",
+      "files/**",
+      "files/*.json"
+
 
     ]
   }
