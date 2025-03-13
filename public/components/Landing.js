@@ -4,9 +4,19 @@ export default {
   name: "SuperBinderLanding",
   template: `
     <div class="bg-gradient-to-b from-indigo-900 to-gray-900 overflow-auto landing">
-      <!-- Hero Section -->
+      <!-- Hero Section with Video -->
       <header class="relative h-screen flex items-center">
-        <div class="absolute inset-0 bg-[url('https://source.unsplash.com/random/1920x1080?collaboration')] bg-cover bg-center opacity-20 animate-pulse-slow"></div>
+        <video 
+          class="absolute inset-0 w-full h-full object-cover opacity-50" 
+          autoplay 
+          loop 
+          muted 
+          playsinline
+          ref="videoEl"
+        >
+          <source :src="videoUrl" type="video/mp4">
+        </video>
+        <div class="absolute inset-0 bg-gradient-to-b from-indigo-900/10 via-indigo-900/50"></div>
         <div class="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 z-10">
           <div class="lg:grid lg:grid-cols-12 lg:gap-8">
             <div class="sm:text-center md:mx-auto lg:col-span-8 lg:text-left">
@@ -53,7 +63,7 @@ export default {
       <section class="py-24 bg-gray-800">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
           <div class="flex flex-col items-center gap-6 p-6 bg-gray-900 rounded-xl border border-gray-700 hover:border-purple-500/50 transition-all">
-           <!-- <img :src="previewImg" alt="SuperBinder Preview" class="h-12 w-auto opacity-90" /> -->
+            <!-- <img :src="previewImg" alt="SuperBinder Preview" class="h-12 w-auto opacity-90" /> -->
             <h2 class="text-3xl font-bold text-white">Experience Real-Time Collaboration</h2>
             <span class="text-gray-300 text-lg">Sync up and create together.</span>
           </div>
@@ -106,7 +116,7 @@ export default {
               <h3 class="text-white font-semibold">GitHub</h3>
               <p class="text-gray-300 text-sm mt-2">Contribute & Collaborate</p>
             </a>
-            <a href="hhttps://x.com/youralberta?lang=en" target="_blank" class="flex flex-col items-center p-6 bg-gray-900 rounded-xl border border-gray-700 hover:border-purple-500/50 transition-all">
+            <a href="https://x.com/youralberta?lang=en" target="_blank" class="flex flex-col items-center p-6 bg-gray-900 rounded-xl border border-gray-700 hover:border-purple-500/50 transition-all">
               <i class="pi pi-twitter text-3xl text-purple-400 mb-4"></i>
               <h3 class="text-white font-semibold">X</h3>
               <p class="text-gray-300 text-sm mt-2">Stay Updated</p>
@@ -117,12 +127,20 @@ export default {
     </div>
   `,
   setup() {
-    const previewImg = Vue.computed(() => `../assets/superbinder-preview.png`);
+    const videoEl = Vue.ref(null);
+    const videoUrl = Vue.computed(() => `./assets/splashVideo.mp4`);
 
     Vue.onMounted(() => {
       document.documentElement.classList.add("landing-page");
       document.body.classList.add("landing-page");
       document.getElementById("app").classList.add("landing-page");
+
+      // Handle video autoplay
+      if (videoEl.value) {
+        videoEl.value.play().catch((e) => {
+          console.warn("Autoplay failed:", e);
+        });
+      }
     });
 
     Vue.onUnmounted(() => {
@@ -130,6 +148,8 @@ export default {
       document.body.classList.remove("landing-page");
       document.getElementById("app").classList.remove("landing-page");
     });
+
+    const previewImg = Vue.computed(() => `../assets/superbinder-preview.png`);
 
     const features = Vue.ref([
       {
@@ -195,7 +215,9 @@ export default {
       features,
       techFeatures,
       stack,
-      previewImg
+      previewImg,
+      videoEl,
+      videoUrl
     };
   }
 };

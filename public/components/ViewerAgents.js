@@ -23,22 +23,27 @@ export default {
 
       <!-- Agents Grid (Scrollable) -->
       <div class="flex-1 overflow-y-auto space-y-4" ref="agentsContainer">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div
             v-for="agent in filteredAgents"
-            :key="agent.id"  
-            class="p-4 bg-gray-700 rounded-lg flex flex-col items-center cursor-pointer hover:bg-gray-600 transition-colors"
-            @click="openEditModal(agent)"
+            :key="agent.id"
+            class="p-4 rounded-lg flex flex-col justify-between cursor-pointer transition-colors relative h-48"
+            :style="{ backgroundImage: \`url(\${agent.data.imageUrl ? agent.data.imageUrl : \`./assets/aiagent\${agent.data.placeholderImage || 1}.jpg\`})\`, backgroundSize: 'cover', backgroundPosition: 'center' }"
           >
-            <img :src="agent.data.imageUrl || defaultImage" :alt="agent.data.name" class="w-16 h-16 rounded-full mb-2 object-cover" />
-            <h3 class="text-purple-400 font-semibold">{{ agent.data.name }}</h3>
-            <div class="flex gap-2 mt-2">
-              <button @click.stop="openEditModal(agent)" class="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
-                Edit
-              </button>
-              <button @click.stop="confirmDelete(agent.id)" class="py-1 px-2 bg-red-600 hover:bg-red-700 text-white rounded-lg">
-                Delete
-              </button>
+            <div class="absolute inset-0 bg-gradient-to-t from-gray-900/90 to-transparent"></div>
+            <div class="relative z-10 flex flex-col h-full justify-between">
+              <div>
+                <h3 class="text-2xl font-semibold text-white mb-2">{{ agent.data.name }}</h3>
+                <p class="text-gray-300 mb-4 line-clamp-2">{{ agent.data.description }}</p>
+              </div>
+              <div class="flex justify-end gap-2">
+                <button @click.stop="openEditModal(agent)" class="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                  Edit
+                </button>
+                <button @click.stop="confirmDelete(agent.id)" class="py-1 px-2 bg-red-600 hover:bg-red-700 text-white rounded-lg">
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -68,7 +73,7 @@ export default {
               v-model="agentImageUrl"
               type="text"
               class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
-              placeholder="Image URL for avatar..."
+              placeholder="Image URL for avatar... (optional)"
             />
             <div>
               <h3 class="text-gray-300 mb-2">System Prompts</h3>
@@ -223,7 +228,6 @@ export default {
     const promptType = Vue.ref('');
     const promptIndex = Vue.ref(null);
     const promptContent = Vue.ref('');
-    const defaultImage = Vue.computed(() => '../assets/aiagent.png');
 
     const filteredAgents = Vue.computed(() => {
       if (!filterQuery.value) return agents.value;
@@ -352,7 +356,6 @@ export default {
       promptType,
       promptIndex,
       promptContent,
-      defaultImage,
       filterAgents,
       openEditModal,
       closeModal,
