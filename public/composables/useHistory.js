@@ -28,6 +28,7 @@ export function useHistory() {
       collab: [...(useCollaboration().collabs.value || [])],
       sections: [...(useSections().sections.value || [])],
     };
+    // console.log('Gathered local history in useHistory:', JSON.stringify(history, null, 2));
     return history;
   }
 
@@ -37,8 +38,8 @@ export function useHistory() {
       return;
     }
     const historyData = data.data || data;
+    // console.log('Syncing channel data received:', JSON.stringify(historyData, null, 2));
     const hasData = Object.keys(historyData).some(key => Array.isArray(historyData[key]) && historyData[key].length > 0);
-
     if (hasData) {
       // Merge function that compares timestamps for matching IDs
       const mergeArrays = (existing, incoming) => {
@@ -92,10 +93,12 @@ export function useHistory() {
 
   eventBus.$on('request-history-data', (callback) => {
     const history = gatherLocalHistory();
+    // console.log('History requested via eventBus, returning:', JSON.stringify(history, null, 2));
     callback(history);
   });
 
   eventBus.$on('sync-history-data', (data) => {
+    // console.log('Received sync-history-data event:', JSON.stringify(data, null, 2));
     syncChannelData(data);
   });
 
