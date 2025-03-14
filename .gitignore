@@ -9,3 +9,6 @@
 
 /channels/*
 !/channels/placeholder.txt
+
+/files/*
+!/files/placeholder.txt

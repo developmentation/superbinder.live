@@ -14,6 +14,7 @@ import { useGoals } from "../composables/useGoals.js";
 import { useQuestions } from "../composables/useQuestions.js";
 import { useArtifacts } from "../composables/useArtifacts.js";
 import { useTranscripts } from "../composables/useTranscripts.js";
+import { useSections } from "../composables/useSections.js";
 
 export default {
   name: "Binder",
@@ -145,7 +146,7 @@ export default {
     const sessionReady = Vue.ref(false);
     const activeTab = Vue.ref("Dashboard");
     const activeDocumentSubTab = Vue.ref("Uploads");
-    const tabs = ["Dashboard", "Documents", "Goals", "Agents", "Q&A", "Collaboration"];
+    const tabs = ["Dashboard", 'Sections', "Documents", "Goals", "Agents", "Q&A", "Collaboration"];
     const documentSubTabs = ["Uploads", "Viewer", "Bookmarks" ]; // "Bookmarks", "Clips"
     const isRoomLocked = Vue.ref(false);
     const isChatOpen = Vue.ref(false);
@@ -160,6 +161,7 @@ export default {
     const { questions, cleanup: cleanupQuestions } = useQuestions();
     const { artifacts, cleanup: cleanupArtifacts } = useArtifacts();
     const { transcripts, cleanup: cleanupTranscripts } = useTranscripts();
+    const { sections, cleanup: cleanupSections } = useSections();
 
     const isMobile = Vue.ref(window.matchMedia("(max-width: 640px)").matches);
     const updateIsMobile = () => {
@@ -184,6 +186,7 @@ export default {
     const answerCount = Vue.computed(() => (history.value.answers || []).length);
     const chatCount = Vue.computed(() => (history.value.chat || []).length);
     const artifactCount = Vue.computed(() => (history.value.artifacts || []).length);
+    const sectionCount = Vue.computed(() => (history.value.sections || []).length);
 
     Vue.watch(
       () => gatherLocalHistory(),

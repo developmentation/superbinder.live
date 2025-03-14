@@ -1,4 +1,4 @@
-// components/Viewer.js
+// ./components/Viewer.js (Updated)
 import LLMInteraction from './LLMInteraction.js';
 import ViewerGoals from './ViewerGoals.js';
 import ViewerAgents from './ViewerAgents.js';
@@ -11,6 +11,7 @@ import ViewerArtifacts from './ViewerArtifacts.js';
 import ViewerUploads from './ViewerUploads.js';
 import ViewerDashboard from './ViewerDashboard.js';
 import ViewerCollaboration from './ViewerCollaboration.js';
+import ViewerSections from './ViewerSections.js'; // New import
 import { useRealTime } from '../composables/useRealTime.js';
 
 export default {
@@ -28,6 +29,7 @@ export default {
     ViewerUploads,
     ViewerDashboard,
     ViewerCollaboration,
+    ViewerSections, // Add new component
   },
   props: {
     activeTab: {
@@ -64,7 +66,6 @@ export default {
   },
   template: `
     <div class="h-auto p-4">
-   <!-- <LLMInteraction></LLMInteraction> -->
       <viewer-dashboard v-show="activeTab === 'Dashboard'" :update-tab="updateTab" />
       <viewer-goals v-show="activeTab === 'Goals'" />
       <viewer-agents v-show="activeTab === 'Agents'" />
@@ -89,6 +90,7 @@ export default {
         v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Uploads'" 
         :update-tab="updateTab"
       />
+      <viewer-sections v-show="activeTab === 'Sections'" />
     </div>
   `,
 };

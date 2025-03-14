@@ -54,7 +54,7 @@ export function useDocuments() {
     renameDocument: renameDocumentHandler,
   });
 
-  async function addDocument(file) {
+  async function addDocument(file, sectionId = null) {
     const uuid = crypto.randomUUID();
     const serverPayload = {
       id: uuid,
@@ -66,6 +66,7 @@ export function useDocuments() {
         size: file.size,
         lastModified: file.lastModified,
         status: 'pending',
+        sectionId,
       },
       timestamp: Date.now(),
     };
@@ -73,6 +74,25 @@ export function useDocuments() {
     documents.value = [...documents.value];
     emit('add-document', serverPayload);
     return { id: uuid, status: 'pending' };
+  }
+
+  function updateDocument(id, name, sectionId = null) {
+    const index = documents.value.findIndex((d) => d.id === id);
+    if (index !== -1) {
+      const data = { ...documents.value[index].data, name, sectionId };
+      const payload = {
+        id,
+        userUuid: userUuid.value,
+        data: { name, sectionId },
+        timestamp: Date.now(),
+      };
+      documents.value[index].data = data;
+      documents.value = [...documents.value];
+      if (selectedDocument.value && selectedDocument.value.id === id) {
+        selectedDocument.value.data = data;
+      }
+      emit('rename-document', payload); // Reuse rename-document for simplicity
+    }
   }
 
   function removeDocument(id) {
@@ -90,24 +110,7 @@ export function useDocuments() {
     }
   }
 
-  function updateDocument(id, name) {
-    const index = documents.value.findIndex(d => d.id === id);
-    if (index !== -1) {
-      const data = { ...documents.value[index].data, name };
-      const payload = {
-        id,
-        userUuid: userUuid.value,
-        data: { name },
-        timestamp: Date.now(),
-      };
-      documents.value[index].data.name = name;
-      documents.value = [...documents.value];
-      if (selectedDocument.value && selectedDocument.value.id === id) {
-        selectedDocument.value.data.name = name;
-      }
-      emit('rename-document', payload);
-    }
-  }
+ 
 
   function setSelectedDocument(doc) {
     selectedDocument.value = doc ? { ...doc } : null;
