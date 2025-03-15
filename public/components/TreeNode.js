@@ -48,16 +48,37 @@ export default {
   ],
   setup(props, { emit }) {
     const { updateSection } = useSections();
-    const { updateDocument } = useDocuments();
+    const { updateDocument, removeDocument } = useDocuments();
 
     const checkboxClasses = Vue.computed(() => ({
       'border-gray-600 bg-gray-800': props.node.data._checkStatus === 'unchecked',
       'border-blue-500 bg-blue-500': props.node.data._checkStatus === 'checked' || props.node.data._checkStatus === 'halfChecked',
     }));
 
+    const nodeClasses = Vue.computed(() => {
+      if (!props.isLeaf(props.node)) {
+        return {
+          'bg-gray-800': props.node.data._checkStatus === 'checked' || props.node.data._checkStatus === 'halfChecked',
+        };
+      }
+      const isProcessed = props.node.data.pages || props.node.data.processedContent;
+      return {
+        'bg-orange-900': !isProcessed,
+        'bg-green-900': isProcessed,
+      };
+    });
+
     const handleAddSection = () => {
       console.log('Emitting add-section for node:', props.node.id, props.node.data.name);
       emit('add-section', props.node.id);
+    };
+
+    const handleRemove = () => {
+      if (props.isLeaf(props.node)) {
+        removeDocument(props.node.id);
+      } else {
+        emit('remove-section', props.node.id);
+      }
     };
 
     const localName = Vue.ref('');
@@ -88,7 +109,9 @@ export default {
 
     return {
       checkboxClasses,
+      nodeClasses,
       handleAddSection,
+      handleRemove,
       localName,
       finishEditing,
     };
@@ -104,8 +127,8 @@ export default {
       :class="{ 'pl-6': node.data.sectionId }"
     >
       <div
-        class="flex items-center py-1 px-2 rounded hover:bg-gray-800 cursor-pointer select-none"
-        :class="{ 'bg-gray-800': node.data._checkStatus === 'checked' || node.data._checkStatus === 'halfChecked' }"
+        class="flex items-center py-1 px-2 rounded hover:bg-gray-700 cursor-pointer select-none"
+        :class="nodeClasses"
         @click="!isLeaf(node) && $emit('toggle-expand', node)"
       >
         <!-- Expand/Collapse Icon -->
@@ -157,15 +180,15 @@ export default {
               @keypress.enter="finishEditing"
               @blur="finishEditing"
               class="bg-transparent text-white border-b border-gray-500 focus:border-purple-400 outline-none flex-1 min-w-0"
-              placeholder="Rename section"
+              placeholder="Rename node"
             />
           </div>
-          <!-- Buttons for sections only -->
-          <div v-if="!isLeaf(node)" class="flex gap-2">
-            <button @click.stop="handleAddSection">➕</button>
+          <!-- Buttons -->
+          <div class="flex gap-2">
+            <button v-if="!isLeaf(node)" @click.stop="handleAddSection">➕</button>
             <button @click.stop="$emit('start-editing', node)">✏️</button>
-            <button @click.stop="$emit('remove-section', node.id)">🗑️</button>
-            <button @click.stop="$emit('trigger-file-upload', node.id)" class="pi pi-upload text-green-400"></button>
+            <button @click.stop="handleRemove">🗑️</button>
+            <button v-if="!isLeaf(node)" @click.stop="$emit('trigger-file-upload', node.id)" class="pi pi-upload text-green-400"></button>
           </div>
         </div>
       </div>
