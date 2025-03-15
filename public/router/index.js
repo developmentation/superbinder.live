@@ -1,5 +1,6 @@
 import Landing from "../components/Landing.js";
 import Binder from "../components/Binder.js";
+import KnowledgeGraphView from "../components/KnowledgeGraphView.js";
 
 const routes = [
   {
@@ -13,8 +14,14 @@ const routes = [
     component: Binder,
     name: "binder",
     // requiresAuth:true, //Setup your own auth if you want SSO/Logins
+  },
+  
+  {
+    path: "/knowledge-graph",
+    component: KnowledgeGraphView,
+    name: "knowledge-graph",
+    // requiresAuth:true, // Uncomment if you want to require authentication
   }
-
 ];
 
 const router = VueRouter.createRouter({
