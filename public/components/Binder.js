@@ -26,105 +26,99 @@ export default {
     ViewerDashboard,
   },
   template: `
-    <div class="flex flex-col min-h-screen text-white p-2 overflow-x-hidden" style="height: 100vh; position: relative;">
-      <session-setup v-if="!sessionReady" @setup-complete="handleSetupComplete" />
+    <div class="flex flex-col h-screen text-[#e2e8f0] overflow-hidden">
+      <!-- Session Setup Screen -->
+      <session-setup v-if="!sessionReady" @setup-complete="handleSetupComplete" class="flex-1 flex items-center justify-center bg-[#0a0f1e]" />
 
-      <div v-if="sessionReady" class="flex flex-col h-full relative">
-        <!-- Menu Bar -->
-        <div class="bg-gray-800 p-2 border-b border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-2">
-          <div class="flex items-center space-x-2">
-            <span class="text-lg font-semibold text-gray-100">Channel: '{{ channelName }}' ({{ participantCount }} participants)</span>
-          </div>
-          <div class="flex items-center space-x-2 sm:ml-auto">
-            <button @click="resetSession" class="p-2 text-white hover:text-purple-400" title="Reset Session">
-              <i class="pi pi-sign-out text-xl"></i>
-            </button>
-            <button @click="toggleRoomLock" class="p-2 text-white hover:text-purple-400" :class="{ 'text-green-500': !isRoomLocked, 'text-red-500': isRoomLocked }" title="Toggle Room Lock">
-              <i v-if="!isRoomLocked" class="pi pi-unlock text-xl"></i>
-              <i v-if="isRoomLocked" class="pi pi-lock text-xl"></i>
-            </button>
-            <span :class="connectionStatusClass" class="inline-block w-4 h-4 rounded-full mr-2" title="Connection Status"></span>
-          </div>
-        </div>
-
-        <!-- Tab Bar with Chat Icon -->
-        <div class="bg-gray-900 border-b border-gray-700 px-4 py-2 relative flex items-center">
-          <div class="flex gap-2 overflow-x-auto scrollbar-hide">
+      <!-- Main Interface -->
+      <div v-if="sessionReady" class="flex flex-col h-full">
+        <!-- Tab Bar -->
+        <div class="bg-[#0a0f1e] border-b border-[#2d3748] px-4 py-3 flex items-center justify-between">
+          <div class="flex overflow-x-auto scrollbar-hide space-x-2">
             <button
               v-for="tab in tabs"
               :key="tab"
               @click="activeTab = tab; updateActiveTab(tab)"
-              class="px-4 py-2 rounded-t-lg font-semibold transition-colors whitespace-nowrap"
-              :class="[activeTab === tab ? 'bg-gray-800 text-purple-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600']"
+              class="px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 whitespace-nowrap"
+              :class="activeTab === tab ? 'bg-[#3b82f6] text-white shadow-lg' : 'bg-[#1e293b] text-[#94a3b8] hover:bg-[#2d3748] hover:text-[#e2e8f0]'"
             >
               {{ getTabLabel(tab) }}
             </button>
           </div>
+          <!-- Chat Toggle for Desktop -->
           <button
             @click="toggleChat"
-            class="ml-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors hidden sm:inline-flex"
-            :class="{ 'bg-gray-800 text-purple-400': isChatOpen }"
+            class="px-4 py-2 bg-[#1e293b] text-[#e2e8f0] rounded-lg font-medium hover:bg-[#2d3748] hover:text-[#34d399] transition-all hidden sm:flex items-center gap-2"
+            :class="{ 'bg-[#3b82f6] text-white': isChatOpen }"
           >
-            <i class="pi pi-comments text-xl"></i>
+            <i class="pi pi-comments text-lg"></i>
+            <span>Chat</span>
           </button>
         </div>
 
-        <!-- Main Content -->
-        <div class="flex flex-1 flex-col overflow-hidden relative" style="height: 100%;">
-          <!-- Conditionally show main content only when chat is not open on mobile -->
-          <div v-show="!isMobile || !isChatOpen" class="flex-1 flex flex-col overflow-hidden">
-            <!-- Document Sub-Tabs (only when Documents tab is active) -->
-            <div v-show="activeTab === 'Documents'" class="bg-gray-900 border-b border-gray-700 px-4 py-2">
-              <div class="flex gap-2 overflow-x-auto scrollbar-hide">
-                <button
-                  v-for="subTab in documentSubTabs"
-                  :key="subTab"
-                  @click="activeDocumentSubTab = subTab; updateActiveTab('Documents')"
-                  class="px-4 py-2 rounded-t-lg font-semibold transition-colors whitespace-nowrap"
-                  :class="[activeDocumentSubTab === subTab ? 'bg-gray-800 text-purple-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600']"
-                >
-                  {{ subTab }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Viewer -->
-            <div 
-              class="flex-1 overflow-y-auto" 
-            
-            > <!--   :style="{ maxHeight: activeTab === 'Documents' ? 'calc(100vh - 300px)' : 'calc(100vh - 200px)' }"-->
-              <viewer
-                :active-tab="activeTab"
-                :active-document-sub-tab="activeDocumentSubTab"
-                :update-tab="updateActiveTab"
-                v-show="true"
-                class="w-full h-full"
-              />
+        <!-- Main Content Area -->
+        <div class="flex-1 flex overflow-hidden relative">
+          <!-- Document Sub-Tabs (for Documents tab) -->
+          <div v-if="activeTab === 'Documents'" class="bg-[#0a0f1e] border-b border-[#2d3748] px-4 py-3 absolute top-0 left-0 right-0 z-10">
+            <div class="flex overflow-x-auto scrollbar-hide space-x-2">
+              <button
+                v-for="subTab in documentSubTabs"
+                :key="subTab"
+                @click="activeDocumentSubTab = subTab; updateActiveTab('Documents')"
+                class="px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 whitespace-nowrap"
+                :class="activeDocumentSubTab === subTab ? 'bg-[#3b82f6] text-white shadow-lg' : 'bg-[#1e293b] text-[#94a3b8] hover:bg-[#2d3748] hover:text-[#e2e8f0]'"
+              >
+                {{ subTab }}
+              </button>
             </div>
           </div>
 
-          <!-- Chat Button (Always visible on mobile, hidden on desktop) -->
-          <button
-            @click="toggleChat"
-            class="fixed bottom-4 right-4 p-3 bg-purple-600 text-white rounded-full shadow-lg z-50 sm:hidden"
-            :class="{ 'bg-gray-800': isChatOpen }"
+          <!-- Main Viewer Content -->
+          <div
+            class="flex-1 overflow-y-auto custom-scrollbar"
+            :style="{ paddingTop: activeTab === 'Documents' ? '64px' : '0px' }"
           >
-            <i class="pi pi-comments text-xl"></i>
-          </button>
+            <viewer
+              :active-tab="activeTab"
+              :active-document-sub-tab="activeDocumentSubTab"
+              :update-tab="updateActiveTab"
+              class="w-full h-full"
+            />
+          </div>
+
+          <!-- Chat Panel (Desktop Sidebar) -->
+          <chat-panel
+            v-show="isChatOpen && !isMobile"
+            :is-open="isChatOpen"
+            :is-mobile="isMobile"
+            :width="chatWidth"
+            @close="toggleChat"
+            @update:width="updateChatWidth"
+            class="absolute top-0 right-0 h-full border-l border-[#2d3748] glass-effect shadow-2xl"
+            :style="{ width: \`\${chatWidth}px\`, zIndex: 100 }"
+          />
+
+          <!-- Chat Panel (Mobile Fullscreen) -->
+          <chat-panel
+            v-show="isChatOpen && isMobile"
+            :is-open="isChatOpen"
+            :is-mobile="isMobile"
+            :width="chatWidth"
+            @close="toggleChat"
+            @update:width="updateChatWidth"
+            class="fixed inset-0 z-50 bg-[#0a0f1e]"
+          />
         </div>
 
-        <!-- Chat Panel (Moved to Binder.js level) -->
-        <chat-panel
-          v-show="isChatOpen"
-          :is-open="isChatOpen"
-          :is-mobile="isMobile"
-          :width="chatWidth"
-          @close="toggleChat"
-          @update:width="updateChatWidth"
-          class="chat-panel"
-          :class="{ 'mobile': isMobile }"
-          :style="{ width: !isMobile ? \`\${chatWidth}px\` : undefined, zIndex: 100 }"
-        />
+        <!-- Chat Button (Mobile Only) -->
+        <button
+          v-if="isMobile"
+          @click="toggleChat"
+          class="fixed bottom-6 right-6 p-4 bg-[#3b82f6] text-white rounded-full shadow-lg z-50 transition-transform transform hover:scale-110"
+          :class="{ 'bg-[#1e293b]': isChatOpen }"
+        >
+          <i class="pi pi-comments text-xl"></i>
+        </button>
       </div>
     </div>
   `,
@@ -146,11 +140,11 @@ export default {
     const sessionReady = Vue.ref(false);
     const activeTab = Vue.ref("Dashboard");
     const activeDocumentSubTab = Vue.ref("Uploads");
-    const tabs = ["Dashboard", 'Sections', "Goals", "Agents", "Q&A", "Collaboration"];
-    const documentSubTabs = ["Uploads", "Viewer", "Bookmarks" ]; // "Bookmarks", "Clips"
+    const tabs = ["Dashboard", "Sections", "Goals", "Agents", "Q&A", "Collaboration"];
+    const documentSubTabs = ["Uploads", "Viewer", "Bookmarks"];
     const isRoomLocked = Vue.ref(false);
     const isChatOpen = Vue.ref(false);
-    const chatWidth = Vue.ref(300);
+    const chatWidth = Vue.ref(350);
     const { userUuid, displayName, channelName } = useRealTime();
 
     const { agents, cleanup: cleanupAgents } = useAgents();
@@ -198,9 +192,7 @@ export default {
 
     function handleSetupComplete({ channel, name }) {
       if (!isValidChannelName(channel)) {
-        console.error(
-          "Invalid channel name. Use alphanumeric characters and underscores only."
-        );
+        console.error("Invalid channel name. Use alphanumeric characters and underscores only.");
         return;
       }
       connect(channel, name);
@@ -219,40 +211,7 @@ export default {
       sessionReady.value = false;
       isRoomLocked.value = false;
       isChatOpen.value = false;
-      chatWidth.value = 300;
-    }
-
-    function toggleRoomLock() {
-      isRoomLocked.value = !isRoomLocked.value;
-      emit("room-lock-toggle", {
-        channelName: channelName.value,
-        locked: isRoomLocked.value,
-      });
-    }
-
-    function downloadFromCloud() {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "application/json";
-      input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const data = JSON.parse(event.target.result);
-            if (data && Object.keys(data).length > 0) {
-              syncChannelData(data);
-            } else {
-              console.warn(
-                "Empty or undefined data downloaded, skipping sync:",
-                data
-              );
-            }
-          };
-          reader.readAsText(file);
-        }
-      };
-      input.click();
+      chatWidth.value = 350;
     }
 
     function handleVisibilityChange() {
@@ -271,15 +230,11 @@ export default {
         clearTimeout(disconnectTimeout);
         if (!isConnected.value && channelName.value && displayName.value) {
           if (!isValidChannelName(channelName.value)) {
-            console.error(
-              "Invalid channel name. Use alphanumeric characters and underscores only."
-            );
+            console.error("Invalid channel name. Use alphanumeric characters and underscores only.");
             return;
           }
           connect(channelName.value, displayName.value);
-          console.log(
-            "Reconnected due to tab visibility, history will sync via init-state"
-          );
+          console.log("Reconnected due to tab visibility, history will sync via init-state");
         }
       }
     }
@@ -306,13 +261,13 @@ export default {
     }
 
     function updateChatWidth(newWidth) {
-      chatWidth.value = Math.max(200, newWidth);
+      chatWidth.value = Math.max(250, newWidth);
     }
 
     const connectionStatusClass = Vue.computed(() => {
-      if (connectionStatus.value === "connected") return "bg-green-500";
-      if (connectionStatus.value === "connecting") return "bg-yellow-500";
-      return "bg-gray-500";
+      if (connectionStatus.value === "connected") return "bg-[#34d399]";
+      if (connectionStatus.value === "connecting") return "bg-[#f59e0b]";
+      return "bg-[#64748b]";
     });
 
     function isValidChannelName(channelName) {
@@ -336,7 +291,7 @@ export default {
 
     on("update-tab", (data) => {
       console.log("Binder received update-tab:", data);
-      if (data.tab) {
+      if (data && data.tab) {
         activeTab.value = data.tab;
         if (data.tab === "Documents" && data.subTab) {
           activeDocumentSubTab.value = data.subTab;
@@ -347,16 +302,16 @@ export default {
     });
 
     on("error", (errorData) => {
-      if (errorData.message.includes("Failed to save state")) {
+      if (errorData && errorData.message.includes("Failed to save state")) {
         console.error("Upload to cloud failed:", errorData.message);
         alert(`Upload failed: ${errorData.message}`);
       }
     });
 
     on("room-lock-toggle", (data) => {
-      if (data.channelName === channelName.value) {
+ 
         isRoomLocked.value = data.locked;
-      }
+      
     });
 
     on("toggle-chat", () => {
@@ -405,7 +360,7 @@ export default {
 
     Vue.watch(isConnected, (connected) => {
       if (!connected && sessionReady.value) {
-        // console.warn("Connection lost:", connectionError.value);
+        console.warn("Connection lost:", connectionError.value);
       }
     });
 
@@ -417,8 +372,6 @@ export default {
       documentSubTabs,
       handleSetupComplete,
       resetSession,
-      toggleRoomLock,
-      downloadFromCloud,
       sessionInfo,
       isConnected,
       connectionStatus,

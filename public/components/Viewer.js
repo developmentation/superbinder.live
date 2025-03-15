@@ -1,4 +1,4 @@
-// ./components/Viewer.js (Updated)
+// ./components/Viewer.js
 import LLMInteraction from './LLMInteraction.js';
 import ViewerGoals from './ViewerGoals.js';
 import ViewerAgents from './ViewerAgents.js';
@@ -11,7 +11,7 @@ import ViewerArtifacts from './ViewerArtifacts.js';
 import ViewerUploads from './ViewerUploads.js';
 import ViewerDashboard from './ViewerDashboard.js';
 import ViewerCollaboration from './ViewerCollaboration.js';
-import ViewerSections from './ViewerSections.js'; // New import
+import ViewerSections from './ViewerSections.js';
 import { useRealTime } from '../composables/useRealTime.js';
 
 export default {
@@ -29,7 +29,7 @@ export default {
     ViewerUploads,
     ViewerDashboard,
     ViewerCollaboration,
-    ViewerSections, // Add new component
+    ViewerSections,
   },
   props: {
     activeTab: {
@@ -65,32 +65,79 @@ export default {
     };
   },
   template: `
-    <div class="h-auto p-4">
-      <viewer-dashboard v-show="activeTab === 'Dashboard'" :update-tab="updateTab" />
-      <viewer-goals v-show="activeTab === 'Goals'" />
-      <viewer-agents v-show="activeTab === 'Agents'" />
-      <viewer-documents 
-        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Viewer'" 
-        :documents="documents" 
+    <div class="h-full w-full  overflow-y-auto custom-scrollbar">
+      <!-- Dashboard -->
+      <viewer-dashboard
+        v-show="activeTab === 'Dashboard'"
+        :update-tab="updateTab"
+        class="h-full"
+      />
+
+      <!-- Goals -->
+      <viewer-goals
+        v-show="activeTab === 'Goals'"
+        class="h-full"
+      />
+
+      <!-- Agents -->
+      <viewer-agents
+        v-show="activeTab === 'Agents'"
+        class="h-full"
+      />
+
+      <!-- Documents Sub-Tabs -->
+      <viewer-documents
+        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Viewer'"
+        :documents="documents"
         :bookmarks="bookmarks"
+        class="h-full"
       />
-      <viewer-clips 
-        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Clips'" 
-        :update-tab="updateTab"  
-      />
-      <viewer-bookmarks 
-        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Bookmarks'" 
+      <viewer-clips
+        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Clips'"
         :update-tab="updateTab"
+        class="h-full"
       />
-      <viewer-transcribe v-show="activeTab === 'Transcriptions'" />
-      <viewer-questions v-show="activeTab === 'Q&A'" :bookmarks="bookmarks" />
-      <viewer-collaboration v-show="activeTab === 'Collaboration'" />
-      <viewer-artifacts v-show="activeTab === 'Artifacts'" />
-      <viewer-uploads 
-        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Uploads'" 
+      <viewer-bookmarks
+        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Bookmarks'"
         :update-tab="updateTab"
+        class="h-full"
       />
-      <viewer-sections v-show="activeTab === 'Sections'" />
+      <viewer-uploads
+        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Uploads'"
+        :update-tab="updateTab"
+        class="h-full"
+      />
+
+      <!-- Transcriptions -->
+      <viewer-transcribe
+        v-show="activeTab === 'Transcriptions'"
+        class="h-full"
+      />
+
+      <!-- Q&A -->
+      <viewer-questions
+        v-show="activeTab === 'Q&A'"
+        :bookmarks="bookmarks"
+        class="h-full"
+      />
+
+      <!-- Collaboration -->
+      <viewer-collaboration
+        v-show="activeTab === 'Collaboration'"
+        class="h-full"
+      />
+
+      <!-- Artifacts -->
+      <viewer-artifacts
+        v-show="activeTab === 'Artifacts'"
+        class="h-full"
+      />
+
+      <!-- Sections -->
+      <viewer-sections
+        v-show="activeTab === 'Sections'"
+        class="h-full"
+      />
     </div>
   `,
 };

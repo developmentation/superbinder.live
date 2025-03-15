@@ -11,6 +11,7 @@ const activeUsers = Vue.ref([]); // Initialized as an array
 const connectionError = Vue.ref(null);
 const lastMessageTimestamp = Vue.ref(0);
 const userColor = Vue.ref(sessionStorage.getItem('userColor') || '#808080'); // Default to grey if not set
+const isRoomLocked = Vue.ref(false); // Added isRoomLocked as a reactive property
 
 const TIMESTAMP_TOLERANCE = 5000;
 
@@ -56,6 +57,13 @@ export function useRealTime() {
         userUuid: data.userUuid,
         timestamp: data.timestamp || Date.now(),
       };
+    } else if (data.type === 'room-lock-toggle') {
+      processedData = {
+        type: data.type,
+        channelName: data.channelName,
+        locked: data.data ? data.data.locked : false, // Extract from nested data field
+        timestamp: data.timestamp || Date.now(),
+      };
     } else {
       processedData = {
         type: data.type,
@@ -94,6 +102,10 @@ export function useRealTime() {
           activeUsers.value.splice(userIndex, 1);
         }
         eventBus.$emit('user-left', processedData);
+        break;
+      case 'room-lock-toggle':
+        isRoomLocked.value = processedData.locked;
+        eventBus.$emit('room-lock-toggle', processedData);
         break;
       default:
         eventBus.$emit(processedData.type, processedData);
@@ -139,13 +151,16 @@ export function useRealTime() {
     });
   }
 
-  function emit(event, { id, data }) {
-    socketManager.emit(
-      event,
-      { id, userUuid: userUuid.value, data, timestamp: Date.now() },
-      channelName.value,
-      userUuid.value
-    );
+  function emit(event, data) {
+    return new Promise((resolve, reject) => {
+      try {
+        socketManager.emit(event, data, channelName.value, userUuid.value);
+        resolve();
+      } catch (error) {
+        console.error('Emit failed:', error);
+        reject(error);
+      }
+    });
   }
 
   function reconnect() {
@@ -239,7 +254,6 @@ export function useRealTime() {
     off('remove-artifact');
     off('add-transcript');
     off('remove-transcript');
-
     off('add-collab');
     off('draft-collab');
     off('delete-collab');
@@ -247,7 +261,6 @@ export function useRealTime() {
     off('add-breakout');
     off('update-breakout');
     off('delete-breakout');
-    
   }
 
   return {
@@ -260,6 +273,7 @@ export function useRealTime() {
     connectionError,
     sessionInfo,
     userColor,
+    isRoomLocked,
     connect,
     disconnect,
     emit,

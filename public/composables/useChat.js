@@ -9,6 +9,7 @@ const eventHandlers = new WeakMap();
 const processedEvents = new Set();
 
 export function useChat() {
+  // Ensure unique handlers for each instance
   if (!eventHandlers.has(useChat)) {
     const handlers = {};
 
@@ -22,13 +23,12 @@ export function useChat() {
         }
         const finalColor = data.color || (senderUuid === userUuid.value ? userColor.value : getUserColor(senderUuid)) || '#808080';
         if (draftMessages.value[senderUuid]) delete draftMessages.value[senderUuid];
-        // Reset the initial timestamp for this user to ensure next draft starts at the bottom
         delete draftInitialTimestamps.value[senderUuid];
         console.log(`Processed add-chat for ${senderUuid} on device ${userUuid.value}, reset initial timestamp`);
         messages.value.push({
           id,
           userUuid: senderUuid,
-          data: { text: data.text, color: finalColor }, // Preserve newlines
+          data: { text: data.text, color: finalColor },
           timestamp: timestamp || Date.now(),
         });
         messages.value = [...messages.value];
@@ -41,9 +41,7 @@ export function useChat() {
         console.warn('Invalid text in draft-chat event, expected string:', data.text);
         return;
       }
-      // Only create or update draft if text has meaningful content after trimming
       if (data.text.trim().length > 0) {
-        // Check if this is a new draft session (new id or no existing timestamp)
         const currentDraftId = draftMessages.value[senderUuid]?.id;
         if (!draftInitialTimestamps.value[senderUuid] || (currentDraftId && currentDraftId !== id)) {
           draftInitialTimestamps.value[senderUuid] = timestamp || Date.now();
@@ -54,17 +52,16 @@ export function useChat() {
         const draftMsg = {
           id,
           userUuid: senderUuid,
-          data: { text: data.text }, // Preserve newlines for draft rendering
+          data: { text: data.text },
           isDraft: true,
-          timestamp: draftInitialTimestamps.value[senderUuid], // Use the stable initial timestamp
+          timestamp: draftInitialTimestamps.value[senderUuid],
           color: '#4B5563',
           displayNameSuffix: '(typing)',
         };
         draftMessages.value[senderUuid] = draftMsg;
       } else if (data.text === '' || data.text == null) {
-        // Remove draft if text is empty or null
         delete draftMessages.value[senderUuid];
-        delete draftInitialTimestamps.value[senderUuid]; // Clean up initial timestamp
+        delete draftInitialTimestamps.value[senderUuid];
         console.log(`Removed draft for ${senderUuid} on device ${userUuid.value}, cleaned up timestamp`);
       }
       draftMessages.value = { ...draftMessages.value };
@@ -77,13 +74,14 @@ export function useChat() {
       }
       const message = messages.value.find(m => m.id === id && m.userUuid === senderUuid);
       if (message) {
-        message.data.text = data.text; // Preserve newlines
+        message.data.text = data.text;
         message.timestamp = timestamp || Date.now();
         messages.value = [...messages.value];
       }
     };
 
     handlers.handleDeleteChat = function ({ id }) {
+      console.log(`Handling delete-chat for id: ${id}`);
       messages.value = messages.value.filter(m => m.id !== id);
       messages.value = [...messages.value];
     };
@@ -91,7 +89,7 @@ export function useChat() {
     handlers.addChat = on('add-chat', handlers.handleAddChat);
     handlers.draftChat = on('draft-chat', handlers.handleDraftChat);
     handlers.updateChat = on('update-chat', handlers.handleUpdateChat);
-    handlers.deleteChat = on('delete-chat', handlers.deleteChat);
+    handlers.deleteChat = on('delete-chat', handlers.handleDeleteChat);
     eventHandlers.set(useChat, handlers);
   }
 
@@ -103,12 +101,12 @@ export function useChat() {
       return;
     }
     const id = uuidv4();
-    const data = { text: text, color: userColor.value || '#808080' }; // Preserve newlines
-    console.log('Sending message with newlines:', data.text); // Debug log
+    const data = { text: text, color: userColor.value || '#808080' };
+    console.log('Sending message with newlines:', data.text);
     handlers.handleAddChat({ id, userUuid: userUuid.value, data });
     emit('add-chat', { id, userUuid: userUuid.value, data, timestamp: Date.now() });
     if (draftMessages.value[userUuid.value]) delete draftMessages.value[userUuid.value];
-    delete draftInitialTimestamps.value[userUuid.value]; // Reset initial timestamp for new session
+    delete draftInitialTimestamps.value[userUuid.value];
     console.log(`Sent message for ${userUuid.value}, reset initial timestamp`);
     draftMessages.value = { ...draftMessages.value };
   }
@@ -118,8 +116,7 @@ export function useChat() {
       console.warn('Invalid text in updateDraft, expected string:', text);
       return;
     }
-    // Generate a new draftId for each new drafting session after sending
-    let draftId = draftMessages.value[userUuid.value]?.id || uuidv4(); // Reuse during session, new ID after send
+    let draftId = draftMessages.value[userUuid.value]?.id || uuidv4();
     console.log(`Update draft for ${userUuid.value}: Draft ID = ${draftId}, Text = "${text}"`);
     handlers.handleDraftChat({ id: draftId, userUuid: userUuid.value, data: { text: text || '' } });
     emit('draft-chat', { id: draftId, userUuid: userUuid.value, data: { text: text || '' }, timestamp: Date.now() });
@@ -130,7 +127,7 @@ export function useChat() {
       console.warn('Invalid parameters in updateChat, expected non-empty string id and text:', { id, text });
       return;
     }
-    emit('update-chat', { id, userUuid: userUuid.value, data: { text: text }, timestamp: Date.now() }); // Preserve newlines
+    emit('update-chat', { id, userUuid: userUuid.value, data: { text: text }, timestamp: Date.now() });
   }
 
   function deleteChat(id) {
@@ -138,9 +135,16 @@ export function useChat() {
       console.warn('Invalid id in deleteChat, expected non-empty id:', { id });
       return;
     }
-    messages.value = messages.value.filter(m => m.id !== id);
-    messages.value = [...messages.value];
-    emit('delete-chat', { id, userUuid: userUuid.value, data: null, timestamp: Date.now() });
+    console.log(`Emitting delete-chat for id: ${id} from userUuid: ${userUuid.value}`);
+    emit('delete-chat', { id, userUuid: userUuid.value, data: null, timestamp: Date.now() })
+      .then(() => {
+        console.log(`Successfully emitted delete-chat for id: ${id}`);
+        messages.value = messages.value.filter(m => m.id !== id);
+        messages.value = [...messages.value];
+      })
+      .catch(error => {
+        console.error('Error emitting delete-chat:', error);
+      });
   }
 
   function getUserColor(userUuid) {
@@ -153,20 +157,20 @@ export function useChat() {
   function cleanup() {
     const handlers = eventHandlers.get(useChat);
     if (handlers) {
-      off('add-chat', handlers.addChat);
-      off('draft-chat', handlers.draftChat);
-      off('update-chat', handlers.updateChat);
-      off('delete-chat', handlers.deleteChat);
+      off('add-chat', handlers.handleAddChat);
+      off('draft-chat', handlers.handleDraftChat);
+      off('update-chat', handlers.handleUpdateChat);
+      off('delete-chat', handlers.handleDeleteChat);
       eventHandlers.delete(useChat);
     }
     processedEvents.clear();
-    draftInitialTimestamps.value = {}; // Clean up initial timestamps
+    draftInitialTimestamps.value = {};
   }
 
   return {
     messages,
     draftMessages,
-    draftInitialTimestamps, // Expose for debugging if needed
+    draftInitialTimestamps,
     sendMessage,
     updateDraft,
     updateChat,
