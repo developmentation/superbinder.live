@@ -1,4 +1,3 @@
-// ./components/ViewerSections.js (Confirmed)
 import SectionTreeViewer from './SectionTreeViewer.js';
 import LazyScrollViewer from './LazyScrollViewer.js';
 import { useDocuments } from '../composables/useDocuments.js';
@@ -35,8 +34,8 @@ export default {
     const isPdf = Vue.computed(() => selectedDocument.value?.data?.type === 'pdf');
 
     const handleNodeSelect = (node) => {
-      if (node.leaf) {
-        const doc = documents.value.find((d) => d.id === node.key);
+      if (node.type === 'document') {
+        const doc = documents.value.find((d) => d.id === node.id);
         setSelectedDocument(doc);
       }
     };
@@ -52,16 +51,18 @@ export default {
     };
   },
   template: `
-    <div class="h-full flex flex-col overflow-hidden">
+    <div class="h-screen flex flex-col overflow-hidden">
       <div class="flex-1 flex overflow-hidden">
-        <section-tree-viewer
-          :selected-keys="selectedKeys"
-          :expanded-keys="expandedKeys"
-          :parent-width="parentWidth"
-          @update:selected-keys="selectedKeys = $event"
-          @update:expanded-keys="expandedKeys = $event"
-          @node-select="handleNodeSelect"
-        />
+        <div class="w-1/3 overflow-y-auto" style="max-height: calc(100vh - 2rem)">
+          <section-tree-viewer
+            :selected-keys="selectedKeys"
+            :expanded-keys="expandedKeys"
+            :parent-width="parentWidth"
+            @update:selectedKeys="selectedKeys = $event"
+            @update:expandedKeys="expandedKeys = $event"
+            @node-select="handleNodeSelect"
+          />
+        </div>
         <div class="w-2/3 overflow-y-auto">
           <div v-if="selectedDocument" class="p-4">
             <div v-if="isPdf && pageItems.length">

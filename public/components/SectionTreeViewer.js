@@ -35,7 +35,12 @@ export default {
         nodeMap.set(section.id, {
           ...section,
           type: 'section',
-          data: { ...section.data, children: [] },
+          data: {
+            ...section.data,
+            _children: [],
+            _checkStatus: props.selectedKeys[section.id] ? 'checked' : 'unchecked',
+            _expanded: !!props.expandedKeys[section.id],
+          },
         });
       });
 
@@ -44,10 +49,15 @@ export default {
         const docNode = {
           ...doc,
           type: 'document',
-          data: { ...doc.data, children: [] },
+          data: {
+            ...doc.data,
+            _children: [],
+            _checkStatus: props.selectedKeys[doc.id] ? 'checked' : 'unchecked',
+            _expanded: false,
+          },
         };
         if (nodeMap.has(sectionId)) {
-          nodeMap.get(sectionId).data.children.push(docNode);
+          nodeMap.get(sectionId).data._children.push(docNode);
         } else if (!sectionId) {
           nodeMap.set(doc.id, docNode);
         }
@@ -57,7 +67,7 @@ export default {
       nodeMap.forEach((node) => {
         if (node.data.sectionId && nodeMap.has(node.data.sectionId)) {
           const parent = nodeMap.get(node.data.sectionId);
-          parent.data.children.push(node);
+          parent.data._children.push(node);
           console.log(`Added node ${node.id} (${node.data.name}) as child of ${parent.id} (${parent.data.name})`);
         } else if (!node.data.sectionId) {
           nodes.push(node);
@@ -67,9 +77,10 @@ export default {
 
       nodes.sort((a, b) => (a.data.order || 0) - (b.data.order || 0));
       nodes.forEach((node) => {
-        if (node.data.children.length) {
-          node.data.children.sort((a, b) => (a.data.order || 0) - (b.data.order || 0));
+        if (node.data._children.length) {
+          node.data._children.sort((a, b) => (a.data.order || 0) - (b.data.order || 0));
         }
+        updateCheckStatus(node);
       });
 
       console.log('Final treeNodes:', nodes);
@@ -91,108 +102,111 @@ export default {
       return node.type === 'document';
     }
 
-    function isSelected(node) {
-      if (isLeaf(node)) return props.selectedKeys[node.id] || false;
-      return getAllChildrenSelected(node);
-    }
-
-    function isIndeterminate(node) {
-      if (isLeaf(node)) return false;
-      const { someSelected, allSelected } = getChildrenSelectionState(node);
-      return someSelected && !allSelected;
-    }
-
-    function isExpanded(node) {
-      return props.expandedKeys[node.id] || false;
-    }
-
-    function getCheckboxClasses(node) {
-      return {
-        'border-gray-600 bg-gray-800': !isSelected(node) && !isIndeterminate(node),
-        'border-blue-500 bg-blue-500': isSelected(node) || isIndeterminate(node),
-      };
-    }
-
-    function getAllChildrenSelected(node) {
-      if (isLeaf(node)) return props.selectedKeys[node.id] || false;
-      if (!node.data.children.length) return false;
-      return node.data.children.every((child) =>
-        isLeaf(child) ? props.selectedKeys[child.id] || false : getAllChildrenSelected(child)
-      );
-    }
-
-    function getChildrenSelectionState(node) {
+    function updateCheckStatus(node) {
       if (isLeaf(node)) {
-        const selected = props.selectedKeys[node.id] || false;
-        return { someSelected: selected, allSelected: selected };
-      }
-      let selectedCount = 0;
-      const totalLeafNodes = countLeafNodes(node);
-
-      function countSelectedLeaves(n) {
-        if (isLeaf(n)) {
-          if (props.selectedKeys[n.id]) selectedCount++;
-          return;
-        }
-        n.data.children.forEach(countSelectedLeaves);
+        return node.data._checkStatus === 'checked';
       }
 
-      countSelectedLeaves(node);
-      return {
-        someSelected: selectedCount > 0,
-        allSelected: selectedCount === totalLeafNodes,
-      };
-    }
+      if (!node.data._children.length) {
+        return node.data._checkStatus === 'checked';
+      }
 
-    function countLeafNodes(node) {
-      if (isLeaf(node)) return 1;
-      return node.data.children.reduce((sum, child) => sum + countLeafNodes(child), 0);
+      const childStates = node.data._children.map(updateCheckStatus);
+      const allChildrenChecked = childStates.every(state => state);
+      const someChildrenChecked = childStates.some(state => state);
+
+      if (allChildrenChecked) {
+        node.data._checkStatus = 'checked';
+      } else if (someChildrenChecked) {
+        node.data._checkStatus = 'halfChecked';
+      } else {
+        node.data._checkStatus = 'unchecked';
+      }
+
+      return node.data._checkStatus === 'checked';
     }
 
     function toggleSelect(node) {
-      if (isLeaf(node)) {
-        if (isSelected(node)) {
-          emit('node-unselect', { node, id: node.id, affectedKeys: [node.id] });
-        } else {
-          emit('node-select', { node, id: node.id, affectedKeys: [node.id] });
-        }
-      } else {
-        const affectedKeys = [];
-        function collectLeafKeys(n) {
-          if (isLeaf(n)) affectedKeys.push(n.id);
-          else n.data.children.forEach(collectLeafKeys);
-        }
-        collectLeafKeys(node);
+      const newSelectedKeys = { ...props.selectedKeys };
+      const affectedKeys = [];
 
-        if (isSelected(node)) {
-          emit('node-unselect', { node, id: node.id, affectedKeys, propagateDown: true });
-        } else {
-          emit('node-select', { node, id: node.id, affectedKeys, propagateDown: true });
-        }
+      function collectKeys(n) {
+        affectedKeys.push(n.id);
+        if (n.data._children) n.data._children.forEach(collectKeys);
       }
+
+      collectKeys(node);
+
+      const isCurrentlyChecked = node.data._checkStatus === 'checked';
+      if (isCurrentlyChecked) {
+        affectedKeys.forEach((id) => delete newSelectedKeys[id]);
+        node.data._checkStatus = 'unchecked';
+        if (!isLeaf(node)) {
+          node.data._children.forEach((child) => child.data._checkStatus = 'unchecked');
+        }
+        emit('node-unselect', { node, id: node.id, affectedKeys, propagateDown: true });
+      } else {
+        affectedKeys.forEach((id) => (newSelectedKeys[id] = true));
+        node.data._checkStatus = 'checked';
+        if (!isLeaf(node)) {
+          node.data._children.forEach((child) => child.data._checkStatus = 'checked');
+        }
+        emit('node-select', { node, id: node.id, affectedKeys, propagateDown: true });
+      }
+
+      let parent = node.data.sectionId ? treeNodes.value.find(n => n.id === node.data.sectionId) : null;
+      while (parent) {
+        updateCheckStatus(parent);
+        parent = parent.data.sectionId ? treeNodes.value.find(n => n.id === parent.data.sectionId) : null;
+      }
+
+      emit('update:selectedKeys', newSelectedKeys);
     }
 
     function toggleExpand(node) {
       if (!isLeaf(node)) {
-        if (isExpanded(node)) {
-          emit('update:expandedKeys', { ...props.expandedKeys, [node.id]: false });
-        } else {
-          emit('update:expandedKeys', { ...props.expandedKeys, [node.id]: true });
-        }
+        const newExpandedKeys = { ...props.expandedKeys, [node.id]: !node.data._expanded };
+        node.data._expanded = !node.data._expanded;
+        emit('update:expandedKeys', newExpandedKeys);
       }
     }
 
+    function expandAll() {
+      const newExpandedKeys = { ...props.expandedKeys };
+      function setExpanded(node) {
+        if (!isLeaf(node)) {
+          node.data._expanded = true;
+          newExpandedKeys[node.id] = true;
+          if (node.data._children) {
+            node.data._children.forEach(setExpanded);
+          }
+        }
+      }
+      treeNodes.value.forEach(setExpanded);
+      emit('update:expandedKeys', newExpandedKeys);
+    }
+
+    function collapseAll() {
+      const newExpandedKeys = { ...props.expandedKeys };
+      function setCollapsed(node) {
+        if (!isLeaf(node)) {
+          node.data._expanded = false;
+          delete newExpandedKeys[node.id];
+          if (node.data._children) {
+            node.data._children.forEach(setCollapsed);
+          }
+        }
+      }
+      treeNodes.value.forEach(setCollapsed);
+      emit('update:expandedKeys', newExpandedKeys);
+    }
+
     const handleNodeSelect = (event) => {
-      const newSelectedKeys = { ...props.selectedKeys };
-      event.affectedKeys.forEach((id) => (newSelectedKeys[id] = true));
-      emit('update:selectedKeys', newSelectedKeys);
-      emit('node-select', event.node);
+      toggleSelect(event.node);
     };
 
     const handleNodeUnselect = (event) => {
-      const newSelectedKeys = { ...props.selectedKeys };
-      event.affectedKeys.forEach((id) => delete newSelectedKeys[id]);
-      emit('update:selectedKeys', newSelectedKeys);
+      toggleSelect(event.node);
     };
 
     const onDragStart = (event, node) => {
@@ -238,7 +252,6 @@ export default {
       }
       await uploadFiles(Array.from(files), uuids);
       fileInput.value.value = '';
-      // Auto-expand the parent section if a sectionId is provided
       if (sectionId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [sectionId]: true });
         console.log(`Auto-expanded section ${sectionId} after file upload`);
@@ -263,7 +276,6 @@ export default {
     const handleAddSection = (parentId) => {
       console.log("HANDLE ADD SECTION", parentId);
       addSection("New Section", parentId);
-      // Auto-expand the parent section if a parentId is provided
       if (parentId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [parentId]: true });
         console.log(`Auto-expanded parent ${parentId} after adding section`);
@@ -278,12 +290,10 @@ export default {
       updateSection,
       removeSection,
       reorderSections,
-      isSelected,
-      isIndeterminate,
-      isExpanded,
-      getCheckboxClasses,
       toggleSelect,
       toggleExpand,
+      expandAll,
+      collapseAll,
       handleNodeSelect,
       handleNodeUnselect,
       onDragStart,
@@ -304,9 +314,17 @@ export default {
   },
   template: `
     <div class="section-tree-viewer text-sm">
-      <button @click="addSection('New Root Section')" class="mb-2 p-2 bg-blue-600 text-white rounded">
-        Add Root Section
-      </button>
+      <div class="flex gap-2 mb-2">
+        <button @click="addSection('New Root Section')" class="p-2 bg-blue-600 text-white rounded">
+          Add Root Section
+        </button>
+        <button @click="expandAll" class="p-2 bg-green-600 text-white rounded">
+          Expand All
+        </button>
+        <button @click="collapseAll" class="p-2 bg-red-600 text-white rounded">
+          Collapse All
+        </button>
+      </div>
       <div
         class="tree-container"
         @dragover="onDragOver($event, null)"
@@ -320,10 +338,6 @@ export default {
           :expanded-keys="expandedKeys"
           :editing-node-id="editingNodeId"
           :new-name="newName"
-          :is-selected="isSelected"
-          :is-indeterminate="isIndeterminate"
-          :is-expanded="isExpanded"
-          :get-checkbox-classes="getCheckboxClasses"
           :get-file-icon="getFileIcon"
           :is-leaf="isLeaf"
           @toggle-select="toggleSelect"

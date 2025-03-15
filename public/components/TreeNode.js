@@ -24,22 +24,6 @@ export default {
       type: String,
       default: '',
     },
-    isSelected: {
-      type: Function,
-      required: true,
-    },
-    isIndeterminate: {
-      type: Function,
-      required: true,
-    },
-    isExpanded: {
-      type: Function,
-      required: true,
-    },
-    getCheckboxClasses: {
-      type: Function,
-      required: true,
-    },
     getFileIcon: {
       type: Function,
       required: true,
@@ -66,6 +50,11 @@ export default {
     const { updateSection } = useSections();
     const { updateDocument } = useDocuments();
 
+    const checkboxClasses = Vue.computed(() => ({
+      'border-gray-600 bg-gray-800': props.node.data._checkStatus === 'unchecked',
+      'border-blue-500 bg-blue-500': props.node.data._checkStatus === 'checked' || props.node.data._checkStatus === 'halfChecked',
+    }));
+
     const handleAddSection = () => {
       console.log('Emitting add-section for node:', props.node.id, props.node.data.name);
       emit('add-section', props.node.id);
@@ -77,7 +66,7 @@ export default {
       () => props.editingNodeId,
       (newId) => {
         if (newId === props.node.id) {
-          localName.value = props.newName; // Initialize with the passed newName
+          localName.value = props.newName;
         }
       }
     );
@@ -91,16 +80,14 @@ export default {
         } else {
           updateSection(props.node.id, updatedName);
         }
-      } else {
-        // Revert to original name if empty
-        emit('finish-editing', props.node.id, props.node.data.name);
       }
-      emit('finish-editing', props.node.id, updatedName || props.node.data.name); // Emit to reset editing state
+      emit('finish-editing', props.node.id, updatedName || props.node.data.name);
     };
 
     console.log(`Node ${props.node.id} (${props.node.data.name}) - isLeaf: ${props.isLeaf(props.node)}`);
 
     return {
+      checkboxClasses,
       handleAddSection,
       localName,
       finishEditing,
@@ -118,7 +105,7 @@ export default {
     >
       <div
         class="flex items-center py-1 px-2 rounded hover:bg-gray-800 cursor-pointer select-none"
-        :class="{ 'bg-gray-800': isSelected(node) }"
+        :class="{ 'bg-gray-800': node.data._checkStatus === 'checked' || node.data._checkStatus === 'halfChecked' }"
         @click="!isLeaf(node) && $emit('toggle-expand', node)"
       >
         <!-- Expand/Collapse Icon -->
@@ -128,7 +115,7 @@ export default {
           @click.stop="$emit('toggle-expand', node)"
         >
           <i
-            :class="['pi', isExpanded(node) ? 'pi-caret-down' : 'pi-caret-up']"
+            :class="['pi', node.data._expanded ? 'pi-caret-down' : 'pi-caret-up']"
             class="text-gray-400"
           ></i>
         </div>
@@ -137,17 +124,17 @@ export default {
         <!-- Checkbox -->
         <div
           class="w-4 h-4 mr-2 border rounded flex items-center justify-center"
-          :class="getCheckboxClasses(node)"
+          :class="checkboxClasses"
           @click.stop="$emit('toggle-select', node)"
         >
           <svg
-            v-if="isSelected(node) || isIndeterminate(node)"
+            v-if="node.data._checkStatus !== 'unchecked'"
             class="w-3 h-3 text-white"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
             <path
-              v-if="isSelected(node)"
+              v-if="node.data._checkStatus === 'checked'"
               fill-rule="evenodd"
               d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
               clip-rule="evenodd"
@@ -184,19 +171,15 @@ export default {
       </div>
 
       <!-- Child Nodes -->
-      <div v-if="!isLeaf(node) && isExpanded(node)" class="pl-6">
+      <div v-if="!isLeaf(node) && node.data._expanded" class="pl-6">
         <TreeNode
-          v-for="childNode in node.data.children"
+          v-for="childNode in node.data._children"
           :key="childNode.id"
           :node="childNode"
           :selected-keys="selectedKeys"
           :expanded-keys="expandedKeys"
           :editing-node-id="editingNodeId"
           :new-name="newName"
-          :is-selected="isSelected"
-          :is-indeterminate="isIndeterminate"
-          :is-expanded="isExpanded"
-          :get-checkbox-classes="getCheckboxClasses"
           :get-file-icon="getFileIcon"
           :is-leaf="isLeaf"
           @toggle-select="$emit('toggle-select', $event)"
