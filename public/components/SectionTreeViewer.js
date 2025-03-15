@@ -1,4 +1,3 @@
-// ./components/SectionTreeViewer.js
 import { useSections } from '../composables/useSections.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useFiles } from '../composables/useFiles.js';
@@ -239,6 +238,11 @@ export default {
       }
       await uploadFiles(Array.from(files), uuids);
       fileInput.value.value = '';
+      // Auto-expand the parent section if a sectionId is provided
+      if (sectionId) {
+        emit('update:expandedKeys', { ...props.expandedKeys, [sectionId]: true });
+        console.log(`Auto-expanded section ${sectionId} after file upload`);
+      }
     };
 
     const startEditing = (node) => {
@@ -251,9 +255,7 @@ export default {
     };
 
     const finishEditing = (nodeId, updatedName) => {
-      if (updatedName ) {
-        updateSection(nodeId, updatedName);
-      }
+      console.log('Finishing editing for node:', nodeId, 'New name:', updatedName);
       editingNodeId.value = null;
       newName.value = '';
     };
@@ -261,6 +263,11 @@ export default {
     const handleAddSection = (parentId) => {
       console.log("HANDLE ADD SECTION", parentId);
       addSection("New Section", parentId);
+      // Auto-expand the parent section if a parentId is provided
+      if (parentId) {
+        emit('update:expandedKeys', { ...props.expandedKeys, [parentId]: true });
+        console.log(`Auto-expanded parent ${parentId} after adding section`);
+      }
     };
 
     return {
