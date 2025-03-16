@@ -20,8 +20,38 @@ export default {
     const contextMenuX = Vue.ref(0);
     const contextMenuY = Vue.ref(0);
     const contextMenuOptions = Vue.ref([]);
-    const storedSelection = Vue.ref(null);
     const pageItems = Vue.ref(props.document.data.pages || []);
+    const headerHeight = Vue.ref(0); // Track header height
+
+    // Watch for changes to props.document and update pageItems
+    Vue.watch(
+      () => props.document,
+      (newDocument) => {
+        console.log('Document changed, updating pageItems:', newDocument);
+        pageItems.value = newDocument.data.pages || [];
+        // Reset selected page index when document changes
+        selectedPageIndex.value = null;
+        jumpToPageInput.value = '';
+        // Optionally reset LazyScrollViewer scroll position
+        if (lazyScrollViewer.value) {
+          Vue.nextTick(() => {
+            lazyScrollViewer.value.scrollToPage(0);
+          });
+        }
+      },
+      { deep: true } // Watch for deep changes in the document object
+    );
+
+    // Measure header height on mount
+    Vue.onMounted(() => {
+      const header = document.querySelector('.sticky.top-0');
+      headerHeight.value = header?.offsetHeight || 0;
+      document.addEventListener('click', hideContextMenu);
+    });
+
+    Vue.onUnmounted(() => {
+      document.removeEventListener('click', hideContextMenu);
+    });
 
     const jumpToPage = () => {
       const pageNum = parseInt(jumpToPageInput.value, 10);
@@ -42,16 +72,13 @@ export default {
       }
     };
 
-    const scrollToPage = (pageIndex, attempt = 1) => {
+    const scrollToPage = (pageIndex) => {
       if (lazyScrollViewer.value && pageItems.value.length > pageIndex) {
-        console.log(`Calling scrollToPage for index: ${pageIndex} (Attempt ${attempt})`);
+        console.log(`Calling scrollToPage for index: ${pageIndex}`);
         lazyScrollViewer.value.scrollToPage(pageIndex);
         selectedPageIndex.value = pageIndex;
-      } else if (attempt < 5) {
-        console.log(`Scroll attempt ${attempt}/5 failed, retrying...`);
-        setTimeout(() => scrollToPage(pageIndex, attempt + 1), 100);
       } else {
-        console.error(`Scroll failed after 5 attempts: pageIndex=${pageIndex}, pages=${pageItems.value.length}`);
+        console.error(`Scroll failed: pageIndex=${pageIndex}, pages=${pageItems.value.length}`);
       }
     };
 
@@ -59,9 +86,9 @@ export default {
       event.preventDefault();
       selectedPageIndex.value = pageIndex;
       contextMenuOptions.value = ['Create Bookmark'];
-      const scrollContainer = event.target.closest('.flex-1.overflow-y-auto');
-      const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
-      const scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
+      const scrollViewer = lazyScrollViewer.value.scrollContainer;
+      const scrollTop = scrollViewer.scrollTop;
+      const scrollLeft = scrollViewer.scrollLeft;
       contextMenuX.value = event.clientX - scrollLeft;
       contextMenuY.value = event.clientY + scrollTop;
 
@@ -97,14 +124,6 @@ export default {
       showContextMenu.value = false;
     };
 
-    Vue.onMounted(() => {
-      document.addEventListener('click', hideContextMenu);
-    });
-
-    Vue.onUnmounted(() => {
-      document.removeEventListener('click', hideContextMenu);
-    });
-
     return {
       lazyScrollViewer,
       jumpToPageInput,
@@ -114,6 +133,7 @@ export default {
       contextMenuY,
       contextMenuOptions,
       pageItems,
+      headerHeight,
       jumpToPage,
       handleContextMenu,
       addBookmarkFromContext,
@@ -145,8 +165,10 @@ export default {
           ref="lazyScrollViewer"
           :pages="pageItems"
           :buffer="1"
+          :header-offset="headerHeight"
           class="pdf-viewer"
           @contextmenu="handleContextMenu"
+          :key="document.id"
         />
       </div>
       <div

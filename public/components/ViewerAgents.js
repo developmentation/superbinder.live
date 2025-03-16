@@ -23,7 +23,7 @@ export default {
 
       <!-- Agents Grid (Scrollable) -->
       <div class="flex-1 overflow-y-auto space-y-4" ref="agentsContainer">
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 md:grid-cols-2 gap-4">
           <div
             v-for="agent in filteredAgents"
             :key="agent.id"
@@ -77,18 +77,18 @@ export default {
             />
             <div>
               <h3 class="text-gray-300 mb-2">System Prompts</h3>
-              <table class="w-full text-left">
+              <table class="w-full text-left dark-table">
                 <thead>
-                  <tr class="border-b border-gray-600">
-                    <th class="py-2 px-4 text-gray-300">Type</th>
-                    <th class="py-2 px-4 text-gray-300">Content</th>
-                    <th class="py-2 px-4 text-gray-300">Actions</th>
+                  <tr class="bg-gray-900">
+                    <th class="py-2 px-4 text-gray-200 font-medium">Type</th>
+                    <th class="py-2 px-4 text-gray-200 font-medium">Content</th>
+                    <th class="py-2 px-4 text-gray-200 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(prompt, index) in systemPrompts" :key="prompt.id" class="border-b border-gray-600">
+                  <tr v-for="(prompt, index) in systemPrompts" :key="prompt.id" class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
                     <td class="py-2 px-4">
-                      <select v-model="prompt.type" @change="updatePromptType('system', index, prompt.type)" class="bg-gray-700 text-white rounded-lg p-1">
+                      <select v-model="prompt.type" @change="updatePromptType('system', index, prompt.type)" class="bg-gray-700 text-white rounded-lg p-1 w-full">
                         <option value="text">Text</option>
                         <option value="goal">Goal</option>
                         <option value="document">Document</option>
@@ -131,18 +131,18 @@ export default {
             </div>
             <div>
               <h3 class="text-gray-300 mb-2">User Prompts</h3>
-              <table class="w-full text-left">
+              <table class="w-full text-left dark-table">
                 <thead>
-                  <tr class="border-b border-gray-600">
-                    <th class="py-2 px-4 text-gray-300">Type</th>
-                    <th class="py-2 px-4 text-gray-300">Content</th>
-                    <th class="py-2 px-4 text-gray-300">Actions</th>
+                  <tr class="bg-gray-900">
+                    <th class="py-2 px-4 text-gray-200 font-medium">Type</th>
+                    <th class="py-2 px-4 text-gray-200 font-medium">Content</th>
+                    <th class="py-2 px-4 text-gray-200 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(prompt, index) in userPrompts" :key="prompt.id" class="border-b border-gray-600">
+                  <tr v-for="(prompt, index) in userPrompts" :key="prompt.id" class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
                     <td class="py-2 px-4">
-                      <select v-model="prompt.type" @change="updatePromptType('user', index, prompt.type)" class="bg-gray-700 text-white rounded-lg p-1">
+                      <select v-model="prompt.type" @change="updatePromptType('user', index, prompt.type)" class="bg-gray-700 text-white rounded-lg p-1 w-full">
                         <option value="text">Text</option>
                         <option value="goal">Goal</option>
                         <option value="document">Document</option>

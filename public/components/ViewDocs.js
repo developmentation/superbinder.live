@@ -1,5 +1,6 @@
-// components/ViewDocs.js
 import { useSearch } from '../composables/useSearch.js';
+
+// Assuming 'marked' is globally accessible
 
 export default {
   name: 'ViewDocs',
@@ -10,80 +11,209 @@ export default {
     },
   },
   setup(props) {
-    const { searchQuery, searchResults, searchDocuments } = useSearch();
-    const docContent = Vue.ref(null);
+    const { searchQuery, searchResults } = useSearch();
     const currentMatchIndex = Vue.ref(0);
     const searchMatches = Vue.ref([]);
+    const debouncedSearchQuery = Vue.ref('');
+    const scrollContainer = Vue.ref(null);
+    const contentContainer = Vue.ref(null);
 
-    const performSearch = () => {
-      if (!props.document || !props.document.data.processedContent) return;
-      searchMatches.value = [];
-      searchResults.value = [];
-      currentMatchIndex.value = 0;
+    // Debounce the search query to reduce re-computations
+    const debounce = (fn, delay) => {
+      let timeout;
+      return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fn(...args), delay);
+      };
+    };
 
-      if (!searchQuery.value.trim()) return;
+    const updateDebouncedSearch = debounce((value) => {
+      debouncedSearchQuery.value = value;
+    }, 300);
 
-      const keywords = searchQuery.value.toLowerCase().split(/\s+/).filter(k => k);
-      if (!keywords.length) return;
+    Vue.watch(searchQuery, (newValue) => {
+      updateDebouncedSearch(newValue);
+    });
 
-      const content = props.document.data.processedContent.toLowerCase();
-      const words = content.split(/\s+/);
-      const matches = [];
+    // Compute the rendered Markdown content
+    const renderedContent = Vue.computed(() => {
+      if (!props.document || !props.document.data.processedContent) {
+        return '';
+      }
+      return marked.parse(props.document.data.processedContent);
+    });
 
-      // Simple fuzzy search: look for keywords within 100 words of each other
-      for (let i = 0; i < words.length; i++) {
-        let foundKeywords = [];
-        for (let j = i; j < Math.min(i + 100, words.length); j++) {
-          const word = words[j];
-          keywords.forEach(keyword => {
-            if (word.includes(keyword) && !foundKeywords.includes(keyword)) {
-              foundKeywords.push(keyword);
+    // Perform search and store match positions
+    const updateSearchMatches = () => {
+      if (!contentContainer.value || !debouncedSearchQuery.value.trim()) {
+        searchMatches.value = [];
+        searchResults.value = [];
+        currentMatchIndex.value = 0;
+        clearHighlights();
+        return;
+      }
+
+      const searchTerm = debouncedSearchQuery.value;
+      const walker = document.createTreeWalker(
+        contentContainer.value,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode: (node) => {
+            const parent = node.parentElement;
+            if (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE' || parent.tagName === 'CODE') {
+              return NodeFilter.FILTER_REJECT;
             }
+            return NodeFilter.FILTER_ACCEPT;
+          },
+        }
+      );
+
+      const matches = [];
+      let matchIndex = 0;
+      let node;
+
+      while ((node = walker.nextNode())) {
+        const text = node.nodeValue;
+        let match;
+        const regex = new RegExp(`(${searchTerm})`, 'gi');
+        regex.lastIndex = 0;
+
+        while ((match = regex.exec(text)) !== null) {
+          const start = match.index;
+          const end = regex.lastIndex;
+          matches.push({
+            textNode: node,
+            start,
+            end,
+            segment: match[0],
+            matchIndex,
           });
-          if (foundKeywords.length === keywords.length) {
-            // Found a match: extract the surrounding text (100 words around the match)
-            const startIdx = Math.max(0, i - 50);
-            const endIdx = Math.min(words.length, i + 50);
-            const segment = words.slice(startIdx, endIdx).join(' ');
-            const startCharIdx = content.indexOf(segment);
-            const endCharIdx = startCharIdx + segment.length;
-            matches.push({ segment, startCharIdx, endCharIdx });
-            break;
-          }
+          matchIndex++;
         }
       }
 
       searchMatches.value = matches;
-      searchResults.value = matches.map((match, index) => ({
+      searchResults.value = matches.map((match) => ({
         id: props.document.id,
         documentName: props.document.data.name,
         segment: match.segment,
-        matchIndex: index,
+        matchIndex: match.matchIndex,
       }));
 
       if (matches.length > 0) {
-        highlightMatch(0);
+        try {
+          applyHighlights();
+          highlightMatch(0);
+        } catch (error) {
+          console.error('Failed to apply highlights:', error);
+          clearHighlights();
+        }
+      } else {
+        clearHighlights();
       }
     };
 
-    const highlightMatch = (index) => {
-      if (!docContent.value || index < 0 || index >= searchMatches.value.length) return;
-      currentMatchIndex.value = index;
-      const match = searchMatches.value[index];
-      const content = docContent.value.innerHTML;
-      const highlightedContent = content.replace(
-        new RegExp(`(${match.segment})`, 'gi'),
-        '<span class="bg-[#3b82f6] text-white px-1">$1</span>'
-      );
-      docContent.value.innerHTML = highlightedContent;
+    // Apply highlights by splitting text nodes
+    const applyHighlights = () => {
+      clearHighlights();
+      const processedNodes = new WeakMap(); // Track processed text nodes and their offsets
 
-      // Scroll to the match
-      const scrollContainer = docContent.value.closest('.flex-1.overflow-y-auto');
-      if (scrollContainer) {
-        const matchElement = docContent.value.querySelector('.bg-[#3b82f6]');
-        if (matchElement) {
-          matchElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      searchMatches.value.forEach((match) => {
+        const textNode = match.textNode;
+        const textLength = textNode.nodeValue.length;
+
+        // Validate the range
+        if (match.start < 0 || match.end > textLength || match.start >= match.end) {
+          console.warn('Invalid range for highlight:', match);
+          return;
         }
+
+        // Check if this text node has been processed
+        if (!processedNodes.has(textNode)) {
+          processedNodes.set(textNode, 0);
+        }
+
+        const parent = textNode.parentNode;
+        const text = textNode.nodeValue;
+        let currentOffset = processedNodes.get(textNode);
+
+        // Adjust start and end based on previous highlights in this node
+        const adjustedStart = match.start + currentOffset;
+        const adjustedEnd = match.end + currentOffset;
+
+        if (adjustedStart >= textLength || adjustedEnd > textLength) {
+          console.warn('Adjusted range exceeds text length:', match, { adjustedStart, adjustedEnd, textLength });
+          return;
+        }
+
+        // Split the text node into three parts
+        const beforeText = text.slice(0, adjustedStart);
+        const matchText = text.slice(adjustedStart, adjustedEnd);
+        const afterText = text.slice(adjustedEnd);
+
+        // Create nodes for each part
+        const beforeNode = beforeText ? document.createTextNode(beforeText) : null;
+        const matchNode = document.createElement('span');
+        matchNode.className = `highlight-${match.matchIndex} inline highlight-blue`;
+        matchNode.textContent = matchText;
+        const afterNode = afterText ? document.createTextNode(afterText) : null;
+
+        // Replace the original text node with the new nodes
+        if (beforeNode) parent.insertBefore(beforeNode, textNode);
+        parent.insertBefore(matchNode, textNode);
+        if (afterNode) parent.insertBefore(afterNode, textNode);
+        parent.removeChild(textNode);
+
+        // Update the offset for the next match in this node
+        processedNodes.set(textNode, currentOffset + matchText.length);
+      });
+    };
+
+    // Clear existing highlights
+    const clearHighlights = () => {
+      if (!contentContainer.value) return;
+      const highlights = contentContainer.value.querySelectorAll('span[class^="highlight-"]');
+      highlights.forEach((span) => {
+        const parent = span.parentNode;
+        const textNode = document.createTextNode(span.textContent);
+        parent.replaceChild(textNode, span);
+      });
+    };
+
+    const highlightMatch = (index) => {
+      if (index < 0 || index >= searchMatches.value.length) return;
+      currentMatchIndex.value = index;
+
+      Vue.nextTick(() => {
+        if (scrollContainer.value && contentContainer.value) {
+          const highlightElement = contentContainer.value.querySelector(`.highlight-${index}`);
+          if (highlightElement) {
+            const headerHeight = document.querySelector('.sticky.top-0')?.offsetHeight || 0;
+            const containerRect = scrollContainer.value.getBoundingClientRect();
+            const elementRect = highlightElement.getBoundingClientRect();
+            const scrollTop = scrollContainer.value.scrollTop;
+            const offsetPosition = elementRect.top - containerRect.top + scrollTop - headerHeight - 10;
+
+            scrollContainer.value.scrollTo({
+              top: offsetPosition,
+              behavior: 'smooth',
+            });
+
+            // Apply current match styling
+            clearCurrentMatchStyle();
+            highlightElement.classList.add('highlight-yellow');
+            highlightElement.classList.remove('highlight-blue');
+          }
+        }
+      });
+    };
+
+    const clearCurrentMatchStyle = () => {
+      if (!contentContainer.value) return;
+      const currentHighlight = contentContainer.value.querySelector('.highlight-yellow');
+      if (currentHighlight) {
+        currentHighlight.classList.remove('highlight-yellow');
+        currentHighlight.classList.add('highlight-blue');
       }
     };
 
@@ -99,8 +229,38 @@ export default {
       highlightMatch(newIndex);
     };
 
-    Vue.watch(searchQuery, () => {
-      performSearch();
+    Vue.watch(debouncedSearchQuery, () => {
+      try {
+        updateSearchMatches();
+      } catch (error) {
+        console.error('Error in debouncedSearchQuery watcher:', error);
+      }
+    });
+
+    Vue.watch(
+      () => props.document.data.processedContent,
+      () => {
+        try {
+          updateSearchMatches();
+        } catch (error) {
+          console.error('Error in processedContent watcher:', error);
+        }
+      },
+      { immediate: true }
+    );
+
+    Vue.onMounted(() => {
+      Vue.nextTick(() => {
+        try {
+          updateSearchMatches();
+        } catch (error) {
+          console.error('Error on mount:', error);
+        }
+      });
+    });
+
+    Vue.onUnmounted(() => {
+      clearHighlights();
     });
 
     return {
@@ -108,10 +268,11 @@ export default {
       searchResults,
       currentMatchIndex,
       searchMatches,
-      docContent,
-      performSearch,
+      renderedContent,
       prevMatch,
       nextMatch,
+      scrollContainer,
+      contentContainer,
     };
   },
   template: `
@@ -120,7 +281,6 @@ export default {
         <input
           type="text"
           v-model="searchQuery"
-          @input="performSearch"
           placeholder="Search document..."
           class="flex-1 p-2 bg-[#2d3748] text-[#e2e8f0] rounded-lg border border-[#4b5563] focus:border-[#4dabf7] focus:outline-none text-sm"
         />
@@ -142,16 +302,12 @@ export default {
           </button>
         </div>
       </div>
-      <div class="flex-1 overflow-y-auto">
+      <div ref="scrollContainer" class="flex-1 overflow-y-auto">
         <div class="bg-[#1a2233] p-4 rounded-lg h-full">
           <div class="flex justify-between items-center mb-2">
             <span class="text-[#94a3b8] text-sm">{{ document.data.name }}</span>
           </div>
-          <div
-            ref="docContent"
-            v-html="document.data.processedContent"
-            class="prose text-[#e2e8f0] h-full overflow-y-auto"
-          ></div>
+          <div ref="contentContainer" class="prose text-[#e2e8f0] h-full overflow-y-auto" v-html="renderedContent"></div>
         </div>
       </div>
     </div>

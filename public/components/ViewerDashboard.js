@@ -13,8 +13,8 @@ export default {
   template: `
     <div class="h-full flex flex-col overflow-hidden">
       <!-- Header with Channel Info -->
-      <div class="bg-[#1a2233] p-4 border-b border-[#2d3748] flex items-center justify-between glass-effect mb-4">
-        <div class="flex items-center space-x-3">
+      <div class="bg-[#1a2233] p-4 border-b border-[#2d3748] flex items-center justify-between glass-effect mb-4 px-3">
+        <div class="flex items-center space-x-3 ">
           <h1 class="text-lg font-semibold text-[#34d399]">
             Channel: {{ channelName }} ({{ participantCount }} participants)
           </h1>

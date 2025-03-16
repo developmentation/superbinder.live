@@ -356,13 +356,8 @@ export function useCollaboration() {
         console.log('Looking up system document with ID:', p.content);
         const doc = documents.value.find(d => d.id === p.content);
         console.log('Found system document:', doc);
-        if (!doc) return '';
-        if (doc.data.type === 'pdf' && Array.isArray(doc.data.pagesText)) {
-          return doc.data.pagesText.join('\n');
-        } else if (doc.data.parsedFileContent) {
-          return doc.data.parsedFileContent;
-        }
-        return '';
+        if (!doc || !doc.data.pagesText) return '';
+        return Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
       });
     systemDocs.forEach(docText => {
       if (docText) {
@@ -393,13 +388,8 @@ export function useCollaboration() {
         console.log('Looking up user document with ID:', p.content);
         const doc = documents.value.find(d => d.id === p.content);
         console.log('Found user document:', doc);
-        if (!doc) return '';
-        if (doc.data.type === 'pdf' && Array.isArray(doc.data.pagesText)) {
-          return doc.data.pagesText.join('\n');
-        } else if (doc.data.parsedFileContent) {
-          return doc.data.parsedFileContent;
-        }
-        return '';
+        if (!doc || !doc.data.pagesText) return '';
+        return Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
       });
     userDocs.forEach(docText => {
       if (docText) {

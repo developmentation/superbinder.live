@@ -46,6 +46,7 @@ export default {
     'finish-editing',
     'remove-section',
     'trigger-file-upload',
+    'node-select',
   ],
   setup(props, { emit }) {
     const { updateSection } = useSections();
@@ -65,8 +66,8 @@ export default {
       }
       const isProcessed = props.node.data.pages || props.node.data.processedContent;
       return {
-'bg-[#97330a]': !isProcessed,
-'bg-[#10602f]': isProcessed,
+        'bg-[#97330a]': !isProcessed,
+        'bg-[#10602f]': isProcessed,
       };
     });
 
@@ -102,6 +103,24 @@ export default {
       emit('trigger-file-upload', props.node.id);
     };
 
+    // Handle click on the node to select it (for leaf nodes only)
+    const handleNodeClick = (event) => {
+      // Prevent selection if clicking on interactive elements
+      if (
+        event.target.closest('.checkbox') ||
+        event.target.closest('.expand-collapse') ||
+        event.target.closest('.action-buttons')
+      ) {
+        return;
+      }
+
+      if (props.isLeaf(props.node)) {
+        emit('node-select', props.node);
+      } else {
+        emit('toggle-expand', props.node);
+      }
+    };
+
     return {
       checkboxClasses,
       nodeClasses,
@@ -111,6 +130,7 @@ export default {
       startEditing,
       finishEditing,
       triggerFileUpload,
+      handleNodeClick,
     };
   },
   template: `
@@ -126,12 +146,12 @@ export default {
       <div
         class="relative flex items-center py-1 px-2 rounded hover:bg-[#2d3748] cursor-pointer select-none"
         :class="nodeClasses"
-        @click="!isLeaf(node) && $emit('toggle-expand', node)"
+        @click="handleNodeClick"
       >
         <!-- Expand/Collapse Icon -->
         <div
           v-if="!isLeaf(node)"
-          class="w-4 h-4 flex items-center justify-center mr-1 text-[#94a3b8]"
+          class="w-4 h-4 flex items-center justify-center mr-1 text-[#94a3b8] expand-collapse"
           @click.stop="$emit('toggle-expand', node)"
         >
           <i
@@ -143,7 +163,7 @@ export default {
 
         <!-- Checkbox -->
         <div
-          class="w-4 h-4 mr-2 border rounded flex items-center justify-center"
+          class="w-4 h-4 mr-2 border rounded flex items-center justify-center checkbox"
           :class="checkboxClasses"
           @click.stop="$emit('toggle-select', node)"
         >
@@ -167,7 +187,10 @@ export default {
         <div class="flex-1 flex items-center justify-between min-w-0 relative">
           <div class="flex items-center gap-2 min-w-0 flex-1">
             <span :class="isLeaf(node) ? getFileIcon(node.data.name) : 'pi pi-folder'" class="text-[#94a3b8] text-sm"></span>
-            <span v-if="!editingNodeId || editingNodeId !== node.id" class="truncate text-[#e2e8f0] text-sm">
+            <span
+              v-if="!editingNodeId || editingNodeId !== node.id"
+              class="truncate text-[#e2e8f0] text-sm"
+            >
               {{ node.data.name }}
             </span>
             <input
@@ -179,10 +202,10 @@ export default {
               placeholder="Rename node"
             />
           </div>
-          <!-- Connecting Line (Moved to Bottom) -->
+          <!-- Connecting Line -->
           <div class="absolute bottom-0 left-0 right-12 h-[1px] bg-[#4b5563] z-0"></div>
           <!-- Buttons -->
-          <div class="flex gap-1 z-10">
+          <div class="flex gap-1 z-10 action-buttons">
             <button v-if="!isLeaf(node)" @click.stop="handleAddSection" class="text-[#10b981] hover:text-[#059669] p-1">
               <i class="pi pi-plus text-sm"></i>
             </button>
@@ -222,6 +245,7 @@ export default {
           @finish-editing="finishEditing"
           @remove-section="$emit('remove-section', $event)"
           @trigger-file-upload="triggerFileUpload"
+          @node-select="$emit('node-select', $event)"
         />
       </div>
     </div>

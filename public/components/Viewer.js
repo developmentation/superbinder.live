@@ -2,13 +2,13 @@
 import LLMInteraction from './LLMInteraction.js';
 import ViewerGoals from './ViewerGoals.js';
 import ViewerAgents from './ViewerAgents.js';
-import ViewerDocuments from './ViewerDocuments.js';
-import ViewerClips from './ViewerClips.js';
-import ViewerBookmarks from './ViewerBookmarks.js';
+// import ViewerDocuments from './ViewerDocuments.js';
+// import ViewerClips from './ViewerClips.js';
+// import ViewerBookmarks from './ViewerBookmarks.js';
 import ViewerTranscribe from './ViewerTranscribe.js';
 import ViewerQuestions from './ViewerQuestions.js';
 import ViewerArtifacts from './ViewerArtifacts.js';
-import ViewerUploads from './ViewerUploads.js';
+// import ViewerUploads from './ViewerUploads.js';
 import ViewerDashboard from './ViewerDashboard.js';
 import ViewerCollaboration from './ViewerCollaboration.js';
 import ViewerSections from './ViewerSections.js';
@@ -20,13 +20,13 @@ export default {
     LLMInteraction,
     ViewerGoals,
     ViewerAgents,
-    ViewerDocuments,
-    ViewerBookmarks,
-    ViewerClips,
+    // ViewerDocuments,
+    // ViewerBookmarks,
+    // ViewerClips,
     ViewerTranscribe,
     ViewerQuestions,
     ViewerArtifacts,
-    ViewerUploads,
+    // ViewerUploads,
     ViewerDashboard,
     ViewerCollaboration,
     ViewerSections,
@@ -86,6 +86,8 @@ export default {
       />
 
       <!-- Documents Sub-Tabs -->
+
+      <!--
       <viewer-documents
         v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Viewer'"
         :documents="documents"
@@ -107,6 +109,7 @@ export default {
         :update-tab="updateTab"
         class="h-full"
       />
+      -->
 
       <!-- Transcriptions -->
       <viewer-transcribe

@@ -6,9 +6,9 @@ import { useAgents } from '../composables/useAgents.js';
 export default {
   name: 'ViewerCollaboration',
   template: `
-    <div class="h-full flex overflow-hidden bg-gray-900">
+    <div class="flex overflow-hidden bg-gray-900  " style="height: calc(100% - 50px);">
       <!-- Sidebar -->
-      <div class="w-72 bg-gray-800 flex-shrink-0 border-r border-gray-700 flex flex-col h-full shadow-lg">
+      <div class="w-72 bg-gray-800 flex-shrink-0 border-r border-gray-700 flex flex-col  shadow-lg">
         <!-- Breakout Rooms -->
         <div class="flex flex-col">
           <div class="p-4 border-b border-gray-700 flex justify-between items-center">

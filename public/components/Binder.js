@@ -33,7 +33,7 @@ export default {
       <!-- Main Interface -->
       <div v-if="sessionReady" class="flex flex-col h-full">
         <!-- Tab Bar -->
-        <div class="bg-[#0a0f1e] border-b border-[#2d3748] px-4 py-3 flex items-center justify-between">
+        <div class="bg-[#0a0f1e] border-b border-[#2d3748] px-4 py-1 flex items-center justify-between">
           <div class="flex overflow-x-auto scrollbar-hide space-x-2">
             <button
               v-for="tab in tabs"
@@ -59,7 +59,7 @@ export default {
         <!-- Main Content Area -->
         <div class="flex-1 flex overflow-hidden relative">
           <!-- Document Sub-Tabs (for Documents tab) -->
-          <div v-if="activeTab === 'Documents'" class="bg-[#0a0f1e] border-b border-[#2d3748] px-4 py-3 absolute top-0 left-0 right-0 z-10">
+          <div v-if="activeTab === 'Documents'" class="bg-[#0a0f1e] border-b border-[#2d3748] px-4 py-1 absolute top-0 left-0 right-0 z-10">
             <div class="flex overflow-x-auto scrollbar-hide space-x-2">
               <button
                 v-for="subTab in documentSubTabs"

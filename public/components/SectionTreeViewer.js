@@ -40,7 +40,7 @@ export default {
             ...section.data,
             _children: [],
             _checkStatus: props.selectedKeys[section.id] ? 'checked' : 'unchecked',
-            _expanded: !!props.expandedKeys[section.id], // Use expandedKeys prop
+            _expanded: !!props.expandedKeys[section.id],
           },
         });
       });
@@ -172,8 +172,12 @@ export default {
       }
     }
 
-    const handleNodeSelect = (event) => {
-      toggleSelect(event.node);
+    const handleNodeSelect = (node) => {
+      console.log('Node selected in SectionTreeViewer:', node);
+      // Removed toggleSelect(node) to prevent checkbox toggling on file name click
+      if (isLeaf(node)) {
+        emit('node-select', node);
+      }
     };
 
     const handleNodeUnselect = (event) => {
@@ -309,6 +313,7 @@ export default {
           @finish-editing="finishEditing"
           @remove-section="removeSection"
           @trigger-file-upload="triggerFileUpload"
+          @node-select="handleNodeSelect"
         />
       </div>
       <input

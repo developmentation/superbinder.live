@@ -11,7 +11,6 @@ const eventHandlers = new WeakMap();
 const processedEvents = new Set();
 
 export function useDocuments() {
-  // Define setSelectedDocument first
   function setSelectedDocument(doc) {
     selectedDocument.value = doc ? { ...doc } : null;
   }
@@ -33,7 +32,7 @@ export function useDocuments() {
     const { id, timestamp } = eventObj;
     documents.value = documents.value.filter(d => d.id !== id);
     if (selectedDocument.value && selectedDocument.value.id === id) {
-      setSelectedDocument(null); // Use the defined setSelectedDocument
+      setSelectedDocument(null);
     }
   }
 
@@ -96,7 +95,7 @@ export function useDocuments() {
       if (selectedDocument.value && selectedDocument.value.id === id) {
         setSelectedDocument({ ...selectedDocument.value, data });
       }
-      emit('rename-document', payload); // Reuse rename-document for simplicity
+      emit('rename-document', payload);
     }
   }
 

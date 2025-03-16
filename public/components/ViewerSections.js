@@ -32,9 +32,10 @@ export default {
       }));
     });
 
-    const handleNodeSelect = (node) => {
+    const handleNodeSelect = (node) => { // Changed from ({ node }) to (node)
       if (node.type === 'document') {
         const doc = documents.value.find(d => d.id === node.id);
+        console.log('Setting selectedDocument:', doc);
         setSelectedDocument(doc);
       }
     };
@@ -57,7 +58,7 @@ export default {
           alert(`Some files failed to upload: ${failures.map(f => f.originalName).join(', ')}`);
           return;
         }
-        await retrieveAndRenderFiles(); // Trigger rendering after successful upload
+        await retrieveAndRenderFiles();
       } catch (error) {
         console.error('Error during upload process:', error);
         alert('Failed to upload files. Please try again.');
@@ -90,7 +91,6 @@ export default {
       addSection('New Root Section');
     };
 
-    // Update expandedKeys based on sections
     const expandAll = () => {
       const newExpandedKeys = { ...expandedKeys.value };
       sections.value.forEach(section => {
@@ -100,7 +100,7 @@ export default {
     };
 
     const collapseAll = () => {
-      expandedKeys.value = {}; // Clear all expanded keys
+      expandedKeys.value = {};
     };
 
     return {
@@ -119,10 +119,10 @@ export default {
     };
   },
   template: `
-    <div class="h-full flex flex-col overflow-hidden">
+    <div class="h-full flex flex-col overflow-hidden" >
       <div class="flex flex-col md:flex-row h-full">
         <!-- SectionTreeViewer (Left Column) -->
-        <div class="w-full md:w-1/2 border-r border-[#2d3748] overflow-hidden">
+        <div class="w-full md:w-1/2 border-r border-[#2d3748] overflow-hidden"  >
           <div class="p-4 bg-[#1a2233] border-b border-[#2d3748] flex items-center justify-between">
             <h3 class="text-lg font-semibold text-[#4dabf7]">Sections</h3>
             <div class="flex gap-2">
@@ -157,7 +157,7 @@ export default {
               </button>
             </div>
           </div>
-          <div class="h-full overflow-y-auto">
+          <div class="h-full overflow-y-auto " >
             <section-tree-viewer
               :selected-keys="selectedKeys"
               :expanded-keys="expandedKeys"
