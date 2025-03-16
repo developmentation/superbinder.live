@@ -278,6 +278,11 @@ export function useRealTime() {
     off('update-breakout');
     off('delete-breakout');
     off('session-removed');
+
+    off('add-artifact');
+    off('update-artifact');
+    off('remove-artifact');
+
   }
 
   return {

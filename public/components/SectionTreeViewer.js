@@ -1,6 +1,7 @@
 // components/SectionTreeViewer.js
 import { useSections } from '../composables/useSections.js';
 import { useDocuments } from '../composables/useDocuments.js';
+import { useArtifacts } from '../composables/useArtifacts.js'; // New import
 import { useFiles } from '../composables/useFiles.js';
 import TreeNode from './TreeNode.js';
 
@@ -16,10 +17,11 @@ export default {
       default: () => ({}),
     },
   },
-  emits: ['update:selectedKeys', 'update:expandedKeys', 'node-select', 'node-unselect'],
+  emits: ['update:selectedKeys', 'update:expandedKeys', 'node-select', 'node-unselect', 'upload-files'],
   setup(props, { emit }) {
     const { sections, addSection, updateSection, removeSection, reorderSections } = useSections();
     const { documents, addDocument, updateDocument } = useDocuments();
+    const { artifacts, updateArtifact } = useArtifacts(); // New
     const { uploadFiles } = useFiles();
     const fileInput = Vue.ref(null);
     const draggedNode = Vue.ref(null);
@@ -28,8 +30,6 @@ export default {
     const newName = Vue.ref('');
 
     const treeNodes = Vue.computed(() => {
-      //console.log('Computing treeNodes with sections:', sections.value);
-
       const nodeMap = new Map();
 
       sections.value.forEach((section) => {
@@ -64,15 +64,33 @@ export default {
         }
       });
 
+      artifacts.value.forEach((artifact) => {
+        const sectionId = artifact.data.sectionId || null;
+        const artifactNode = {
+          ...artifact,
+          type: 'artifact',
+          data: {
+            ...artifact.data,
+            name: artifact.data.name || `Artifact ${artifact.id.slice(0, 8)}`,
+            _children: [],
+            _checkStatus: props.selectedKeys[artifact.id] ? 'checked' : 'unchecked',
+            _expanded: false,
+          },
+        };
+        if (nodeMap.has(sectionId)) {
+          nodeMap.get(sectionId).data._children.push(artifactNode);
+        } else if (!sectionId) {
+          nodeMap.set(artifact.id, artifactNode);
+        }
+      });
+
       const nodes = [];
       nodeMap.forEach((node) => {
         if (node.data.sectionId && nodeMap.has(node.data.sectionId)) {
           const parent = nodeMap.get(node.data.sectionId);
           parent.data._children.push(node);
-          //console.log(`Added node ${node.id} (${node.data.name}) as child of ${parent.id} (${parent.data.name})`);
         } else if (!node.data.sectionId) {
           nodes.push(node);
-          //console.log(`Added root node ${node.id} (${node.data.name})`);
         }
       });
 
@@ -84,7 +102,6 @@ export default {
         updateCheckStatus(node);
       });
 
-      //console.log('Final treeNodes:', nodes);
       return nodes;
     });
 
@@ -100,22 +117,19 @@ export default {
     }
 
     function isLeaf(node) {
-      return node.type === 'document';
+      return node.type === 'document' || node.type === 'artifact';
     }
 
     function updateCheckStatus(node) {
       if (isLeaf(node)) {
         return node.data._checkStatus === 'checked';
       }
-
       if (!node.data._children.length) {
         return node.data._checkStatus === 'checked';
       }
-
       const childStates = node.data._children.map(updateCheckStatus);
       const allChildrenChecked = childStates.every(state => state);
       const someChildrenChecked = childStates.some(state => state);
-
       if (allChildrenChecked) {
         node.data._checkStatus = 'checked';
       } else if (someChildrenChecked) {
@@ -123,7 +137,6 @@ export default {
       } else {
         node.data._checkStatus = 'unchecked';
       }
-
       return node.data._checkStatus === 'checked';
     }
 
@@ -173,15 +186,9 @@ export default {
     }
 
     const handleNodeSelect = (node) => {
-      //console.log('Node selected in SectionTreeViewer:', node);
-      // Removed toggleSelect(node) to prevent checkbox toggling on file name click
       if (isLeaf(node)) {
         emit('node-select', node);
       }
-    };
-
-    const handleNodeUnselect = (event) => {
-      toggleSelect(event.node);
     };
 
     const onDragStart = (event, node) => {
@@ -203,10 +210,18 @@ export default {
       if (draggedNode.value && targetNode && !isLeaf(targetNode)) {
         const sectionId = targetNode.id;
         if (draggedNode.value.data.sectionId !== sectionId) {
-          updateDocument(draggedNode.value.id, draggedNode.value.data.name, sectionId);
+          if (draggedNode.value.type === 'document') {
+            updateDocument(draggedNode.value.id, draggedNode.value.data.name, sectionId);
+          } else if (draggedNode.value.type === 'artifact') {
+            updateArtifact(draggedNode.value.id, draggedNode.value.data.name, sectionId);
+          }
         }
       } else if (draggedNode.value && !targetNode) {
-        updateDocument(draggedNode.value.id, draggedNode.value.data.name, null);
+        if (draggedNode.value.type === 'document') {
+          updateDocument(draggedNode.value.id, draggedNode.value.data.name, null);
+        } else if (draggedNode.value.type === 'artifact') {
+          updateArtifact(draggedNode.value.id, draggedNode.value.data.name, null);
+        }
       }
       draggedNode.value = null;
       dropTarget.value = null;
@@ -229,8 +244,8 @@ export default {
       fileInput.value.value = '';
       if (sectionId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [sectionId]: true });
-        //console.log(`Auto-expanded section ${sectionId} after file upload`);
       }
+      emit('upload-files', event, sectionId); // Emit to ViewerSections
     };
 
     const startEditing = (node) => {
@@ -243,17 +258,14 @@ export default {
     };
 
     const finishEditing = (nodeId, updatedName) => {
-      //console.log('Finishing editing for node:', nodeId, 'New name:', updatedName);
       editingNodeId.value = null;
       newName.value = '';
     };
 
     const handleAddSection = (parentId) => {
-      //console.log("HANDLE ADD SECTION", parentId);
       addSection("New Section", parentId);
       if (parentId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [parentId]: true });
-        //console.log(`Auto-expanded parent ${parentId} after adding section`);
       }
     };
 
@@ -268,7 +280,6 @@ export default {
       toggleSelect,
       toggleExpand,
       handleNodeSelect,
-      handleNodeUnselect,
       onDragStart,
       onDragOver,
       onDragLeave,

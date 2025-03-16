@@ -1,6 +1,7 @@
 // components/TreeNode.js
 import { useSections } from '../composables/useSections.js';
 import { useDocuments } from '../composables/useDocuments.js';
+import { useArtifacts } from '../composables/useArtifacts.js'; // New import
 
 export default {
   name: 'TreeNode',
@@ -51,6 +52,7 @@ export default {
   setup(props, { emit }) {
     const { updateSection } = useSections();
     const { updateDocument, removeDocument } = useDocuments();
+    const { updateArtifact, removeArtifact } = useArtifacts(); // New
     const editingName = Vue.ref(props.node.data.name);
 
     const checkboxClasses = Vue.computed(() => ({
@@ -64,10 +66,13 @@ export default {
           'bg-[#2d3748]': props.node.data._checkStatus === 'checked' || props.node.data._checkStatus === 'halfChecked',
         };
       }
+      if (props.node.type === 'artifact') {
+        return { 'bg-[#1e3a8a]': true }; // Dark mode blue for artifacts
+      }
       const isProcessed = props.node.data.pages || props.node.data.processedContent;
       return {
-        'bg-[#97330a]': !isProcessed,
-        'bg-[#10602f]': isProcessed,
+        'bg-[#97330a]': !isProcessed, // Orange for unprocessed documents
+        'bg-[#10602f]': isProcessed,  // Green for processed documents
       };
     });
 
@@ -76,22 +81,26 @@ export default {
     };
 
     const handleRemove = () => {
-      if (props.isLeaf(props.node)) {
+      if (props.node.type === 'document') {
         removeDocument(props.node.id);
+      } else if (props.node.type === 'artifact') {
+        removeArtifact(props.node.id);
       } else {
         emit('remove-section', props.node.id);
       }
     };
 
     const startEditing = (node) => {
-      emit('start-editing', node|| props.node);
+      emit('start-editing', node || props.node);
     };
 
     const finishEditing = () => {
       const updatedName = editingName.value.trim();
       if (updatedName) {
-        if (props.isLeaf(props.node)) {
+        if (props.node.type === 'document') {
           updateDocument(props.node.id, updatedName, props.node.data.sectionId);
+        } else if (props.node.type === 'artifact') {
+          updateArtifact(props.node.id, updatedName, props.node.data.sectionId);
         } else {
           updateSection(props.node.id, updatedName);
         }
@@ -103,9 +112,7 @@ export default {
       emit('trigger-file-upload', nodeId || props.node.id);
     };
 
-    // Handle click on the node to select it (for leaf nodes only)
     const handleNodeClick = (event) => {
-      // Prevent selection if clicking on interactive elements
       if (
         event.target.closest('.checkbox') ||
         event.target.closest('.expand-collapse') ||
@@ -113,7 +120,6 @@ export default {
       ) {
         return;
       }
-
       if (props.isLeaf(props.node)) {
         emit('node-select', props.node);
       } else {
@@ -148,7 +154,6 @@ export default {
         :class="nodeClasses"
         @click="handleNodeClick"
       >
-        <!-- Expand/Collapse Icon -->
         <div
           v-if="!isLeaf(node)"
           class="w-4 h-4 flex items-center justify-center mr-1 text-[#94a3b8] expand-collapse"
@@ -161,7 +166,6 @@ export default {
         </div>
         <div v-else class="w-4 mr-1"></div>
 
-        <!-- Checkbox -->
         <div
           class="w-4 h-4 mr-2 border rounded flex items-center justify-center checkbox"
           :class="checkboxClasses"
@@ -183,7 +187,6 @@ export default {
           </svg>
         </div>
 
-        <!-- Node Content -->
         <div class="flex-1 flex items-center justify-between min-w-0 relative">
           <div class="flex items-center gap-2 min-w-0 flex-1">
             <span :class="isLeaf(node) ? getFileIcon(node.data.name) : 'pi pi-folder'" class="text-[#94a3b8] text-sm"></span>
@@ -202,9 +205,7 @@ export default {
               placeholder="Rename node"
             />
           </div>
-          <!-- Connecting Line -->
           <div class="absolute bottom-0 left-0 right-12 h-[1px] bg-[#4b5563] z-0"></div>
-          <!-- Buttons -->
           <div class="flex gap-1 z-10 action-buttons">
             <button v-if="!isLeaf(node)" @click.stop="handleAddSection" class="text-[#10b981] hover:text-[#059669] p-1">
               <i class="pi pi-plus text-sm"></i>
@@ -222,7 +223,6 @@ export default {
         </div>
       </div>
 
-      <!-- Child Nodes -->
       <div v-if="!isLeaf(node) && node.data._expanded" class="pl-6">
         <tree-node
           v-for="childNode in node.data._children"

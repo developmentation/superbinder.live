@@ -3,6 +3,7 @@ import SectionTreeViewer from './SectionTreeViewer.js';
 import ViewPDFs from './ViewPDFs.js';
 import ViewDocs from './ViewDocs.js';
 import { useDocuments } from '../composables/useDocuments.js';
+import { useArtifacts } from '../composables/useArtifacts.js';
 import { useFiles } from '../composables/useFiles.js';
 import { useSections } from '../composables/useSections.js';
 import { regeneratePdfPages } from '../utils/files/fileProcessor.js';
@@ -12,6 +13,7 @@ export default {
   components: { SectionTreeViewer, ViewPDFs, ViewDocs },
   setup() {
     const { documents, selectedDocument, setSelectedDocument, addDocument, retrieveAndRenderFiles } = useDocuments();
+    const { artifacts, selectedArtifact, setSelectedArtifact } = useArtifacts();
     const { uploadFiles } = useFiles();
     const { sections, addSection } = useSections();
     const selectedKeys = Vue.ref({});
@@ -20,7 +22,7 @@ export default {
     const isProcessingFiles = Vue.ref(false);
 
     const treeNodes = Vue.computed(() => {
-      return documents.value.map(doc => ({
+      const docNodes = documents.value.map(doc => ({
         ...doc,
         type: 'document',
         data: {
@@ -30,13 +32,31 @@ export default {
           _expanded: false,
         },
       }));
+
+      const artifactNodes = artifacts.value.map(artifact => ({
+        ...artifact,
+        type: 'artifact',
+        data: {
+          ...artifact.data,
+          name: artifact.data.name || `Artifact ${artifact.id.slice(0, 8)}`,
+          _children: [],
+          _checkStatus: selectedKeys.value[artifact.id] ? 'checked' : 'unchecked',
+          _expanded: false,
+        },
+      }));
+
+      return [...docNodes, ...artifactNodes];
     });
 
-    const handleNodeSelect = (node) => { // Changed from ({ node }) to (node)
+    const handleNodeSelect = (node) => {
       if (node.type === 'document') {
         const doc = documents.value.find(d => d.id === node.id);
-        console.log('Setting selectedDocument:', doc);
         setSelectedDocument(doc);
+        setSelectedArtifact(null);
+      } else if (node.type === 'artifact') {
+        const artifact = artifacts.value.find(a => a.id === node.id);
+        setSelectedArtifact(artifact);
+        setSelectedDocument(null);
       }
     };
 
@@ -106,6 +126,7 @@ export default {
     return {
       treeNodes,
       selectedDocument,
+      selectedArtifact,
       selectedKeys,
       expandedKeys,
       isLoadingFiles,
@@ -119,10 +140,10 @@ export default {
     };
   },
   template: `
-    <div class="h-full flex flex-col overflow-hidden" >
+    <div class="h-full flex flex-col overflow-hidden">
       <div class="flex flex-col md:flex-row h-full">
         <!-- SectionTreeViewer (Left Column) -->
-        <div class="w-full md:w-1/2 border-r border-[#2d3748] overflow-hidden"  >
+        <div class="w-full md:w-1/2 border-r border-[#2d3748] overflow-hidden">
           <div class="p-4 bg-[#1a2233] border-b border-[#2d3748] flex items-center justify-between">
             <h3 class="text-lg font-semibold text-[#4dabf7]">Sections</h3>
             <div class="flex gap-2">
@@ -157,7 +178,7 @@ export default {
               </button>
             </div>
           </div>
-          <div class="h-full overflow-y-auto " >
+          <div class="h-full overflow-y-auto">
             <section-tree-viewer
               :selected-keys="selectedKeys"
               :expanded-keys="expandedKeys"
@@ -166,10 +187,12 @@ export default {
               @node-select="handleNodeSelect"
               @upload-files="handleFileUpload"
             />
+            <!-- Spacer div to ensure scrollable space at the bottom -->
+            <div class="h-[200px]"></div>
           </div>
         </div>
 
-        <!-- Document Viewer (Right Column) -->
+        <!-- Document/Artifact Viewer (Right Column) -->
         <div class="w-full md:w-1/2 overflow-hidden">
           <div v-if="selectedDocument" class="h-full">
             <ViewPDFs
@@ -181,8 +204,14 @@ export default {
               :document="selectedDocument"
             />
           </div>
+          <div v-else-if="selectedArtifact" class="h-full p-4 bg-[#1a2233] overflow-y-auto">
+            <h3 class="text-lg font-semibold text-[#4dabf7] mb-2">{{ selectedArtifact.data.name }}</h3>
+            <div v-for="(text, index) in selectedArtifact.data.pagesText" :key="index" class="text-[#e2e8f0] mb-2">
+              {{ text }}
+            </div>
+          </div>
           <div v-else class="h-full flex items-center justify-center text-[#94a3b8] text-sm">
-            Select a document to view.
+            Select a document or artifact to view.
           </div>
         </div>
       </div>

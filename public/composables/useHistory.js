@@ -27,6 +27,7 @@ export function useHistory() {
       breakout: [...(useCollaboration().breakouts.value || [])],
       collab: [...(useCollaboration().collabs.value || [])],
       sections: [...(useSections().sections.value || [])],
+      artifacts: [...(useArtifacts().artifacts.value || [])],
     };
     // console.log('Gathered local history in useHistory:', JSON.stringify(history, null, 2));
     return history;
@@ -86,6 +87,7 @@ export function useHistory() {
       useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakout);
       useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
       useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
+      useArtifacts().artifacts.value = mergeArrays(useArtifacts().artifacts.value || [], historyData.artifacts);
     } else {
 
       console.log('No meaningful data in history, skipping sync:', historyData);

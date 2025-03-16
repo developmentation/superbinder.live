@@ -47,6 +47,7 @@ Object.keys({
   breakout: 'breakoutSet',
   sections: 'sectionSet',
   channels: 'channelsSet',
+  artifacts: 'artifactsSet',
 }).forEach(entityType => {
   const collectionName = `${entityType}Set`;
   entityModels[entityType] = mongoose.model(collectionName, entitySetSchema, collectionName);
@@ -97,6 +98,7 @@ const entityConfigs = {
   breakout: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-breakout', update: 'update-breakout', remove: 'delete-breakout', reorder: null } },
   sections: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-section', update: 'update-section', remove: 'remove-section', reorder: 'reorder-section' } },
   channels: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-channel', update: 'update-channel', remove: 'remove-channel', reorder: null } },
+  artifacts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-artifact', update: 'update-artifact', remove: 'remove-artifact', reorder: null } },
 };
 
 /**
@@ -715,6 +717,11 @@ async function handleMessage(dataObj, socket) {
       case 'add-section':
       case 'update-section':
       case 'remove-section':
+
+      case 'add-artifact':
+      case 'update-artifact':
+      case 'remove-artifact':
+        
       case 'reorder-section':
       case 'add-channel':
       case 'remove-channel':

@@ -2,9 +2,12 @@
 import { useCollaboration } from '../composables/useCollaboration.js';
 import { useRealTime } from '../composables/useRealTime.js';
 import { useAgents } from '../composables/useAgents.js';
+import { useArtifacts } from '../composables/useArtifacts.js';
+import SectionSelectorModal from './SectionSelectorModal.js';
 
 export default {
   name: 'ViewerCollaboration',
+  components: { SectionSelectorModal },
   template: `
     <div class="flex flex-col md:flex-row overflow-hidden bg-gray-900" style="height: calc(100% - 50px);">
       <!-- Toggle Button for Mobile -->
@@ -152,6 +155,14 @@ export default {
                   >
                     <i class="pi pi-times text-sm"></i>
                   </button>
+                  <button
+                    v-if="!msg.isDraft"
+                    @click.stop="openArtifactModal(msg.data.text)"
+                    class="text-blue-400 hover:text-blue-300 rounded-full bg-gray-700 p-1"
+                    title="Save as Artifact"
+                  >
+                    <i class="pi pi-bookmark text-sm"></i>
+                  </button>
                 </div>
               </div>
               <div
@@ -193,6 +204,13 @@ export default {
           </button>
         </div>
       </div>
+
+      <!-- Artifact Modal -->
+⁠      <section-selector-modal
+        :visible="showArtifactModal"
+        @save="saveArtifactFromModal"
+        @close="closeArtifactModal"
+      />
     </div>
   `,
   setup() {
@@ -212,12 +230,15 @@ export default {
     } = useCollaboration();
     const { userUuid: currentUserUuid } = useRealTime();
     const { agents } = useAgents();
+    const { addArtifact } = useArtifacts();
     const draft = Vue.ref('');
     const chatContainer = Vue.ref(null);
     const chatInput = Vue.ref(null);
     const isAutoScrollEnabled = Vue.ref(true);
     const editing = Vue.ref({});
-    const sidebarVisible = Vue.ref(false); // New state for sidebar visibility
+    const sidebarVisible = Vue.ref(false);
+    const showArtifactModal = Vue.ref(false);
+    const selectedMessageText = Vue.ref('');
 
     const currentBreakout = Vue.computed(() => breakouts.value.find(r => r.id === currentBreakoutId.value));
     const allMessages = Vue.computed(() => {
@@ -320,13 +341,9 @@ export default {
 
     function copyMessage(text) {
       if (!text) return;
-  
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text)
-          .then(() => {
-            console.log('Message copied to clipboard:', text);
-            // Optional: Add visual feedback, e.g., a toast notification
-          })
+          .then(() => console.log('Message copied to clipboard:', text))
           .catch(err => {
             console.error('Clipboard API error:', err);
             fallbackCopy(text);
@@ -335,20 +352,15 @@ export default {
         fallbackCopy(text);
       }
     }
-  
+
     function fallbackCopy(text) {
       const tempInput = document.createElement('input');
       document.body.appendChild(tempInput);
       tempInput.value = text;
       tempInput.select();
       try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-          console.log('Fallback: Message copied to clipboard:', text);
-          // Optional: Add visual feedback
-        } else {
-          console.error('Fallback copy failed: execCommand returned false');
-        }
+        document.execCommand('copy');
+        console.log('Fallback: Message copied to clipboard:', text);
       } catch (err) {
         console.error('Fallback copy failed:', err);
       } finally {
@@ -363,16 +375,13 @@ export default {
         updateDraft(text, currentBreakoutId.value);
       }
       Vue.nextTick(() => {
-        if (chatInput.value) {
-          chatInput.value.focus();
-        }
+        if (chatInput.value) chatInput.value.focus();
       });
     }
 
     function selectBreakout(breakoutId) {
-      console.log('Selecting breakout with id:', breakoutId);
       currentBreakoutId.value = breakoutId;
-      if (window.innerWidth < 768) sidebarVisible.value = false; // Hide sidebar on mobile after selection
+      if (window.innerWidth < 768) sidebarVisible.value = false;
     }
 
     function appendAgentName(agentName) {
@@ -382,11 +391,9 @@ export default {
         updateDraft(draft.value, currentBreakoutId.value);
       }
       Vue.nextTick(() => {
-        if (chatInput.value) {
-          chatInput.value.focus();
-        }
+        if (chatInput.value) chatInput.value.focus();
       });
-      if (window.innerWidth < 768) sidebarVisible.value = false; // Hide sidebar on mobile after selection
+      if (window.innerWidth < 768) sidebarVisible.value = false;
     }
 
     function addBreakoutLocal() {
@@ -398,7 +405,6 @@ export default {
       const edited = editing.value[breakoutId];
       if (edited && edited.name.trim()) {
         updateBreakout(breakoutId, edited.name.trim());
-        console.log('Emitted update-breakout on input:', { id: breakoutId, name: edited.name.trim() });
       }
     }
 
@@ -406,7 +412,6 @@ export default {
       const edited = editing.value[breakoutId];
       if (edited && edited.name.trim()) {
         updateBreakout(breakoutId, edited.name.trim());
-        console.log('Emitted update-breakout on save:', { id: breakoutId, name: edited.name.trim() });
       }
       delete editing.value[breakoutId];
       editing.value = { ...editing.value };
@@ -417,7 +422,6 @@ export default {
     }
 
     function deleteBreakoutLocal(id) {
-      console.log('Deleting breakout with id:', id);
       deleteBreakout(id);
     }
 
@@ -434,6 +438,30 @@ export default {
 
     function toggleSidebar() {
       sidebarVisible.value = !sidebarVisible.value;
+    }
+
+    // Artifact modal methods
+    function openArtifactModal(text) {
+      selectedMessageText.value = text;
+      showArtifactModal.value = true;
+    }
+
+    function saveArtifactFromModal({ sectionIds, name }) {
+      if (selectedMessageText.value && sectionIds.length > 0) {
+        const timestamp = Date.now();
+        sectionIds.forEach((sectionId, index) => {
+          const artifactName = name || `Artifact from Chat ${timestamp}`;
+          const finalName = sectionIds.length > 1 && index > 0 ? `${artifactName} (${index + 1})` : artifactName;
+          addArtifact(finalName, [selectedMessageText.value], sectionId);
+          console.log(`Saved artifact: ${finalName} with sectionId: ${sectionId}`);
+        });
+      }
+      closeArtifactModal();
+    }
+
+    function closeArtifactModal() {
+      showArtifactModal.value = false;
+      selectedMessageText.value = '';
     }
 
     return {
@@ -467,8 +495,12 @@ export default {
       getAgentAvatar,
       renderMarkdown,
       appendAgentName,
-      sidebarVisible, // Expose sidebar visibility
-      toggleSidebar,  // Expose toggle function
+      sidebarVisible,
+      toggleSidebar,
+      showArtifactModal,
+      openArtifactModal,
+      saveArtifactFromModal,
+      closeArtifactModal,
     };
   },
 };
