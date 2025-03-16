@@ -4,6 +4,7 @@ import { useDocuments } from '../composables/useDocuments.js';
 import { useClips } from '../composables/useClips.js';
 import { useLLM } from '../composables/useLLM.js';
 import { useScrollNavigation } from '../composables/useScrollNavigation.js';
+import { useArtifacts } from '../composables/useArtifacts.js'; // New import
 import ViewerDocuments from './ViewerDocuments.js';
 
 export default {
@@ -190,6 +191,7 @@ export default {
     const { clips } = useClips();
     const { llmRequests, triggerLLM } = useLLM();
     const { jumpToPageNumber } = useScrollNavigation();
+    const { artifacts } = useArtifacts(); // New
     const newQuestion = Vue.ref('');
     const answerInput = Vue.ref([]);
     const answerLLMMap = Vue.ref({});
@@ -331,14 +333,23 @@ export default {
   
       const question = rawQuestions.value.find(q => q.id === questionId);
       const questionText = question ? question.data.text : '';
-      const materials = documents.value.map(doc => ({
+      // Include all documents
+      const documentMaterials = documents.value.map(doc => ({
         documentId: doc.id,
         name: doc.data.name,
-        pages: JSON.stringify(doc.data.pagesText.map((text, index) => ({id: doc.id, page: index + 1, text })))
+        pages: JSON.stringify(doc.data.pagesText.map((text, index) => ({ id: doc.id, page: index + 1, text })))
       }));
+      // Include all artifacts
+      const artifactMaterials = artifacts.value.map(artifact => ({
+        artifactId: artifact.id,
+        name: artifact.data.name,
+        content: JSON.stringify(artifact.data.pagesText.map((text, index) => ({ id: artifact.id, page: index + 1, text })))
+      }));
+      // Combine materials
+      const materials = { documents: documentMaterials, artifacts: artifactMaterials };
       const userPrompt = `
         Answer the following question using the provided materials, without repeating the question in the response: "${questionText}"
-        Provide a single, clean JSON array of references at the end in the format: [{"id": "documentId", "page": number}]
+        Provide a single, clean JSON array of references at the end in the format: [{"id": "documentId or artifactId", "page": number}]
         Materials: ${JSON.stringify(materials)}
       `;
   
@@ -348,11 +359,11 @@ export default {
         0.5,
         `
         Answer the question clearly and provide adequate details.  
-        Where applicable, provide answers from various pages and documents, although only where there is information which clearly relates to the question. 
+        Where applicable, provide answers from various pages and documents or artifacts, although only where there is information which clearly relates to the question. 
         
         Do not include the question or materials in the response.
 
-        At the end, provide exactly one JSON array containing objects with {"id": "documentId", "page": number} where you found the relevant information. The id is found in the json of the reference materials.
+        At the end, provide exactly one JSON array containing objects with {"id": "documentId or artifactId", "page": number} where you found the relevant information. The id is found in the json of the reference materials.
         Try to provide at least 3 links per response, which are always in the same JSON array at the end of your response. 
         `,
         userPrompt,
@@ -361,7 +372,7 @@ export default {
       );
     }
 
-    function handlePaste(event) {  // Added handlePaste function
+    function handlePaste(event) {
       event.preventDefault();
       const text = (event.clipboardData || window.clipboardData).getData('text/plain');
       document.execCommand('insertText', false, text);
@@ -480,7 +491,7 @@ export default {
       modalJumpToPageNumber,
       topAnswerIds,
       deleteLink,
-      handlePaste,  // Added to return
+      handlePaste,
     };
   },
 };
