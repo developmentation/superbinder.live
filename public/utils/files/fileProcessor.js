@@ -78,7 +78,7 @@ export async function processFile(arrayBuffer, mimeType) {
     throw new Error('Invalid input: missing arrayBuffer or mimeType');
   }
 
-  const uuid = crypto.randomUUID();
+  const uuid = uuidv4();
   const extension = mimeTypeToExtension[mimeType] || mimeType.split('/')[1] || 'bin'; // Use mapped extension or fallback
   const originalMetadata = {
     type: extension,

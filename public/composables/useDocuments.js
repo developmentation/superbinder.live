@@ -11,6 +11,11 @@ const eventHandlers = new WeakMap();
 const processedEvents = new Set();
 
 export function useDocuments() {
+  // Define setSelectedDocument first
+  function setSelectedDocument(doc) {
+    selectedDocument.value = doc ? { ...doc } : null;
+  }
+
   function handleAddDocument(eventObj) {
     const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
     const eventKey = `add-document-${id}-${timestamp}`;
@@ -28,7 +33,7 @@ export function useDocuments() {
     const { id, timestamp } = eventObj;
     documents.value = documents.value.filter(d => d.id !== id);
     if (selectedDocument.value && selectedDocument.value.id === id) {
-      selectedDocument.value = null;
+      setSelectedDocument(null); // Use the defined setSelectedDocument
     }
   }
 
@@ -39,7 +44,7 @@ export function useDocuments() {
       documents.value[index].data.name = data.name;
       documents.value = [...documents.value];
       if (selectedDocument.value && selectedDocument.value.id === id) {
-        selectedDocument.value.data.name = data.name;
+        setSelectedDocument({ ...selectedDocument.value, data: { ...selectedDocument.value.data, name: data.name } });
       }
     }
   }
@@ -55,7 +60,7 @@ export function useDocuments() {
   });
 
   async function addDocument(file, sectionId = null) {
-    const uuid = crypto.randomUUID();
+    const uuid = uuidv4();
     const serverPayload = {
       id: uuid,
       userUuid: userUuid.value,
@@ -89,7 +94,7 @@ export function useDocuments() {
       documents.value[index].data = data;
       documents.value = [...documents.value];
       if (selectedDocument.value && selectedDocument.value.id === id) {
-        selectedDocument.value.data = data;
+        setSelectedDocument({ ...selectedDocument.value, data });
       }
       emit('rename-document', payload); // Reuse rename-document for simplicity
     }
@@ -106,52 +111,51 @@ export function useDocuments() {
     documents.value = [...documents.value];
     emit('remove-document', payload);
     if (selectedDocument.value && selectedDocument.value.id === id) {
-      selectedDocument.value = null;
+      setSelectedDocument(null);
     }
   }
 
- 
-
-  function setSelectedDocument(doc) {
-    selectedDocument.value = doc ? { ...doc } : null;
-  }
-
   async function retrieveAndRenderFiles() {
-    const unprocessedDocs = documents.value.filter(doc => !doc.data.pages && !doc.data.processedContent); // Process all unprocessed files
+    const unprocessedDocs = documents.value.filter(doc => !doc.data.pages && !doc.data.processedContent);
     if (unprocessedDocs.length === 0) return;
 
     const uuids = unprocessedDocs.map(doc => doc.id);
-    const retrievedFiles = await retrieveFiles(uuids);
+    try {
+      const retrievedFiles = await retrieveFiles(uuids);
 
-    for (const file of retrievedFiles) {
-      if (file.data && !file.error) {
-        const docIndex = documents.value.findIndex(d => d.id === file.uuid);
-        if (docIndex !== -1) {
-          const doc = documents.value[docIndex];
-          const storedFile = getFile(file.uuid);
-          if (storedFile && storedFile.data) {
-            const mimeType = doc.data.mimeType || `application/${doc.data.type}`;
-            const processed = await processFile(storedFile.data, mimeType);
-            doc.data = { 
-              ...doc.data, 
-              pages: processed.data.pages, 
-              pagesText: processed.data.pagesText, 
-              processedContent: processed.data.processedContent,
-              originalContent: storedFile.data,
-              status: processed.data.status,
-              renderAsHtml: processed.data.renderAsHtml,
-            };
-            documents.value = [...documents.value];
-            if (selectedDocument.value && selectedDocument.value.id === file.uuid) {
-              selectedDocument.value.data = { ...selectedDocument.value.data, ...doc.data };
+      for (const file of retrievedFiles) {
+        if (file.data && !file.error) {
+          const docIndex = documents.value.findIndex(d => d.id === file.uuid);
+          if (docIndex !== -1) {
+            const doc = documents.value[docIndex];
+            const storedFile = getFile(file.uuid);
+            if (storedFile && storedFile.data) {
+              const mimeType = doc.data.mimeType || `application/${doc.data.type}`;
+              const processed = await processFile(storedFile.data, mimeType);
+              doc.data = { 
+                ...doc.data, 
+                pages: processed.data.pages, 
+                pagesText: processed.data.pagesText, 
+                processedContent: processed.data.processedContent,
+                originalContent: storedFile.data,
+                status: processed.data.status,
+                renderAsHtml: processed.data.renderAsHtml,
+              };
+              documents.value = [...documents.value];
+              if (selectedDocument.value && selectedDocument.value.id === file.uuid) {
+                setSelectedDocument({ ...selectedDocument.value, data: { ...selectedDocument.value.data, ...doc.data } });
+              }
+            } else {
+              console.error(`File not found in files.value for UUID ${file.uuid}`);
             }
-          } else {
-            console.error(`File not found in files.value for UUID ${file.uuid}`);
           }
+        } else {
+          console.error(`Retrieval error for UUID ${file.uuid}:`, file.error);
         }
-      } else {
-        console.error(`Retrieval error for UUID ${file.uuid}:`, file.error);
       }
+    } catch (error) {
+      console.error('Error retrieving and rendering files:', error);
+      throw error;
     }
   }
 
@@ -173,7 +177,7 @@ export function useDocuments() {
     removeDocument,
     updateDocument,
     setSelectedDocument,
-    retrieveAndRenderFiles, // Renamed from retrieveAndRenderPdfs
+    retrieveAndRenderFiles,
     cleanup,
   };
 }

@@ -1,20 +1,30 @@
 // ./composables/useFiles.js
-
 const files = Vue.ref({});
 
 export function useFiles() {
-  async function uploadFiles(fileList, uuids = fileList.map(() => crypto.randomUUID())) {
+  async function uploadFiles(fileList, uuids = fileList.map(() => uuidv4())) {
     const formData = new FormData();
     formData.append('uuids', JSON.stringify(uuids));
     fileList.forEach((file, index) => {
       formData.append('files', file);
     });
 
+    console.log("uploading fileList", fileList)
+
     try {
       const response = await axios.post('/api/files', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      return { uuids, results: response.data.files };
+      const { files: results } = response.data;
+      
+      // Check for renaming failures
+      const failures = results.filter(result => result.uuid && !result.renamedCorrectly);
+      if (failures.length > 0) {
+        console.error('Upload failures detected:', failures);
+        throw new Error('Some files failed to upload or rename correctly');
+      }
+
+      return { uuids, results };
     } catch (error) {
       console.error('Upload failed:', error);
       throw error;

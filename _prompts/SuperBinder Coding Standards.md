@@ -8,7 +8,7 @@ Always use JavaScript and not TypeScript.
 #### General Context
 - **Project**: SuperBinder, a real-time collaboration app with humans and AI agents.
 - **Framework**: Vue.js 3.2, loaded via CDN (`<script src="https://unpkg.com/vue@3.2.47/dist/vue.global.js"></script>`).
-- **Dependencies**: Socket.io, Tailwind CSS, PrimeIcons, and `uuid` are also loaded via CDN and globally available.
+- **Dependencies**: Socket.io, Tailwind CSS, PrimeIcons, and `uuid` are also loaded via CDN and globally available. Never reimport these into the components or composables.
 - **File Format**: All components and composables are written as `.js` files (not `.vue`), using the Options API-like structure with `setup()` for Composition API features.
 
 #### Component Structure

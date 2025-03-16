@@ -1,13 +1,13 @@
-// ./tools/uploads.js (refactored with conditional renaming)
+// ./tools/uploads.js (simplified to only upload files)
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 
 // Ensure the DATA directory exists
 async function ensureDataDirectory() {
-  const dataDir = process.env.DATA;
+  const dataDir = process.env.DATA || path.resolve(__dirname, '../files');
   if (!dataDir) {
-    throw new Error('DATA environment variable is not set');
+    throw new Error('DATA environment variable is not set and default path resolution failed');
   }
   await fs.mkdir(dataDir, { recursive: true });
 }
@@ -17,32 +17,16 @@ const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     try {
       await ensureDataDirectory();
-      cb(null, process.env.DATA);
+      cb(null, process.env.DATA || path.resolve(__dirname, '../files'));
     } catch (err) {
       cb(err);
     }
   },
   filename: (req, file, cb) => {
-    // Parse UUIDs from request body if provided
-    let uuids = [];
-    try {
-      if (req.body.uuids) {
-        uuids = JSON.parse(req.body.uuids) || [];
-      }
-    } catch (parseErr) {
-      console.warn('Invalid UUIDs format, falling back to original name:', parseErr.message);
-    }
-
-    const index = req.files ? req.files.findIndex(f => f.fieldname === file.fieldname) : -1;
-    if (index >= 0 && uuids[index]) {
-      // Use UUID as filename if provided and matches the file index
-      cb(null, uuids[index]);
-    } else {
-      // Fallback to original name with timestamp prefix to avoid overwrites
-      const timestamp = Date.now();
-      const originalName = file.originalname;
-      cb(null, `${timestamp}-${originalName}`);
-    }
+    // Keep the original filename without any renaming
+    const sanitizedOriginalName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_'); // Sanitize to avoid filesystem issues
+    console.log(`Uploading file: ${sanitizedOriginalName}`);
+    cb(null, sanitizedOriginalName);
   },
 });
 

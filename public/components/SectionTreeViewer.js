@@ -1,3 +1,4 @@
+// components/SectionTreeViewer.js
 import { useSections } from '../composables/useSections.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useFiles } from '../composables/useFiles.js';
@@ -39,7 +40,7 @@ export default {
             ...section.data,
             _children: [],
             _checkStatus: props.selectedKeys[section.id] ? 'checked' : 'unchecked',
-            _expanded: !!props.expandedKeys[section.id],
+            _expanded: !!props.expandedKeys[section.id], // Use expandedKeys prop
           },
         });
       });
@@ -171,36 +172,6 @@ export default {
       }
     }
 
-    function expandAll() {
-      const newExpandedKeys = { ...props.expandedKeys };
-      function setExpanded(node) {
-        if (!isLeaf(node)) {
-          node.data._expanded = true;
-          newExpandedKeys[node.id] = true;
-          if (node.data._children) {
-            node.data._children.forEach(setExpanded);
-          }
-        }
-      }
-      treeNodes.value.forEach(setExpanded);
-      emit('update:expandedKeys', newExpandedKeys);
-    }
-
-    function collapseAll() {
-      const newExpandedKeys = { ...props.expandedKeys };
-      function setCollapsed(node) {
-        if (!isLeaf(node)) {
-          node.data._expanded = false;
-          delete newExpandedKeys[node.id];
-          if (node.data._children) {
-            node.data._children.forEach(setCollapsed);
-          }
-        }
-      }
-      treeNodes.value.forEach(setCollapsed);
-      emit('update:expandedKeys', newExpandedKeys);
-    }
-
     const handleNodeSelect = (event) => {
       toggleSelect(event.node);
     };
@@ -292,8 +263,6 @@ export default {
       reorderSections,
       toggleSelect,
       toggleExpand,
-      expandAll,
-      collapseAll,
       handleNodeSelect,
       handleNodeUnselect,
       onDragStart,
@@ -314,17 +283,6 @@ export default {
   },
   template: `
     <div class="section-tree-viewer text-sm">
-      <div class="flex gap-2 mb-2">
-        <button @click="addSection('New Root Section')" class="p-2 bg-blue-600 text-white rounded">
-          Add Root Section
-        </button>
-        <button @click="expandAll" class="p-2 bg-green-600 text-white rounded">
-          Expand All
-        </button>
-        <button @click="collapseAll" class="p-2 bg-red-600 text-white rounded">
-          Collapse All
-        </button>
-      </div>
       <div
         class="tree-container"
         @dragover="onDragOver($event, null)"

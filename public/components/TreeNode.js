@@ -1,8 +1,9 @@
+// components/TreeNode.js
 import { useSections } from '../composables/useSections.js';
 import { useDocuments } from '../composables/useDocuments.js';
 
 export default {
-  name: "TreeNode",
+  name: 'TreeNode',
   props: {
     node: {
       type: Object,
@@ -49,27 +50,27 @@ export default {
   setup(props, { emit }) {
     const { updateSection } = useSections();
     const { updateDocument, removeDocument } = useDocuments();
+    const editingName = Vue.ref(props.node.data.name);
 
     const checkboxClasses = Vue.computed(() => ({
-      'border-gray-600 bg-gray-800': props.node.data._checkStatus === 'unchecked',
-      'border-blue-500 bg-blue-500': props.node.data._checkStatus === 'checked' || props.node.data._checkStatus === 'halfChecked',
+      'border-[#4b5563] bg-[#2d3748]': props.node.data._checkStatus === 'unchecked',
+      'border-[#3b82f6] bg-[#3b82f6]': props.node.data._checkStatus === 'checked' || props.node.data._checkStatus === 'halfChecked',
     }));
 
     const nodeClasses = Vue.computed(() => {
       if (!props.isLeaf(props.node)) {
         return {
-          'bg-gray-800': props.node.data._checkStatus === 'checked' || props.node.data._checkStatus === 'halfChecked',
+          'bg-[#2d3748]': props.node.data._checkStatus === 'checked' || props.node.data._checkStatus === 'halfChecked',
         };
       }
       const isProcessed = props.node.data.pages || props.node.data.processedContent;
       return {
-        'bg-orange-900': !isProcessed,
-        'bg-green-900': isProcessed,
+'bg-[#97330a]': !isProcessed,
+'bg-[#10602f]': isProcessed,
       };
     });
 
     const handleAddSection = () => {
-      console.log('Emitting add-section for node:', props.node.id, props.node.data.name);
       emit('add-section', props.node.id);
     };
 
@@ -81,20 +82,12 @@ export default {
       }
     };
 
-    const localName = Vue.ref('');
-
-    Vue.watch(
-      () => props.editingNodeId,
-      (newId) => {
-        if (newId === props.node.id) {
-          localName.value = props.newName;
-        }
-      }
-    );
+    const startEditing = () => {
+      emit('start-editing', props.node);
+    };
 
     const finishEditing = () => {
-      console.log("Finish Editing", { id: props.node.id, localName: localName.value.trim() });
-      const updatedName = localName.value.trim();
+      const updatedName = editingName.value.trim();
       if (updatedName) {
         if (props.isLeaf(props.node)) {
           updateDocument(props.node.id, updatedName, props.node.data.sectionId);
@@ -105,15 +98,19 @@ export default {
       emit('finish-editing', props.node.id, updatedName || props.node.data.name);
     };
 
-    console.log(`Node ${props.node.id} (${props.node.data.name}) - isLeaf: ${props.isLeaf(props.node)}`);
+    const triggerFileUpload = () => {
+      emit('trigger-file-upload', props.node.id);
+    };
 
     return {
       checkboxClasses,
       nodeClasses,
+      editingName,
       handleAddSection,
       handleRemove,
-      localName,
+      startEditing,
       finishEditing,
+      triggerFileUpload,
     };
   },
   template: `
@@ -127,19 +124,19 @@ export default {
       :class="{ 'pl-6': node.data.sectionId }"
     >
       <div
-        class="flex items-center py-1 px-2 rounded hover:bg-gray-700 cursor-pointer select-none"
+        class="relative flex items-center py-1 px-2 rounded hover:bg-[#2d3748] cursor-pointer select-none"
         :class="nodeClasses"
         @click="!isLeaf(node) && $emit('toggle-expand', node)"
       >
         <!-- Expand/Collapse Icon -->
         <div
           v-if="!isLeaf(node)"
-          class="w-4 h-4 flex items-center justify-center mr-1 text-gray-400"
+          class="w-4 h-4 flex items-center justify-center mr-1 text-[#94a3b8]"
           @click.stop="$emit('toggle-expand', node)"
         >
           <i
-            :class="['pi', node.data._expanded ? 'pi-caret-down' : 'pi-caret-up']"
-            class="text-gray-400"
+            :class="['pi', node.data._expanded ? 'pi-caret-down' : 'pi-caret-right']"
+            class="text-[#94a3b8] text-sm"
           ></i>
         </div>
         <div v-else class="w-4 mr-1"></div>
@@ -167,42 +164,51 @@ export default {
         </div>
 
         <!-- Node Content -->
-        <div class="flex items-center justify-between w-full">
-          <div class="flex items-center gap-2 min-w-0">
-            <span :class="isLeaf(node) ? getFileIcon(node.data.name) : 'pi pi-folder'" class="text-gray-400"></span>
-            <span v-if="!editingNodeId || editingNodeId !== node.id" class="truncate text-gray-200">
+        <div class="flex-1 flex items-center justify-between min-w-0 relative">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <span :class="isLeaf(node) ? getFileIcon(node.data.name) : 'pi pi-folder'" class="text-[#94a3b8] text-sm"></span>
+            <span v-if="!editingNodeId || editingNodeId !== node.id" class="truncate text-[#e2e8f0] text-sm">
               {{ node.data.name }}
             </span>
             <input
               v-else
-              :id="'edit-' + node.id"
-              v-model="localName"
+              v-model="editingName"
               @keypress.enter="finishEditing"
               @blur="finishEditing"
-              class="bg-transparent text-white border-b border-gray-500 focus:border-purple-400 outline-none flex-1 min-w-0"
+              class="bg-transparent text-[#e2e8f0] border-b border-[#4b5563] focus:border-[#3b82f6] outline-none flex-1 min-w-0 text-sm"
               placeholder="Rename node"
             />
           </div>
+          <!-- Connecting Line (Moved to Bottom) -->
+          <div class="absolute bottom-0 left-0 right-12 h-[1px] bg-[#4b5563] z-0"></div>
           <!-- Buttons -->
-          <div class="flex gap-2">
-            <button v-if="!isLeaf(node)" @click.stop="handleAddSection">➕</button>
-            <button @click.stop="$emit('start-editing', node)">✏️</button>
-            <button @click.stop="handleRemove">🗑️</button>
-            <button v-if="!isLeaf(node)" @click.stop="$emit('trigger-file-upload', node.id)" class="pi pi-upload text-green-400"></button>
+          <div class="flex gap-1 z-10">
+            <button v-if="!isLeaf(node)" @click.stop="handleAddSection" class="text-[#10b981] hover:text-[#059669] p-1">
+              <i class="pi pi-plus text-sm"></i>
+            </button>
+            <button v-if="!isLeaf(node)" @click.stop="triggerFileUpload" class="text-[#3b82f6] hover:text-[#2563eb] p-1">
+              <i class="pi pi-upload text-sm"></i>
+            </button>
+            <button @click.stop="startEditing" class="text-[#f59e0b] hover:text-[#d97706] p-1">
+              <i class="pi pi-pencil text-sm"></i>
+            </button>
+            <button @click.stop="handleRemove" class="text-[#ef4444] hover:text-[#dc2626] p-1">
+              <i class="pi pi-trash text-sm"></i>
+            </button>
           </div>
         </div>
       </div>
 
       <!-- Child Nodes -->
       <div v-if="!isLeaf(node) && node.data._expanded" class="pl-6">
-        <TreeNode
+        <tree-node
           v-for="childNode in node.data._children"
           :key="childNode.id"
           :node="childNode"
           :selected-keys="selectedKeys"
           :expanded-keys="expandedKeys"
           :editing-node-id="editingNodeId"
-          :new-name="newName"
+          :new-name="editingName"
           :get-file-icon="getFileIcon"
           :is-leaf="isLeaf"
           @toggle-select="$emit('toggle-select', $event)"
@@ -212,10 +218,10 @@ export default {
           @dragleave="$emit('dragleave')"
           @drop="$emit('drop', $event, $event.target)"
           @add-section="$emit('add-section', $event)"
-          @start-editing="$emit('start-editing', $event)"
-          @finish-editing="$emit('finish-editing', $event)"
+          @start-editing="startEditing"
+          @finish-editing="finishEditing"
           @remove-section="$emit('remove-section', $event)"
-          @trigger-file-upload="$emit('trigger-file-upload', $event)"
+          @trigger-file-upload="triggerFileUpload"
         />
       </div>
     </div>

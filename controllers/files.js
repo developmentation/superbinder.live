@@ -1,4 +1,4 @@
-// ./controllers/files.js (updated to fix fs.existsSync error)
+// ./controllers/files.js (updated to handle renaming to UUIDs)
 const path = require('path');
 const fs = require('fs').promises;
 const { upload } = require('../tools/uploads.js');
@@ -8,7 +8,7 @@ const filesController = {};
 
 /**
  * POST /api/files
- * Handles multiple file uploads, saving them to process.env.DATA with UUID filenames if provided.
+ * Handles multiple file uploads, renaming them to UUIDs and saving to process.env.DATA.
  * Expects req.body.uuids to be a JSON string array of UUIDs matching the order of files.
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -27,6 +27,13 @@ filesController.addFiles = async (req, res) => {
         return res.status(400).json({ message: 'No files uploaded' });
       }
 
+      // Validate and set DATA directory
+      const dataDir = process.env.DATA || path.resolve(__dirname, '../files');
+      if (!dataDir) {
+        return res.status(500).json({ message: 'DATA environment variable is not set and default path resolution failed' });
+      }
+      console.log('Using data directory:', dataDir);
+
       // Parse UUIDs from request body
       let uuids;
       try {
@@ -40,25 +47,49 @@ filesController.addFiles = async (req, res) => {
         return res.status(400).json({ message: `Mismatch between UUIDs (${uuids.length}) and files (${req.files.length})` });
       }
 
-      // Verify saved filenames match UUIDs if provided
+      // Log the files and UUIDs for debugging
+      console.log('Uploaded files (before renaming):', req.files.map(file => ({
+        originalName: file.originalname,
+        filename: file.filename,
+        path: file.path,
+      })));
+      console.log('Provided UUIDs:', uuids);
+
+      // Rename files to UUIDs if provided
       const results = await Promise.all(req.files.map(async (file, index) => {
-        const expectedFilename = uuids[index] || file.filename; // Use UUID or fallback filename
-        const savedPath = path.join(process.env.DATA, file.filename);
+        const originalPath = path.join(dataDir, file.filename);
+        let newFilename = file.originalname; // Default to original name if no UUID
+        let newPath = originalPath;
+        let renamedCorrectly = true;
+
+        if (uuids.length > 0 && uuids[index]) {
+          newFilename = uuids[index];
+          newPath = path.join(dataDir, newFilename);
+          try {
+            await fs.rename(originalPath, newPath);
+            console.log(`Renamed ${file.originalname} to ${newFilename}`);
+          } catch (renameErr) {
+            console.error(`Failed to rename ${file.originalname} to ${newFilename}:`, renameErr.message);
+            renamedCorrectly = false;
+            newPath = originalPath; // Keep original path if rename fails
+          }
+        }
+
         let fileExists = false;
         try {
-          await fs.access(savedPath); // Check if file exists asynchronously
+          await fs.access(newPath);
           fileExists = true;
         } catch (accessErr) {
-          console.warn(`File not found at ${savedPath}:`, accessErr.message);
+          console.warn(`File not found at ${newPath}:`, accessErr.message);
           fileExists = false;
         }
-        const isRenamedCorrectly = uuids[index] ? file.filename === uuids[index] : true;
+
         return {
           uuid: uuids[index] || null,
           saved: fileExists,
           originalName: file.originalname,
-          filename: file.filename,
-          renamedCorrectly: isRenamedCorrectly,
+          filename: newFilename,
+          renamedCorrectly: renamedCorrectly,
         };
       }));
 
@@ -106,11 +137,12 @@ filesController.retrieveFiles = async (req, res) => {
       return res.status(400).json({ message: 'UUIDs must be a non-empty array' });
     }
 
-    // Ensure DATA directory exists
-    const dataDir = process.env.DATA;
+    // Validate and set DATA directory
+    const dataDir = process.env.DATA || path.resolve(__dirname, '../files');
     if (!dataDir) {
-      return res.status(500).json({ message: 'DATA environment variable is not set' });
+      return res.status(500).json({ message: 'DATA environment variable is not set and default path resolution failed' });
     }
+    console.log('Using data directory for retrieval:', dataDir);
 
     // Retrieve files
     const files = [];
@@ -119,12 +151,11 @@ filesController.retrieveFiles = async (req, res) => {
       try {
         // Read file binary
         const fileBuffer = await fs.readFile(filePath);
-        // We don’t have the original extension/MIME type stored; assume binary response
         files.push({
           uuid,
-          filename: uuid, // No extension stored
-          data: fileBuffer.toString('base64'), // Encode as base64 for JSON response
-          mimeType: 'application/octet-stream', // Default MIME type (unknown)
+          filename: uuid,
+          data: fileBuffer.toString('base64'),
+          mimeType: 'application/octet-stream',
         });
       } catch (fileErr) {
         console.warn(`File not found for UUID ${uuid}:`, fileErr.message);
