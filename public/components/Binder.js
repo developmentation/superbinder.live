@@ -253,10 +253,10 @@ export default {
       } else if (tab !== "Documents") {
         activeDocumentSubTab.value = "Uploads";
       }
-      emit("update-tab", {
-        tab: tab,
-        subTab: tab === "Documents" ? activeDocumentSubTab.value : null,
-      });
+      // emit("update-tab", {
+      //   tab: tab,
+      //   subTab: tab === "Documents" ? activeDocumentSubTab.value : null,
+      // });
     }
 
     function toggleChat() {

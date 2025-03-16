@@ -99,8 +99,8 @@ export default {
       emit('finish-editing', props.node.id, updatedName || props.node.data.name);
     };
 
-    const triggerFileUpload = () => {
-      emit('trigger-file-upload', props.node.id);
+    const triggerFileUpload = (nodeId) => {
+      emit('trigger-file-upload', nodeId || props.node.id);
     };
 
     // Handle click on the node to select it (for leaf nodes only)
@@ -209,7 +209,7 @@ export default {
             <button v-if="!isLeaf(node)" @click.stop="handleAddSection" class="text-[#10b981] hover:text-[#059669] p-1">
               <i class="pi pi-plus text-sm"></i>
             </button>
-            <button v-if="!isLeaf(node)" @click.stop="triggerFileUpload" class="text-[#3b82f6] hover:text-[#2563eb] p-1">
+            <button v-if="!isLeaf(node)" @click.stop="triggerFileUpload(node.id)" class="text-[#3b82f6] hover:text-[#2563eb] p-1">
               <i class="pi pi-upload text-sm"></i>
             </button>
             <button @click.stop="startEditing" class="text-[#f59e0b] hover:text-[#d97706] p-1">
