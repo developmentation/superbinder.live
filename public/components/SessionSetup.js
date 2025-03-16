@@ -6,11 +6,11 @@ export default {
   template: `
     <div class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
       <div class="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-md">
-        <h2 class="text-2xl font-bold text-white mb-4">Join SuperBinder</h2>
+        <h2 class="text-2xl font-bold text-white mb-4">Create a SuperBinder</h2>
         <div v-if="errorMessage" class="mb-4 p-2 bg-red-600 text-white rounded-lg">{{ errorMessage }}</div>
         <form @submit.prevent="submitSetup">
           <div class="mb-4">
-            <label class="block text-gray-300 mb-2">Display Name</label>
+            <label class="block text-gray-300 mb-2">Display Name *</label>
             <input
               v-model="displayName"
               type="text"
@@ -20,7 +20,7 @@ export default {
             />
           </div>
           <div class="mb-4">
-            <label class="block text-gray-300 mb-2">Channel Name</label>
+            <label class="block text-gray-300 mb-2">Channel Name *</label>
             <input
               v-model="channelName"
               type="text"
@@ -35,17 +35,28 @@ export default {
               type="submit"
               class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
             >
-              Join Channel
+              Join 
             </button>
+
+            <button
+              type="button"
+              @click="createUuid"
+              class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+              title="Unique Channel"
+            >
+              <i class="pi pi-key"></i>
+              <span>Unique Channel</span>
+            </button>
+
             <button
               type="button"
               @click="copyLink"
               :disabled="!channelName || channelName.trim().length === 0"
               class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-              title="Copy Link"
+              title="Copy URL"
             >
               <i class="pi pi-link"></i>
-              <span>Copy Link</span>
+              <span>Copy URL</span>
             </button>
           </div>
         </form>
@@ -55,6 +66,7 @@ export default {
   setup(props, { emit }) {
     const displayName = Vue.ref('');
     const channelName = Vue.ref('');
+    const channelId = Vue.ref('');
     const errorMessage = Vue.ref('');
     const route = VueRouter.useRoute();
     const router = VueRouter.useRouter();
@@ -92,6 +104,11 @@ export default {
           name: displayName.value,
         });
       }
+    }
+
+    function createUuid()
+    {
+      channelName.value = uuidv4()
     }
 
     function copyLink() {
@@ -134,6 +151,7 @@ export default {
       submitSetup,
       copyLink,
       updateChannelName,
+      createUuid
     };
   },
 };

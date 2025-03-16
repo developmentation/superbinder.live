@@ -5,7 +5,7 @@ import { useSections } from '../composables/useSections.js';
 import { useGoals } from '../composables/useGoals.js';
 import { useAgents } from '../composables/useAgents.js';
 import { useQuestions } from '../composables/useQuestions.js';
-import { useCollaboration } from '../composables/useCollaboration.js'; // Assuming this exists
+import { useCollaboration } from '../composables/useCollaboration.js';
 import { useChat } from '../composables/useChat.js';
 
 export default {
@@ -28,6 +28,9 @@ export default {
         <div class="flex items-center space-x-3">
           <button @click="toggleRoomLock" class="p-2 text-[#e2e8f0] hover:text-[#34d399] transition-colors" title="Toggle Room Lock">
             <i :class="isRoomLocked ? 'pi pi-lock' : 'pi pi-unlock'" class="text-xl"></i>
+          </button>
+          <button @click="removeChannel" class="p-2 text-[#e2e8f0] hover:text-[#ef4444] transition-colors" title="Remove Channel">
+            <i class="pi pi-trash text-xl"></i>
           </button>
         </div>
       </div>
@@ -128,12 +131,12 @@ export default {
     </div>
   `,
   setup(props) {
-    const { activeUsers, channelName, isRoomLocked, emit } = useRealTime();
+    const { activeUsers, channelName, isRoomLocked, emit, userUuid } = useRealTime();
     const { sections } = useSections();
     const { goals } = useGoals();
     const { agents } = useAgents();
     const { questions, answers } = useQuestions();
-    const { breakouts } = useCollaboration(); // Assuming breakouts is the array of breakout rooms
+    const { breakouts } = useCollaboration();
     const { messages } = useChat();
 
     const userCount = Vue.computed(() => Object.keys(activeUsers.value).length);
@@ -155,6 +158,20 @@ export default {
       });
     }
 
+    function removeChannel() {
+      emit("remove-channel", {
+        id: channelName.value, // Optional, can be derived from channelName if backend requires it
+        channel:channelName.value,
+        data: {
+          userUuid: userUuid.value,
+          channelName: channelName.value,
+          timestamp: Date.now(),
+        },
+      }).catch(error => {
+        console.error('Error emitting remove-channel:', error);
+      });
+    }
+
     return {
       activeUsers,
       userCount,
@@ -162,6 +179,7 @@ export default {
       participantCount,
       isRoomLocked,
       toggleRoomLock,
+      removeChannel,
       sections,
       goals,
       agents,

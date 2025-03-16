@@ -6,6 +6,7 @@ import ViewerUploads from "./ViewerUploads.js";
 import Viewer from "./Viewer.js";
 import ChatPanel from "./ChatPanel.js";
 import ViewerDashboard from "./ViewerDashboard.js";
+import SessionRemoved from "./SessionRemoved.js"; // Import the new component
 import { useAgents } from "../composables/useAgents.js";
 import { useChat } from "../composables/useChat.js";
 import { useClips } from "../composables/useClips.js";
@@ -26,6 +27,7 @@ export default {
     Viewer,
     ChatPanel,
     ViewerDashboard,
+    SessionRemoved, // Register the new component
   },
   template: `
     <div class="flex flex-col h-screen text-[#e2e8f0] overflow-hidden">
@@ -33,7 +35,7 @@ export default {
       <session-setup v-if="!sessionReady" @setup-complete="handleSetupComplete" class="flex-1 flex items-center justify-center bg-[#0a0f1e]" />
 
       <!-- Main Interface -->
-      <div v-if="sessionReady" class="flex flex-col h-full">
+      <div v-if="sessionReady && !isSessionRemoved" class="flex flex-col h-full">
         <!-- Tab Bar -->
         <div class="bg-[#0a0f1e] border-b border-[#2d3748] px-4 py-1 flex items-center justify-between">
           <div class="flex overflow-x-auto scrollbar-hide space-x-2">
@@ -122,6 +124,13 @@ export default {
           <i class="pi pi-comments text-xl"></i>
         </button>
       </div>
+
+      <!-- Session Removed Modal -->
+      <session-removed
+        v-if="isSessionRemoved"
+        :removed-by="sessionRemovedBy"
+        @reset-session="handleResetSession"
+      />
     </div>
   `,
   setup() {
@@ -163,6 +172,8 @@ export default {
     const isChatOpen = Vue.ref(false);
     const chatWidth = Vue.ref(350);
     const isMobile = Vue.ref(window.matchMedia("(max-width: 640px)").matches);
+    const isSessionRemoved = Vue.ref(false); // New state for showing the modal
+    const sessionRemovedBy = Vue.ref(''); // Who removed the session
 
     const participantCount = Vue.computed(() => activeUsers.value.length);
 
@@ -215,6 +226,24 @@ export default {
       isRoomLocked.value = false;
       isChatOpen.value = false;
       chatWidth.value = 350;
+      isSessionRemoved.value = false;
+      sessionRemovedBy.value = '';
+      // Reset all composable states
+      agents.value = [];
+      messages.value = [];
+      clips.value = [];
+      documents.value = [];
+      goals.value = [];
+      questions.value = [];
+      answers.value = [];
+      artifacts.value = [];
+      transcripts.value = [];
+      sections.value = [];
+      breakouts.value = [];
+    }
+
+    function handleResetSession() {
+      resetSession();
     }
 
     function handleVisibilityChange() {
@@ -253,10 +282,6 @@ export default {
       } else if (tab !== "Documents") {
         activeDocumentSubTab.value = "Uploads";
       }
-      // emit("update-tab", {
-      //   tab: tab,
-      //   subTab: tab === "Documents" ? activeDocumentSubTab.value : null,
-      // });
     }
 
     function toggleChat() {
@@ -324,6 +349,11 @@ export default {
       toggleChat();
     });
 
+    on("session-removed", ({ removedBy }) => {
+      isSessionRemoved.value = true;
+      sessionRemovedBy.value = removedBy;
+    });
+
     Vue.onMounted(() => {
       document.addEventListener("visibilitychange", handleVisibilityChange);
       window.addEventListener("resize", () => {
@@ -359,6 +389,7 @@ export default {
       off("error");
       off("room-lock-toggle");
       off("toggle-chat");
+      off("session-removed");
       cleanupAgents();
       cleanupChat();
       cleanupClips();
@@ -418,6 +449,9 @@ export default {
       answers,
       breakouts,
       messages,
+      isSessionRemoved,
+      sessionRemovedBy,
+      handleResetSession,
     };
   },
 };

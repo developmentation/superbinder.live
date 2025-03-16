@@ -7,11 +7,11 @@ const displayName = Vue.ref(sessionStorage.getItem('displayName') || '');
 const channelName = Vue.ref(sessionStorage.getItem('channelName') || '');
 const isConnected = Vue.ref(false);
 const connectionStatus = Vue.ref('disconnected');
-const activeUsers = Vue.ref([]); // Initialized as an array
+const activeUsers = Vue.ref([]);
 const connectionError = Vue.ref(null);
 const lastMessageTimestamp = Vue.ref(0);
-const userColor = Vue.ref(sessionStorage.getItem('userColor') || '#808080'); // Default to grey if not set
-const isRoomLocked = Vue.ref(false); // Added isRoomLocked as a reactive property
+const userColor = Vue.ref(sessionStorage.getItem('userColor') || '#808080');
+const isRoomLocked = Vue.ref(false);
 
 const TIMESTAMP_TOLERANCE = 5000;
 
@@ -61,7 +61,15 @@ export function useRealTime() {
       processedData = {
         type: data.type,
         channelName: data.channelName,
-        locked: data.data ? data.data.locked : false, // Extract from nested data field
+        locked: data.data ? data.data.locked : false,
+        timestamp: data.timestamp || Date.now(),
+      };
+    } else if (data.type === 'remove-channel') {
+      processedData = {
+        type: data.type,
+        id: data.id || null, // Allow id to be optional
+        userUuid: data.userUuid,
+        channelName: data.data?.channelName || data.channelName, // Allow either data.channelName or top-level channelName
         timestamp: data.timestamp || Date.now(),
       };
     } else {
@@ -106,6 +114,14 @@ export function useRealTime() {
       case 'room-lock-toggle':
         isRoomLocked.value = processedData.locked;
         eventBus.$emit('room-lock-toggle', processedData);
+        break;
+      case 'remove-channel':
+        // Check if the channel matches the current session
+        if (processedData.channelName === channelName.value || (processedData.id && processedData.id === channelName.value)) {
+          const removedBy = activeUsers.value.find(user => user.userUuid === processedData.userUuid)?.displayName || 'Unknown User';
+          eventBus.$emit('session-removed', { removedBy });
+          disconnect(); // Disconnect immediately
+        }
         break;
       default:
         eventBus.$emit(processedData.type, processedData);
@@ -261,6 +277,7 @@ export function useRealTime() {
     off('add-breakout');
     off('update-breakout');
     off('delete-breakout');
+    off('session-removed');
   }
 
   return {

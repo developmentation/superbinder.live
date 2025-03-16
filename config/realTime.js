@@ -46,6 +46,7 @@ Object.keys({
   collab: 'collabSet',
   breakout: 'breakoutSet',
   sections: 'sectionSet',
+  channels: 'channelsSet',
 }).forEach(entityType => {
   const collectionName = `${entityType}Set`;
   entityModels[entityType] = mongoose.model(collectionName, entitySetSchema, collectionName);
@@ -71,7 +72,7 @@ async function initializeDatabase() {
     await verifyIndexes();
   } catch (err) {
     await logError('error', 'Failed to initialize database', err.stack);
-    process.exit(1); // Still exit on database initialization failure
+    process.exit(1);
   }
 }
 
@@ -95,6 +96,7 @@ const entityConfigs = {
   collab: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-collab', update: 'update-collab', remove: 'delete-collab', draft: 'draft-collab' } },
   breakout: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-breakout', update: 'update-breakout', remove: 'delete-breakout', reorder: null } },
   sections: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-section', update: 'update-section', remove: 'remove-section', reorder: 'reorder-section' } },
+  channels: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-channel', update: 'update-channel', remove: 'remove-channel', reorder: null } },
 };
 
 /**
@@ -229,6 +231,64 @@ function validateEntity(payload, entityType, operation) {
   return { valid: true, message: '' };
 }
 
+async function upsertChannel(channelName, userUuid, displayName) {
+  try {
+    const timestamp = Date.now();
+    const userEntry = { userUuid, displayName, joinedAt: timestamp };
+
+    // Check if the channel exists in the database
+    const existingChannel = await entityModels['channels'].findOne({ id: channelName });
+
+    if (existingChannel) {
+      // Channel exists, update the users array
+      const users = existingChannel.data.users || [];
+      const userExists = users.some(user => user.userUuid === userUuid);
+
+      if (!userExists) {
+        // Add the user if they don't already exist
+        users.push(userEntry);
+      } else {
+        // Update the user's displayName and joinedAt if they already exist
+        const userIndex = users.findIndex(user => user.userUuid === userUuid);
+        users[userIndex] = userEntry;
+      }
+
+      await entityModels['channels'].updateOne(
+        { id: channelName },
+        {
+          $set: {
+            'data.users': users,
+            userUuid, // Update the last user who modified the channel
+            timestamp,
+            serverTimestamp: timestamp,
+          },
+        }
+      );
+
+      return { id: channelName, channel: channelName, userUuid, data: { locked: existingChannel.data.locked, users }, timestamp, serverTimestamp: timestamp };
+    } else {
+      // Channel doesn't exist, create a new one
+      const channelData = {
+        id: channelName,
+        channel: channelName,
+        userUuid,
+        data: {
+          locked: false,
+          users: [userEntry],
+        },
+        timestamp,
+        serverTimestamp: timestamp,
+      };
+
+      await entityModels['channels'].create(channelData);
+      return channelData;
+    }
+  } catch (err) {
+    await logError('error', `Failed to upsert channel ${channelName}`, err.stack, userUuid, channelName);
+    throw err;
+  }
+}
+
 async function updateCreateState(channelName, entityType, payload) {
   try {
     const config = entityConfigs[entityType];
@@ -309,6 +369,44 @@ async function updateVoteState(channelName, entityType, payload) {
   }
 }
 
+async function removeChannel(channelName, userUuid) {
+  console.log('Remove Channel', { channelName, userUuid });
+  try {
+    const serverTimestamp = Date.now();
+    const message = {
+      type: 'remove-channel',
+      id: channelName,
+      userUuid,
+      data: { message: `This channel has been removed by ${channels.get(channelName)?.users[userUuid]?.displayName || 'a user'}` },
+      timestamp: serverTimestamp,
+      serverTimestamp,
+    };
+
+    if (channels.has(channelName)) {
+      const channel = channels.get(channelName);
+      for (const socketUuid in channel.sockets) {
+        if (channel.sockets[socketUuid]) {
+          channel.sockets[socketUuid].emit('message', message);
+        }
+      }
+    }
+
+    await entityModels['channels'].deleteOne({ channel: channelName });
+    await Promise.all(
+      Object.keys(entityModels).map(entityType =>
+        entityModels[entityType].deleteMany({ channel: channelName })
+      )
+    );
+
+    if (channels.has(channelName)) {
+      channels.delete(channelName);
+    }
+  } catch (err) {
+    await logError('error', `Failed to remove channel ${channelName}`, err.stack, userUuid, channelName);
+    throw err;
+  }
+}
+
 async function sendLLMStream(uuid, channelName, session, type, message, isEnd = false) {
   try {
     const payload = {
@@ -355,6 +453,11 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
 
     const timestamp = payload.timestamp || Date.now();
     const normalizedPayload = { ...payload, userUuid, timestamp, channelName };
+
+    if (entityType === 'channels' && operation === 'remove') {
+      await removeChannel(channelName, userUuid);
+      return;
+    }
 
     if (entityType === 'llm' && operation === 'add') {
       if (!validateLLMData(payload.data)) {
@@ -442,6 +545,14 @@ function createRealTimeServers(server, corsOptions) {
         socket.join(channelName);
         socket.userUuid = userUuid;
 
+        // Check if the channel exists in the database and load it into memory if necessary
+        let channelDoc = await entityModels['channels'].findOne({ id: channelName }).lean();
+        if (!channelDoc) {
+          // If the channel doesn't exist in the database, create it
+          channelDoc = await upsertChannel(channelName, userUuid, displayName);
+        }
+
+        // Load channel state into memory if not already present
         if (!channels.has(channelName)) {
           const initialState = {};
           for (const entityType of Object.keys(entityConfigs)) {
@@ -451,7 +562,17 @@ function createRealTimeServers(server, corsOptions) {
             users: {},
             sockets: {},
             state: initialState,
-            locked: false,
+            locked: channelDoc.data.locked || false,
+          });
+
+          // Populate the in-memory users map from the database
+          const channel = channels.get(channelName);
+          channelDoc.data.users.forEach(user => {
+            channel.users[user.userUuid] = {
+              displayName: user.displayName,
+              color: user.color || generateMutedDarkColor(), // Ensure color exists
+              joinedAt: user.joinedAt,
+            };
           });
         }
 
@@ -461,7 +582,11 @@ function createRealTimeServers(server, corsOptions) {
           return;
         }
 
-        const userColor = generateMutedDarkColor();
+        // Update the channel document with the new user (upsert already handles this)
+        await upsertChannel(channelName, userUuid, displayName);
+
+        // Update in-memory state
+        const userColor = channel.users[userUuid]?.color || generateMutedDarkColor();
         channel.users[userUuid] = { displayName, color: userColor, joinedAt: Date.now() };
         channel.sockets[userUuid] = socket;
 
@@ -587,13 +712,13 @@ async function handleMessage(dataObj, socket) {
       case 'delete-breakout':
       case 'add-llm':
       case 'draft-llm':
-
       case 'add-section':
       case 'update-section':
       case 'remove-section':
       case 'reorder-section':
-
-      await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data }, socket);
+      case 'add-channel':
+      case 'remove-channel':
+        await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data }, socket);
         break;
       case 'room-lock-toggle':
         channel.locked = data.locked;
