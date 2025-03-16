@@ -3,10 +3,12 @@ import { useAgents } from '../composables/useAgents.js';
 import { useRealTime } from '../composables/useRealTime.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useGoals } from '../composables/useGoals.js';
-import { useClips } from '../composables/useClips.js';
+import { useArtifacts } from '../composables/useArtifacts.js';
+import SectionPickerModal from './SectionPickerModal.js';
 
 export default {
   name: 'ViewerAgents',
+  components: { SectionPickerModal },
   template: `
     <div class="h-full flex flex-col overflow-hidden p-4">
       <!-- Filter and Add Agent Buttons -->
@@ -92,7 +94,8 @@ export default {
                         <option value="text">Text</option>
                         <option value="goal">Goal</option>
                         <option value="document">Document</option>
-                        <option value="clip">Clip</option>
+                        <option value="artifact">Artifact</option>
+                        <option value="sections">Sections</option>
                       </select>
                     </td>
                     <td class="py-2 px-4">
@@ -111,10 +114,15 @@ export default {
                           <option v-for="doc in documents" :key="doc.id" :value="doc.id">{{ doc.data.name }}</option>
                         </select>
                       </template>
-                      <template v-else-if="prompt.type === 'clip'">
+                      <template v-else-if="prompt.type === 'artifact'">
                         <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
-                          <option v-for="clip in clips" :key="clip.id" :value="clip.id">{{ clip.data.text.substring(0, 100) }}...</option>
+                          <option v-for="artifact in artifacts" :key="artifact.id" :value="artifact.id">{{ artifact.data.name }}</option>
                         </select>
+                      </template>
+                      <template v-else-if="prompt.type === 'sections'">
+                        <button @click="openSectionModal('system', index, prompt.content)" class="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                          Select Sections ({{ prompt.content ? prompt.content.length : 0 }})
+                        </button>
                       </template>
                     </td>
                     <td class="py-2 px-4">
@@ -146,7 +154,8 @@ export default {
                         <option value="text">Text</option>
                         <option value="goal">Goal</option>
                         <option value="document">Document</option>
-                        <option value="clip">Clip</option>
+                        <option value="artifact">Artifact</option>
+                        <option value="sections">Sections</option>
                       </select>
                     </td>
                     <td class="py-2 px-4">
@@ -165,10 +174,15 @@ export default {
                           <option v-for="doc in documents" :key="doc.id" :value="doc.id">{{ doc.data.name }}</option>
                         </select>
                       </template>
-                      <template v-else-if="prompt.type === 'clip'">
+                      <template v-else-if="prompt.type === 'artifact'">
                         <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
-                          <option v-for="clip in clips" :key="clip.id" :value="clip.id">{{ clip.data.text.substring(0, 100) }}...</option>
+                          <option v-for="artifact in artifacts" :key="artifact.id" :value="artifact.id">{{ artifact.data.name }}</option>
                         </select>
+                      </template>
+                      <template v-else-if="prompt.type === 'sections'">
+                        <button @click="openSectionModal('user', index, prompt.content)" class="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                          Select Sections ({{ prompt.content ? prompt.content.length : 0 }})
+                        </button>
                       </template>
                     </td>
                     <td class="py-2 px-4">
@@ -206,6 +220,14 @@ export default {
           </div>
         </div>
       </div>
+
+      <!-- Section Picker Modal -->
+      <section-picker-modal
+        :visible="isSectionModalOpen"
+        :uuids="sectionModalContent"
+        @select="saveSectionSelection"
+        @close="closeSectionModal"
+      />
     </div>
   `,
   setup() {
@@ -213,10 +235,11 @@ export default {
     const { displayName } = useRealTime();
     const { documents } = useDocuments();
     const { goals } = useGoals();
-    const { clips } = useClips();
+    const { artifacts } = useArtifacts();
     const filterQuery = Vue.ref('');
     const isModalOpen = Vue.ref(false);
     const isPromptModalOpen = Vue.ref(false);
+    const isSectionModalOpen = Vue.ref(false);
     const editingAgent = Vue.ref(null);
     const agentId = Vue.ref('');
     const agentName = Vue.ref('');
@@ -228,6 +251,9 @@ export default {
     const promptType = Vue.ref('');
     const promptIndex = Vue.ref(null);
     const promptContent = Vue.ref('');
+    const sectionModalType = Vue.ref('');
+    const sectionModalIndex = Vue.ref(null);
+    const sectionModalContent = Vue.ref([]);
 
     const filteredAgents = Vue.computed(() => {
       if (!filterQuery.value) return agents.value;
@@ -291,7 +317,11 @@ export default {
     function updatePromptType(type, index, newType) {
       const prompts = type === 'system' ? systemPrompts : userPrompts;
       prompts.value[index].type = newType;
-      if (newType !== 'text') prompts.value[index].content = '';
+      if (newType === 'sections') {
+        prompts.value[index].content = []; // Initialize as array for sections
+      } else if (newType !== 'text') {
+        prompts.value[index].content = ''; // Reset for non-text types
+      }
     }
 
     function openPromptModal(type, index, content) {
@@ -314,6 +344,28 @@ export default {
         prompts.value[promptIndex.value] = { ...prompts.value[promptIndex.value], content: promptContent.value };
       }
       closePromptModal();
+    }
+
+    function openSectionModal(type, index, content) {
+      sectionModalType.value = type;
+      sectionModalIndex.value = index;
+      sectionModalContent.value = Array.isArray(content) ? content : [];
+      isSectionModalOpen.value = true;
+    }
+
+    function closeSectionModal() {
+      isSectionModalOpen.value = false;
+      sectionModalType.value = '';
+      sectionModalIndex.value = null;
+      sectionModalContent.value = [];
+    }
+
+    function saveSectionSelection(sectionIds) {
+      if (sectionModalType.value && sectionModalIndex.value !== null) {
+        const prompts = sectionModalType.value === 'system' ? systemPrompts : userPrompts;
+        prompts.value[sectionModalIndex.value].content = sectionIds;
+      }
+      closeSectionModal();
     }
 
     function saveAgent() {
@@ -340,11 +392,12 @@ export default {
       agents,
       documents,
       goals,
-      clips,
+      artifacts,
       filterQuery,
       filteredAgents,
       isModalOpen,
       isPromptModalOpen,
+      isSectionModalOpen,
       editingAgent,
       agentId,
       agentName,
@@ -356,6 +409,9 @@ export default {
       promptType,
       promptIndex,
       promptContent,
+      sectionModalType,
+      sectionModalIndex,
+      sectionModalContent,
       filterAgents,
       openEditModal,
       closeModal,
@@ -365,6 +421,9 @@ export default {
       openPromptModal,
       closePromptModal,
       savePrompt,
+      openSectionModal,
+      closeSectionModal,
+      saveSectionSelection,
       saveAgent,
       confirmDelete,
       validateName,

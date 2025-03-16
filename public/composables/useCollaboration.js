@@ -4,6 +4,7 @@ import { useAgents } from './useAgents.js';
 import { useLLM } from './useLLM.js';
 import { useDocuments } from './useDocuments.js';
 import { useGoals } from './useGoals.js';
+import { useArtifacts } from './useArtifacts.js';
 
 const breakouts = Vue.ref([]); // List of breakout rooms { id, data: { name } }
 const collabs = Vue.ref([]); // Array of messages [{ id, userUuid, data: { text, breakoutId, color }, timestamp, isDraft }]
@@ -16,6 +17,7 @@ const { agents } = useAgents();
 const { triggerLLM, llmRequests } = useLLM();
 const { documents } = useDocuments();
 const { goals } = useGoals();
+const { artifacts } = useArtifacts();
 
 const eventHandlers = new WeakMap();
 const processedEvents = new Set();
@@ -98,7 +100,7 @@ export function useCollaboration() {
           };
         } else {
           delete draftMessages.value[breakoutId][senderUuid];
-          delete draftInitialTimestamps.value[breakoutId][senderUuid];
+          delete draftInitialTimestamps.value[breakoutId]?.[senderUuid];
           console.log(`Removed draft for ${senderUuid} in breakout ${breakoutId}`);
         }
         draftMessages.value = { ...draftMessages.value };
@@ -344,77 +346,96 @@ export function useCollaboration() {
 
     messageHistory.push({ role: 'system', content: `You are participating in a multiperson chat with humans and other AI agents. Your name is @${agent.data.name}, but you don't need to write it unless you are asked your name.` });
 
-    const systemText = agent.data.systemPrompts.find(p => p.type === 'text')?.content;
-    if (systemText) {
-      messageHistory.push({ role: 'system', content: systemText });
-    }
-    console.log('System Prompt Text:', systemText);
+    // Collect unique document and artifact IDs for system prompts
+    const systemUniqueIds = new Set();
 
-    const systemDocs = agent.data.systemPrompts
-      .filter(p => p.type === 'document' && documents.value.some(d => d.id === p.content))
-      .map(p => {
-        console.log('Looking up system document with ID:', p.content);
-        const doc = documents.value.find(d => d.id === p.content);
-        console.log('Found system document:', doc);
-        if (!doc || !doc.data.pagesText) return '';
-        return Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
-      });
-    systemDocs.forEach(docText => {
-      if (docText) {
-        messageHistory.push({ role: 'system', content: docText });
+    // Process system prompts
+    agent.data.systemPrompts.forEach(prompt => {
+      if (prompt.type === 'text' && prompt.content) {
+        messageHistory.push({ role: 'system', content: prompt.content });
+      } else if (prompt.type === 'goal' && goals.value.some(g => g.id === prompt.content)) {
+        const goal = goals.value.find(g => g.id === prompt.content);
+        if (goal?.data.text) {
+          messageHistory.push({ role: 'system', content: goal.data.text });
+        }
+      } else if (prompt.type === 'document' && documents.value.some(d => d.id === prompt.content)) {
+        systemUniqueIds.add(prompt.content);
+      } else if (prompt.type === 'artifact' && artifacts.value.some(a => a.id === prompt.content)) {
+        systemUniqueIds.add(prompt.content);
+      } else if (prompt.type === 'sections' && Array.isArray(prompt.content)) {
+        prompt.content.forEach(sectionId => {
+          documents.value.forEach(doc => {
+            if (doc.data.sectionId === sectionId) systemUniqueIds.add(doc.id);
+          });
+          artifacts.value.forEach(artifact => {
+            if (artifact.data.sectionId === sectionId) systemUniqueIds.add(artifact.id);
+          });
+        });
       }
     });
-    console.log('System Prompt Documents:', systemDocs);
 
-    const systemGoals = agent.data.systemPrompts
-      .filter(p => p.type === 'goal' && goals.value.some(g => g.id === p.content))
-      .map(p => goals.value.find(g => g.id === p.content)?.data.text || '');
-    systemGoals.forEach(goalText => {
-      if (goalText) {
-        messageHistory.push({ role: 'system', content: goalText });
+    // Add content for system prompt documents and artifacts
+    systemUniqueIds.forEach(id => {
+      const doc = documents.value.find(d => d.id === id);
+      if (doc && doc.data.pagesText) {
+        const content = Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
+        messageHistory.push({ role: 'system', content });
+      }
+      const artifact = artifacts.value.find(a => a.id === id);
+      if (artifact && artifact.data.pagesText) {
+        const content = Array.isArray(artifact.data.pagesText) ? artifact.data.pagesText.join('\n') : artifact.data.pagesText;
+        messageHistory.push({ role: 'system', content });
       }
     });
-    console.log('System Prompt Goals:', systemGoals);
 
-    const userText = agent.data.userPrompts.find(p => p.type === 'text')?.content;
-    if (userText) {
-      messageHistory.push({ role: 'user', content: userText });
-    }
-    console.log('User Prompt Text:', userText);
+    // Collect unique document and artifact IDs for user prompts
+    const userUniqueIds = new Set();
 
-    const userDocs = agent.data.userPrompts
-      .filter(p => p.type === 'document' && documents.value.some(d => d.id === p.content))
-      .map(p => {
-        console.log('Looking up user document with ID:', p.content);
-        const doc = documents.value.find(d => d.id === p.content);
-        console.log('Found user document:', doc);
-        if (!doc || !doc.data.pagesText) return '';
-        return Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
-      });
-    userDocs.forEach(docText => {
-      if (docText) {
-        messageHistory.push({ role: 'user', content: docText });
+    // Process user prompts
+    agent.data.userPrompts.forEach(prompt => {
+      if (prompt.type === 'text' && prompt.content) {
+        messageHistory.push({ role: 'user', content: prompt.content });
+      } else if (prompt.type === 'goal' && goals.value.some(g => g.id === prompt.content)) {
+        const goal = goals.value.find(g => g.id === prompt.content);
+        if (goal?.data.text) {
+          messageHistory.push({ role: 'user', content: goal.data.text });
+        }
+      } else if (prompt.type === 'document' && documents.value.some(d => d.id === prompt.content)) {
+        userUniqueIds.add(prompt.content);
+      } else if (prompt.type === 'artifact' && artifacts.value.some(a => a.id === prompt.content)) {
+        userUniqueIds.add(prompt.content);
+      } else if (prompt.type === 'sections' && Array.isArray(prompt.content)) {
+        prompt.content.forEach(sectionId => {
+          documents.value.forEach(doc => {
+            if (doc.data.sectionId === sectionId) userUniqueIds.add(doc.id);
+          });
+          artifacts.value.forEach(artifact => {
+            if (artifact.data.sectionId === sectionId) userUniqueIds.add(artifact.id);
+          });
+        });
       }
     });
-    console.log('User Prompt Documents:', userDocs);
 
-    const userGoals = agent.data.userPrompts
-      .filter(p => p.type === 'goal' && goals.value.some(g => g.id === p.content))
-      .map(p => goals.value.find(g => g.id === p.content)?.data.text || '');
-    userGoals.forEach(goalText => {
-      if (goalText) {
-        messageHistory.push({ role: 'user', content: goalText });
+    // Add content for user prompt documents and artifacts
+    userUniqueIds.forEach(id => {
+      const doc = documents.value.find(d => d.id === id);
+      if (doc && doc.data.pagesText) {
+        const content = Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
+        messageHistory.push({ role: 'user', content });
+      }
+      const artifact = artifacts.value.find(a => a.id === id);
+      if (artifact && artifact.data.pagesText) {
+        const content = Array.isArray(artifact.data.pagesText) ? artifact.data.pagesText.join('\n') : artifact.data.pagesText;
+        messageHistory.push({ role: 'user', content });
       }
     });
-    console.log('User Prompt Goals:', userGoals);
 
     const chatHistory = roomMessages.map(m => ({
-      role: m.data.agentId ? 'user' : 'user', //you can change this to system:user 
+      role: m.data.agentId ? 'user' : 'user',
       content: m.data.text,
     }));
     messageHistory.push(...chatHistory);
     console.log('Chat History:', chatHistory);
-
     console.log('LLM Payload:', { messageHistory });
 
     triggerLLM(

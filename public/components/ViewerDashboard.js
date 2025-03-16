@@ -7,6 +7,8 @@ import { useAgents } from '../composables/useAgents.js';
 import { useQuestions } from '../composables/useQuestions.js';
 import { useCollaboration } from '../composables/useCollaboration.js';
 import { useChat } from '../composables/useChat.js';
+import { useDocuments } from '../composables/useDocuments.js';
+import { useArtifacts } from '../composables/useArtifacts.js';
 
 export default {
   name: 'ViewerDashboard',
@@ -56,6 +58,36 @@ export default {
 
           <!-- Metrics -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 h-full">
+            <!-- Sections Card -->
+            <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Sections')">
+              <div class="flex items-center gap-3 mb-2">
+                <i class="pi pi-list text-[#06b6d4] text-3xl"></i>
+                <h2 class="text-base font-semibold text-[#e2e8f0]">Sections</h2>
+              </div>
+              <p class="text-2xl font-bold text-[#34d399]">{{ sections.length }}</p>
+              <p class="text-[#94a3b8] text-sm mt-1">Total sections created.</p>
+            </div>
+
+            <!-- Documents Card -->
+            <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Sections')">
+              <div class="flex items-center gap-3 mb-2">
+                <i class="pi pi-file text-[#10b981] text-3xl"></i>
+                <h2 class="text-base font-semibold text-[#e2e8f0]">Documents</h2>
+              </div>
+              <p class="text-2xl font-bold text-[#34d399]">{{ documents.length }}</p>
+              <p class="text-[#94a3b8] text-sm mt-1">Total documents uploaded.</p>
+            </div>
+
+            <!-- Artifacts Card -->
+            <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Sections')">
+              <div class="flex items-center gap-3 mb-2">
+                <i class="pi pi-box text-[#f97316] text-3xl"></i>
+                <h2 class="text-base font-semibold text-[#e2e8f0]">Artifacts</h2>
+              </div>
+              <p class="text-2xl font-bold text-[#34d399]">{{ artifacts.length }}</p>
+              <p class="text-[#94a3b8] text-sm mt-1">Total artifacts created.</p>
+            </div>
+
             <!-- Goals Card -->
             <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Goals')">
               <div class="flex items-center gap-3 mb-2">
@@ -76,14 +108,14 @@ export default {
               <p class="text-[#94a3b8] text-sm mt-1">Total active agents.</p>
             </div>
 
-            <!-- Sections Card -->
-            <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Sections')">
+            <!-- Breakouts Card -->
+            <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Collaboration')">
               <div class="flex items-center gap-3 mb-2">
-                <i class="pi pi-list text-[#06b6d4] text-3xl"></i>
-                <h2 class="text-base font-semibold text-[#e2e8f0]">Sections</h2>
+                <i class="pi pi-users text-[#ec4899] text-3xl"></i>
+                <h2 class="text-base font-semibold text-[#e2e8f0]">Breakouts</h2>
               </div>
-              <p class="text-2xl font-bold text-[#34d399]">{{ sections.length }}</p>
-              <p class="text-[#94a3b8] text-sm mt-1">Total sections created.</p>
+              <p class="text-2xl font-bold text-[#34d399]">{{ breakouts.length }}</p>
+              <p class="text-[#94a3b8] text-sm mt-1">Total breakout rooms.</p>
             </div>
 
             <!-- Questions Card -->
@@ -104,16 +136,6 @@ export default {
               </div>
               <p class="text-2xl font-bold text-[#34d399]">{{ answers.length }}</p>
               <p class="text-[#94a3b8] text-sm mt-1">Total answers provided.</p>
-            </div>
-
-            <!-- Breakouts Card -->
-            <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Collaboration')">
-              <div class="flex items-center gap-3 mb-2">
-                <i class="pi pi-users text-[#ec4899] text-3xl"></i>
-                <h2 class="text-base font-semibold text-[#e2e8f0]">Breakouts</h2>
-              </div>
-              <p class="text-2xl font-bold text-[#34d399]">{{ breakouts.length }}</p>
-              <p class="text-[#94a3b8] text-sm mt-1">Total breakout rooms.</p>
             </div>
 
             <!-- Chat Messages Card -->
@@ -138,6 +160,8 @@ export default {
     const { questions, answers } = useQuestions();
     const { breakouts } = useCollaboration();
     const { messages } = useChat();
+    const { documents } = useDocuments();
+    const { artifacts } = useArtifacts();
 
     const userCount = Vue.computed(() => Object.keys(activeUsers.value).length);
     const participantCount = Vue.computed(() => userCount.value);
@@ -160,8 +184,8 @@ export default {
 
     function removeChannel() {
       emit("remove-channel", {
-        id: channelName.value, // Optional, can be derived from channelName if backend requires it
-        channel:channelName.value,
+        id: channelName.value,
+        channel: channelName.value,
         data: {
           userUuid: userUuid.value,
           channelName: channelName.value,
@@ -181,6 +205,8 @@ export default {
       toggleRoomLock,
       removeChannel,
       sections,
+      documents,
+      artifacts,
       goals,
       agents,
       questions,
