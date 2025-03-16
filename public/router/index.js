@@ -7,14 +7,17 @@ const routes = [
     component: Landing,
     name: "landing",
   },
-
   {
     path: "/binder",
     component: Binder,
     name: "binder",
-    // requiresAuth:true, //Setup your own auth if you want SSO/Logins
-  }
-
+  },
+  {
+    path: "/binder/:channelName",
+    component: Binder,
+    name: "binderWithChannel",
+    props: true,
+  },
 ];
 
 const router = VueRouter.createRouter({
@@ -22,16 +25,11 @@ const router = VueRouter.createRouter({
   routes,
 });
 
-// Navigation guard
 router.beforeEach((to, from, next) => {
   const loggedIn = true;
-
-  // If route requires auth and user is not logged in
-  if (to.meta.requiresAuth && !loggedIn.value) {
-    // Redirect to landing page
+  if (to.meta.requiresAuth && !loggedIn) {
     next({ name: "landing" });
   } else {
-    // Otherwise proceed as normal
     next();
   }
 });

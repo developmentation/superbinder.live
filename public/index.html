@@ -6,7 +6,6 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- Add these new meta tags -->
   <!-- Primary Meta Tags -->
   <meta name="title" content="SuperBinder.live - Collaborative AI Generation">
   <meta name="description" content="Build documents and artifacts with multiple people and multiple AI agents in real time.">
@@ -27,64 +26,53 @@
 
   <title>SuperBinder.live</title>
 
-  <link rel="icon" type="image/png" href="./assets/fav.png" />
+  <link rel="icon" type="image/png" href="/assets/fav.png" />
 
-  <!-- Vue and Vue Router from CDN -->
-  <!-- <script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vue-router@4.2.3/dist/vue-router.global.js"></script> -->
-  <script src="./plugins/vue.global.js"></script>
-  <script src="./plugins/vue-router.global.js"></script>
+  <!-- Vue and Vue Router -->
+  <script src="/plugins/vue.global.js"></script>
+  <script src="/plugins/vue-router.global.js"></script>
 
   <!-- Other Plugins -->
-  <!-- <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script> -->
-  <script src="./plugins/axios.min.js"></script>
+  <script src="/plugins/axios.min.js"></script>
 
   <!-- Primevue Icons -->
-  <link rel="stylesheet" href="./plugins/primeicons.css" />
+  <link rel="stylesheet" href="/plugins/primeicons.css" />
 
-  <!-- Tailwind CSS CDN -->
-  <!-- <script src="https://cdn.tailwindcss.com"></script> -->
-  <script src="./plugins/tailwind.js"></script>
+  <!-- Tailwind CSS -->
+  <script src="/plugins/tailwind.js"></script>
 
-  <!-- UUID-->
-  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.2.0/uuidv4.min.js"></script> -->
-  <script src="./plugins/uuidv4.min.js"></script>
+  <!-- UUID -->
+  <script src="/plugins/uuidv4.min.js"></script>
 
-  <!--JSON5 - For processing complex JSON objects -->
-  <!-- <script type="module" src="https://cdnjs.cloudflare.com/ajax/libs/json5/2.2.3/index.min.js"></script> -->
-  <script src="./plugins/json5.min.js"></script>
-  <script src="./plugins/html2canvas.min.js"></script>
+  <!-- JSON5 - For processing complex JSON objects -->
+  <script src="/plugins/json5.min.js"></script>
+  <script src="/plugins/html2canvas.min.js"></script>
 
-  <!--Socket.io Client-->
-  <!-- <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+" crossorigin="anonymous"></script> -->
-  <script src="./plugins/socket.io.min.js"></script>
+  <!-- Socket.io Client -->
+  <script src="/plugins/socket.io.min.js"></script>
 
-  <!--Markdown and PDF-->
-  <!--<script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>-->
-  <script src="./plugins/markdown-it.min.js"></script>
-  <script src="./plugins/jspdf.umd.min.js"></script>
-  <script src="./plugins/marked.umd.js"></script>
+  <!-- Markdown and PDF -->
+  <script src="/plugins/markdown-it.min.js"></script>
+  <script src="/plugins/jspdf.umd.min.js"></script>
+  <script src="/plugins/marked.umd.js"></script>
 
-  <!-- DOCX-->
-  <!-- <script src="https://cdn.jsdelivr.net/npm/docx@9.1.0/build/index.umd.min.js"></script> -->
-  <script src="./plugins/docx.umd.min.js"></script>
+  <!-- DOCX -->
+  <script src="/plugins/docx.umd.min.js"></script>
 
-  <!-- JSZIP  https://stuk.github.io/jszip/ Version 3.10.1-->
-  <script src="./plugins/jszip.min.js"></script>
+  <!-- JSZIP -->
+  <script src="/plugins/jszip.min.js"></script>
 
-  <!-- Mammoth https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.9.0/mammoth.browser.min.js-->
-  <script src="./plugins/mammoth.browser.min.js"></script>
+  <!-- Mammoth -->
+  <script src="/plugins/mammoth.browser.min.js"></script>
 
-  <!-- Excel JS https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js-->
-  <script src="./plugins/exceljs.min.js"></script>
+  <!-- Excel JS -->
+  <script src="/plugins/exceljs.min.js"></script>
 
-  <!-- pdfjs-dist https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs-->
-  <!-- Worker, cmaps, and standard_fonts imported via the npm i pdfjs-dist node_modules folder, included in the node.js package.json-->
-  <script type="module" src="./plugins/pdf.min.mjs"></script>
+  <!-- pdfjs-dist -->
+  <script type="module" src="/plugins/pdf.min.mjs"></script>
 
   <!-- Include Main Script -->
-  <script type="module" src="./main.js"></script>
+  <script type="module" src="/main.js"></script>
 
   <style>
     /* Reset and Base Styles */
@@ -229,110 +217,105 @@
     }
 
     mark {
-  background-color: lightblue;
-  color: black;
-}
+      background-color: lightblue;
+      color: black;
+    }
 
+    .prose span, .prose mark {
+      display: inline !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
 
-.prose span, .prose mark {
-  display: inline !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
+    span[class^="highlight-"] {
+      background-color: #ADD8E6; /* Light blue for all matches */
+      color: black;
+      padding: 0.25rem;
+    }
 
-span[class^="highlight-"] {
-  background-color: #ADD8E6; /* Light blue for all matches */
-  color: black;
-  padding: 0.25rem;
-}
-
-span.highlight-yellow {
-  background-color: #facc15 !important; /* Yellow for the current match */
-  color: black;
-  padding: 0.25rem;
-}
-
-
-
-
+    span.highlight-yellow {
+      background-color: #facc15 !important; /* Yellow for the current match */
+      color: black;
+      padding: 0.25rem;
+    }
   </style>
 
-<style>
-  /* Existing styles remain unchanged... */
+  <style>
+    /* Dark Mode Table Styling */
+    .dark-table {
+      border-collapse: separate;
+      border-spacing: 0;
+      background: linear-gradient(135deg, #1e293b, #0f172a); /* Subtle gradient for depth */
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
 
-  /* Dark Mode Table Styling */
-  .dark-table {
-    border-collapse: separate;
-    border-spacing: 0;
-    background: linear-gradient(135deg, #1e293b, #0f172a); /* Subtle gradient for depth */
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
+    .dark-table thead tr {
+      background-color: #1e293b; /* Darker header background */
+    }
 
-  .dark-table thead tr {
-    background-color: #1e293b; /* Darker header background */
-  }
+    .dark-table th {
+      font-weight: 600;
+      color: #e2e8f0;
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 2px solid #2d3748; /* Stronger border for header */
+    }
 
-  .dark-table th {
-    font-weight: 600;
-    color: #e2e8f0;
-    padding: 12px 16px;
-    text-align: left;
-    border-bottom: 2px solid #2d3748; /* Stronger border for header */
-  }
+    .dark-table td {
+      padding: 12px 16px;
+      color: #d1d5db;
+      border-bottom: 1px solid #2d3748; /* Subtle row separation */
+    }
 
-  .dark-table td {
-    padding: 12px 16px;
-    color: #d1d5db;
-    border-bottom: 1px solid #2d3748; /* Subtle row separation */
-  }
+    .dark-table tr:hover {
+      background-color: #2d3748; /* Hover effect for rows */
+      transition: background-color 0.2s ease;
+    }
 
-  .dark-table tr:hover {
-    background-color: #2d3748; /* Hover effect for rows */
-    transition: background-color 0.2s ease;
-  }
+    .dark-table select,
+    .dark-table button {
+      width: 100%;
+      max-width: 200px; /* Limit select width for better layout */
+      background-color: #2d3748;
+      border: 1px solid #4b5563;
+      color: #e2e8f0;
+      border-radius: 4px;
+      padding: 4px;
+    }
 
-  .dark-table select,
-  .dark-table button {
-    width: 100%;
-    max-width: 200px; /* Limit select width for better layout */
-    background-color: #2d3748;
-    border: 1px solid #4b5563;
-    color: #e2e8f0;
-    border-radius: 4px;
-    padding: 4px;
-  }
+    .dark-table select:focus,
+    .dark-table button:focus {
+      outline: none;
+      border-color: #7c3aed; /* Purple focus ring */
+      box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+    }
 
-  .dark-table select:focus,
-  .dark-table button:focus {
-    outline: none;
-    border-color: #7c3aed; /* Purple focus ring */
-    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
-  }
+    .dark-table .pi-times {
+      font-size: 1rem;
+      cursor: pointer;
+    }
 
-  .dark-table .pi-times {
-    font-size: 1rem;
-    cursor: pointer;
-  }
+    /* Ensure modal content doesn't overlap with tables */
+    .dark-table-wrapper {
+      max-height: 300px; /* Adjust based on modal height */
+      overflow-y: auto;
+    }
 
-  /* Ensure modal content doesn't overlap with tables */
-  .dark-table-wrapper {
-    max-height: 300px; /* Adjust based on modal height */
-    overflow-y: auto;
-  }
-
-  /* Optional: Glass effect for tables (if desired) */
-  .dark-table.glass-effect {
-    background: rgba(30, 41, 59, 0.9);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-</style>
-
+    /* Optional: Glass effect for tables (if desired) */
+    .dark-table.glass-effect {
+      background: rgba(30, 41, 59, 0.9);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  </style>
 </head>
 <body>
   <div class="app-dark" id="app"></div>
   <div id="modal-portal"></div>
+  <!-- Comment out the Cloudflare script for local development to avoid 404 errors -->
+  <!-- In production, Cloudflare will re-inject this script if bot protection is enabled -->
+  <!-- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92144a720ef1afc0',t:'MTc0MjEyODUzMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script> -->
 </body>
 </html>

@@ -6,12 +6,28 @@ import { useAgents } from '../composables/useAgents.js';
 export default {
   name: 'ViewerCollaboration',
   template: `
-    <div class="flex overflow-hidden bg-gray-900  " style="height: calc(100% - 50px);">
+    <div class="flex flex-col md:flex-row overflow-hidden bg-gray-900" style="height: calc(100% - 50px);">
+      <!-- Toggle Button for Mobile -->
+      <button
+        @click="toggleSidebar"
+        class="md:hidden fixed top-2 left-2 z-20 p-2 bg-purple-600 text-white rounded-lg"
+      >
+        <i :class="sidebarVisible ? 'pi pi-times' : 'pi pi-bars'"></i>
+      </button>
+
       <!-- Sidebar -->
-      <div class="w-72 bg-gray-800 flex-shrink-0 border-r border-gray-700 flex flex-col  shadow-lg">
+      <div
+        :class="{
+          'w-72 bg-gray-800 flex-shrink-0 border-r border-gray-700 flex flex-col shadow-lg': true,
+          'fixed inset-y-0 left-0 z-10 transform transition-transform duration-300': true,
+          'translate-x-0': sidebarVisible,
+          '-translate-x-full': !sidebarVisible,
+          'md:static md:translate-x-0': true
+        }"
+      >
         <!-- Breakout Rooms -->
-        <div class="flex flex-col">
-          <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+        <div class="flex flex-col flex-1">
+          <div class="p-1 border-b border-gray-700 flex justify-between items-center">
             <h3 class="text-lg font-semibold text-purple-400">Breakout Rooms</h3>
             <button @click="addBreakoutLocal" class="text-white hover:text-green-400 transition-colors">
               <i class="pi pi-plus"></i>
@@ -51,7 +67,7 @@ export default {
         </div>
 
         <!-- Agents List -->
-        <div class="flex flex-col">
+        <div class="flex flex-col flex-1">
           <div class="p-4 border-t border-gray-700 flex justify-between items-center">
             <h3 class="text-lg font-semibold text-purple-400">Agents</h3>
           </div>
@@ -63,7 +79,7 @@ export default {
               class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
             >
               <img
-                :src="agent.data.imageUrl || \`./assets/aiagent\${agent.data.placeholderImage || 1}.jpg\`"
+                :src="agent.data.imageUrl || \`/assets/aiagent\${agent.data.placeholderImage || 1}.jpg\`"
                 alt="Agent Avatar"
                 class="w-12 h-12 rounded-full object-cover border border-gray-600"
               />
@@ -77,7 +93,7 @@ export default {
       <!-- Chat Area -->
       <div class="flex-1 flex flex-col bg-gray-900">
         <!-- Header -->
-        <div class="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0 bg-gray-800">
+        <div class="p-1 border-b border-gray-700 flex justify-between items-center flex-shrink-0 bg-gray-800">
           <h3 class="text-xl font-semibold text-purple-400">{{ currentBreakout?.data.name || 'Select a Breakout Room' }}</h3>
           <div class="flex items-center gap-2">
             <span class="text-gray-400 text-sm">Active Users: {{ activeUsers.length }}</span>
@@ -201,6 +217,7 @@ export default {
     const chatInput = Vue.ref(null);
     const isAutoScrollEnabled = Vue.ref(true);
     const editing = Vue.ref({});
+    const sidebarVisible = Vue.ref(false); // New state for sidebar visibility
 
     const currentBreakout = Vue.computed(() => breakouts.value.find(r => r.id === currentBreakoutId.value));
     const allMessages = Vue.computed(() => {
@@ -227,7 +244,7 @@ export default {
 
     function getAgentAvatar(agentId) {
       const agent = agents.value.find(a => a.id === agentId);
-      return agent ? (agent.data.imageUrl || `./assets/aiagent${agent.data.placeholderImage || 1}.jpg`) : './assets/aiagent1.jpg';
+      return agent ? (agent.data.imageUrl || `/assets/aiagent${agent.data.placeholderImage || 1}.jpg`) : '/assets/aiagent1.jpg';
     }
 
     function formatTime(timestamp) {
@@ -302,29 +319,60 @@ export default {
     }
 
     function copyMessage(text) {
-      if (text) {
+      if (!text) return;
+  
+      if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text)
-          .then(() => console.log('Message copied to clipboard'))
-          .catch(err => console.error('Failed to copy message:', err));
+          .then(() => {
+            console.log('Message copied to clipboard:', text);
+            // Optional: Add visual feedback, e.g., a toast notification
+          })
+          .catch(err => {
+            console.error('Clipboard API error:', err);
+            fallbackCopy(text);
+          });
+      } else {
+        fallbackCopy(text);
+      }
+    }
+  
+    function fallbackCopy(text) {
+      const tempInput = document.createElement('input');
+      document.body.appendChild(tempInput);
+      tempInput.value = text;
+      tempInput.select();
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          console.log('Fallback: Message copied to clipboard:', text);
+          // Optional: Add visual feedback
+        } else {
+          console.error('Fallback copy failed: execCommand returned false');
+        }
+      } catch (err) {
+        console.error('Fallback copy failed:', err);
+      } finally {
+        document.body.removeChild(tempInput);
       }
     }
 
     function redoMessage(text) {
-      if (text) {
-        navigator.clipboard.writeText(text)
-          .then(() => {
-            draft.value = text;
-            if (currentBreakoutId.value) {
-              updateDraft(text, currentBreakoutId.value);
-            }
-          })
-          .catch(err => console.error('Failed to redo message:', err));
+      if (!text) return;
+      draft.value = text;
+      if (currentBreakoutId.value) {
+        updateDraft(text, currentBreakoutId.value);
       }
+      Vue.nextTick(() => {
+        if (chatInput.value) {
+          chatInput.value.focus();
+        }
+      });
     }
 
     function selectBreakout(breakoutId) {
       console.log('Selecting breakout with id:', breakoutId);
       currentBreakoutId.value = breakoutId;
+      if (window.innerWidth < 768) sidebarVisible.value = false; // Hide sidebar on mobile after selection
     }
 
     function appendAgentName(agentName) {
@@ -338,6 +386,7 @@ export default {
           chatInput.value.focus();
         }
       });
+      if (window.innerWidth < 768) sidebarVisible.value = false; // Hide sidebar on mobile after selection
     }
 
     function addBreakoutLocal() {
@@ -383,6 +432,10 @@ export default {
       editing.value = { ...editing.value };
     }
 
+    function toggleSidebar() {
+      sidebarVisible.value = !sidebarVisible.value;
+    }
+
     return {
       breakouts,
       allMessages,
@@ -414,6 +467,8 @@ export default {
       getAgentAvatar,
       renderMarkdown,
       appendAgentName,
+      sidebarVisible, // Expose sidebar visibility
+      toggleSidebar,  // Expose toggle function
     };
   },
 };

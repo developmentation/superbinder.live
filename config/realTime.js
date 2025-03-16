@@ -123,7 +123,7 @@ function validateMessage(data) {
 
 function isValidChannelName(channelName) {
   if (!channelName || typeof channelName !== 'string') return false;
-  return /^[a-zA-Z0-9_]+$/.test(channelName);
+  return /^[a-z0-9 _-]+$/i.test(channelName);
 }
 
 function validateLLMData(data) {

@@ -28,7 +28,7 @@ export default {
             v-for="agent in filteredAgents"
             :key="agent.id"
             class="p-4 rounded-lg flex flex-col justify-between cursor-pointer transition-colors relative h-48"
-            :style="{ backgroundImage: \`url(\${agent.data.imageUrl ? agent.data.imageUrl : \`./assets/aiagent\${agent.data.placeholderImage || 1}.jpg\`})\`, backgroundSize: 'cover', backgroundPosition: 'center' }"
+            :style="{ backgroundImage: \`url(\${agent.data.imageUrl ? agent.data.imageUrl : \`/assets/aiagent\${agent.data.placeholderImage || 1}.jpg\`})\`, backgroundSize: 'cover', backgroundPosition: 'center' }"
           >
             <div class="absolute inset-0 bg-gradient-to-t from-gray-900/90 to-transparent"></div>
             <div class="relative z-10 flex flex-col h-full justify-between">

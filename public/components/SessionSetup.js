@@ -1,4 +1,5 @@
 import { useRealTime } from '../composables/useRealTime.js';
+import { useConfigs } from '../composables/useConfigs.js';
 
 export default {
   name: 'SessionSetup',
@@ -24,16 +25,29 @@ export default {
               v-model="channelName"
               type="text"
               class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
-              placeholder="Channel to join or create (alphanumeric and underscore only)"
+              placeholder="Channel to join or create (alphanumeric, space, underscore, dash)"
               required
+              @input="updateChannelName"
             />
           </div>
-          <button
-            type="submit"
-            class="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
-          >
-            Join Channel
-          </button>
+          <div class="flex gap-2">
+            <button
+              type="submit"
+              class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
+            >
+              Join Channel
+            </button>
+            <button
+              type="button"
+              @click="copyLink"
+              :disabled="!channelName || channelName.trim().length === 0"
+              class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+              title="Copy Link"
+            >
+              <i class="pi pi-link"></i>
+              <span>Copy Link</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -42,15 +56,36 @@ export default {
     const displayName = Vue.ref('');
     const channelName = Vue.ref('');
     const errorMessage = Vue.ref('');
+    const route = VueRouter.useRoute();
+    const router = VueRouter.useRouter();
+    const { env } = useConfigs();
+    const { connect, on } = useRealTime();
 
-    const { connect, on } = useRealTime(); // Removed userColor from destructuring
+    // Prepopulate channelName from URL
+    Vue.onMounted(() => {
+      const channelFromUrl = route.params.channelName;
+      if (channelFromUrl) {
+        channelName.value = channelFromUrl.toLowerCase();
+      }
+    });
+
+    function updateChannelName() {
+      // Normalize channel name: lowercase and remove invalid characters
+      channelName.value = channelName.value.toLowerCase();
+      const cleanChannel = channelName.value.replace(/[^a-z0-9 _-]/g, '');
+      if (channelName.value !== cleanChannel) {
+        channelName.value = cleanChannel;
+      }
+    }
 
     function submitSetup() {
       if (displayName.value && channelName.value) {
         if (!isValidChannelName(channelName.value)) {
-          errorMessage.value = 'Invalid channel name. Use alphanumeric characters and underscores only.';
+          errorMessage.value = 'Invalid channel name. Use alphanumeric characters, spaces, underscores, and dashes only.';
           return;
         }
+        // Update URL only on form submission
+        router.push(`/binder/${channelName.value}`);
         connect(channelName.value, displayName.value);
         emit('setup-complete', {
           channel: channelName.value,
@@ -59,19 +94,37 @@ export default {
       }
     }
 
-    on('error', (data) => {
-      if (data.message === 'Channel is Locked') {
-        errorMessage.value = 'This channel is locked and cannot be joined.';
-      } else if (data.message.includes('Invalid channel name')) {
-        errorMessage.value = 'Invalid channel name. Use alphanumeric characters and underscores only.';
+    function copyLink() {
+      const link = `${env.value.API_URL}/binder/${channelName.value}`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link)
+          .catch(err => {
+            console.error('Clipboard API error:', err);
+            fallbackCopy(link);
+          });
       } else {
-        errorMessage.value = data.message || 'An error occurred.';
+        fallbackCopy(link);
       }
-    });
+    }
+
+    function fallbackCopy(text) {
+      const tempInput = document.createElement('input');
+      document.body.appendChild(tempInput);
+      tempInput.value = text;
+      tempInput.select();
+      try {
+        document.execCommand('copy');
+      } catch (err) {
+        console.error('Fallback copy failed:', err);
+        errorMessage.value = 'Failed to copy link.';
+      } finally {
+        document.body.removeChild(tempInput);
+      }
+    }
 
     function isValidChannelName(channelName) {
       if (!channelName || typeof channelName !== 'string') return false;
-      return /^[a-zA-Z0-9_]+$/.test(channelName);
+      return /^[a-z0-9 _-]+$/.test(channelName);
     }
 
     return {
@@ -79,6 +132,8 @@ export default {
       channelName,
       errorMessage,
       submitSetup,
+      copyLink,
+      updateChannelName,
     };
   },
 };

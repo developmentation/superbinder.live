@@ -25,7 +25,7 @@ export default {
                 <span class="block text-purple-400 mt-2">Humans & AI, Together Live</span>
               </h1>
               <p class="mt-6 text-xl text-gray-300 leading-relaxed max-w-3xl">
-                Collaborate in real-time with humans and AI agents to create and evaluate documents. Voice transcription and websocket sync make it fun and seamless!
+                Collaborate in real-time with humans and AI agents with a large document set.
               </p>
               <div class="mt-10 flex gap-6 sm:justify-center lg:justify-start">
                 <a href="/binder" class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-semibold transition-all transform hover:scale-105">
@@ -128,7 +128,7 @@ export default {
   `,
   setup() {
     const videoEl = Vue.ref(null);
-    const videoUrl = Vue.computed(() => `./assets/splashVideo.mp4`);
+    const videoUrl = Vue.computed(() => `/assets/splashVideo.mp4`);
 
     Vue.onMounted(() => {
       document.documentElement.classList.add("landing-page");
@@ -149,7 +149,7 @@ export default {
       document.getElementById("app").classList.remove("landing-page");
     });
 
-    const previewImg = Vue.computed(() => `../assets/superbinder-preview.png`);
+    const previewImg = Vue.computed(() => `/assets/superbinder-preview.png`);
 
     const features = Vue.ref([
       {

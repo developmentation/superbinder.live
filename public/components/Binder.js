@@ -15,6 +15,8 @@ import { useQuestions } from "../composables/useQuestions.js";
 import { useArtifacts } from "../composables/useArtifacts.js";
 import { useTranscripts } from "../composables/useTranscripts.js";
 import { useSections } from "../composables/useSections.js";
+import { useCollaboration } from "../composables/useCollaboration.js";
+import { useConfigs } from "../composables/useConfigs.js";
 
 export default {
   name: "Binder",
@@ -123,6 +125,7 @@ export default {
     </div>
   `,
   setup() {
+    const { env } = useConfigs();
     const {
       sessionInfo,
       connect,
@@ -135,8 +138,22 @@ export default {
       on,
       off,
       connectionError,
+      userUuid,
+      displayName,
+      channelName,
     } = useRealTime();
     const { gatherLocalHistory } = useHistory();
+    const { agents, cleanup: cleanupAgents } = useAgents();
+    const { messages, cleanup: cleanupChat } = useChat();
+    const { clips, cleanup: cleanupClips } = useClips();
+    const { documents, cleanup: cleanupDocuments } = useDocuments();
+    const { goals, cleanup: cleanupGoals } = useGoals();
+    const { questions, answers, cleanup: cleanupQuestions } = useQuestions();
+    const { artifacts, cleanup: cleanupArtifacts } = useArtifacts();
+    const { transcripts, cleanup: cleanupTranscripts } = useTranscripts();
+    const { sections, cleanup: cleanupSections } = useSections();
+    const { breakouts, cleanup: cleanupCollaboration } = useCollaboration();
+
     const sessionReady = Vue.ref(false);
     const activeTab = Vue.ref("Dashboard");
     const activeDocumentSubTab = Vue.ref("Uploads");
@@ -145,23 +162,7 @@ export default {
     const isRoomLocked = Vue.ref(false);
     const isChatOpen = Vue.ref(false);
     const chatWidth = Vue.ref(350);
-    const { userUuid, displayName, channelName } = useRealTime();
-
-    const { agents, cleanup: cleanupAgents } = useAgents();
-    const { messages, cleanup: cleanupChat } = useChat();
-    const { clips, cleanup: cleanupClips } = useClips();
-    const { documents, cleanup: cleanupDocuments } = useDocuments();
-    const { goals, cleanup: cleanupGoals } = useGoals();
-    const { questions, cleanup: cleanupQuestions } = useQuestions();
-    const { artifacts, cleanup: cleanupArtifacts } = useArtifacts();
-    const { transcripts, cleanup: cleanupTranscripts } = useTranscripts();
-    const { sections, cleanup: cleanupSections } = useSections();
-
     const isMobile = Vue.ref(window.matchMedia("(max-width: 640px)").matches);
-    const updateIsMobile = () => {
-      isMobile.value = window.matchMedia("(max-width: 640px)").matches;
-    };
-    window.addEventListener("resize", updateIsMobile);
 
     const participantCount = Vue.computed(() => activeUsers.value.length);
 
@@ -190,9 +191,11 @@ export default {
       { deep: true }
     );
 
+    const route = VueRouter.useRoute();
+
     function handleSetupComplete({ channel, name }) {
       if (!isValidChannelName(channel)) {
-        console.error("Invalid channel name. Use alphanumeric characters and underscores only.");
+        console.error("Invalid channel name. Use alphanumeric characters, spaces, underscores, and dashes only.");
         return;
       }
       connect(channel, name);
@@ -230,7 +233,7 @@ export default {
         clearTimeout(disconnectTimeout);
         if (!isConnected.value && channelName.value && displayName.value) {
           if (!isValidChannelName(channelName.value)) {
-            console.error("Invalid channel name. Use alphanumeric characters and underscores only.");
+            console.error("Invalid channel name. Use alphanumeric characters, spaces, underscores, and dashes only.");
             return;
           }
           connect(channelName.value, displayName.value);
@@ -272,20 +275,25 @@ export default {
 
     function isValidChannelName(channelName) {
       if (!channelName || typeof channelName !== "string") return false;
-      return /^[a-zA-Z0-9_]+$/.test(channelName);
+      return /^[a-z0-9 _-]+$/.test(channelName);
     }
 
     function getTabLabel(tab) {
       switch (tab) {
-        case 'Dashboard': return 'Dashboard';
-        case 'Goals': return `Goals (${goalCount.value})`;
-        case 'Agents': return `Agents (${agentCount.value})`;
-        case 'Documents': return `Documents (${documentCount.value})`;
-        case 'Clips': return `Clips (${clipCount.value})`;
-        case 'Bookmarks': return `Bookmarks (${bookmarkCount.value})`;
-        case 'Transcriptions': return `Transcriptions (${transcriptCount.value})`;
-        case 'Q&A': return `Q&A (${questionCount.value} / ${answerCount.value})`;
-        default: return tab;
+        case 'Dashboard':
+          return 'Dashboard';
+        case 'Sections':
+          return `Sections (${sections.value.length})`;
+        case 'Goals':
+          return `Goals (${goals.value.length})`;
+        case 'Agents':
+          return `Agents (${agents.value.length})`;
+        case 'Q&A':
+          return `Q&A (${questions.value.length} / ${answers.value.length})`;
+        case 'Collaboration':
+          return `Collaboration (${breakouts.value.length})`;
+        default:
+          return tab;
       }
     }
 
@@ -309,9 +317,7 @@ export default {
     });
 
     on("room-lock-toggle", (data) => {
- 
-        isRoomLocked.value = data.locked;
-      
+      isRoomLocked.value = data.locked;
     });
 
     on("toggle-chat", () => {
@@ -320,28 +326,33 @@ export default {
 
     Vue.onMounted(() => {
       document.addEventListener("visibilitychange", handleVisibilityChange);
-      window.addEventListener("resize", updateIsMobile);
+      window.addEventListener("resize", () => {
+        isMobile.value = window.matchMedia("(max-width: 640px)").matches;
+      });
+      const channelFromUrl = route.params.channelName;
       if (
+        channelFromUrl &&
         sessionInfo.value.userUuid &&
-        sessionInfo.value.channelName &&
         sessionInfo.value.displayName
       ) {
-        if (!isValidChannelName(sessionInfo.value.channelName)) {
+        if (!isValidChannelName(channelFromUrl)) {
           console.error(
-            "Invalid channel name in session info. Use alphanumeric characters and underscores only."
+            "Invalid channel name in URL. Use alphanumeric characters, spaces, underscores, and dashes only."
           );
           sessionReady.value = false;
           return;
         }
         console.log("Mounting Binder, loading session...");
-        loadSession();
+        connect(channelFromUrl, sessionInfo.value.displayName);
         sessionReady.value = true;
       }
     });
 
     Vue.onUnmounted(() => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("resize", updateIsMobile);
+      window.removeEventListener("resize", () => {
+        isMobile.value = window.matchMedia("(max-width: 640px)").matches;
+      });
       clearTimeout(disconnectTimeout);
       off("update-tab");
       off("user-list");
@@ -356,6 +367,8 @@ export default {
       cleanupQuestions();
       cleanupArtifacts();
       cleanupTranscripts();
+      cleanupSections();
+      cleanupCollaboration();
     });
 
     Vue.watch(isConnected, (connected) => {
@@ -397,6 +410,14 @@ export default {
       answerCount,
       chatCount,
       artifactCount,
+      sectionCount,
+      sections,
+      goals,
+      agents,
+      questions,
+      answers,
+      breakouts,
+      messages,
     };
   },
 };

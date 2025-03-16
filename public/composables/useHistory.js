@@ -87,7 +87,9 @@ export function useHistory() {
       useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
       useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
     } else {
-      console.warn('No meaningful data in history, skipping sync:', historyData);
+
+      console.log('No meaningful data in history, skipping sync:', historyData);
+      // console.warn('No meaningful data in history, skipping sync:', historyData);
     }
   }
 

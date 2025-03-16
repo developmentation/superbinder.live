@@ -8,7 +8,7 @@ export const useTextToSpeech = () => {
     
   const loadVoices = async (templateNames = ['Starter Template']) => {
     try {
-            ttsVoices.value = await fetch(new URL(`../assets/voices.json`, import.meta.url)).then(res => res.ok ? res.json() : null)
+            ttsVoices.value = await fetch(new URL(`/assets/voices.json`, import.meta.url)).then(res => res.ok ? res.json() : null)
             console.log("Loaded AI Voices")
     } 
     catch (error) {
