@@ -28,7 +28,7 @@ export default {
     const newName = Vue.ref('');
 
     const treeNodes = Vue.computed(() => {
-      console.log('Computing treeNodes with sections:', sections.value);
+      //console.log('Computing treeNodes with sections:', sections.value);
 
       const nodeMap = new Map();
 
@@ -69,10 +69,10 @@ export default {
         if (node.data.sectionId && nodeMap.has(node.data.sectionId)) {
           const parent = nodeMap.get(node.data.sectionId);
           parent.data._children.push(node);
-          console.log(`Added node ${node.id} (${node.data.name}) as child of ${parent.id} (${parent.data.name})`);
+          //console.log(`Added node ${node.id} (${node.data.name}) as child of ${parent.id} (${parent.data.name})`);
         } else if (!node.data.sectionId) {
           nodes.push(node);
-          console.log(`Added root node ${node.id} (${node.data.name})`);
+          //console.log(`Added root node ${node.id} (${node.data.name})`);
         }
       });
 
@@ -84,7 +84,7 @@ export default {
         updateCheckStatus(node);
       });
 
-      console.log('Final treeNodes:', nodes);
+      //console.log('Final treeNodes:', nodes);
       return nodes;
     });
 
@@ -173,7 +173,7 @@ export default {
     }
 
     const handleNodeSelect = (node) => {
-      console.log('Node selected in SectionTreeViewer:', node);
+      //console.log('Node selected in SectionTreeViewer:', node);
       // Removed toggleSelect(node) to prevent checkbox toggling on file name click
       if (isLeaf(node)) {
         emit('node-select', node);
@@ -229,7 +229,7 @@ export default {
       fileInput.value.value = '';
       if (sectionId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [sectionId]: true });
-        console.log(`Auto-expanded section ${sectionId} after file upload`);
+        //console.log(`Auto-expanded section ${sectionId} after file upload`);
       }
     };
 
@@ -243,17 +243,17 @@ export default {
     };
 
     const finishEditing = (nodeId, updatedName) => {
-      console.log('Finishing editing for node:', nodeId, 'New name:', updatedName);
+      //console.log('Finishing editing for node:', nodeId, 'New name:', updatedName);
       editingNodeId.value = null;
       newName.value = '';
     };
 
     const handleAddSection = (parentId) => {
-      console.log("HANDLE ADD SECTION", parentId);
+      //console.log("HANDLE ADD SECTION", parentId);
       addSection("New Section", parentId);
       if (parentId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [parentId]: true });
-        console.log(`Auto-expanded parent ${parentId} after adding section`);
+        //console.log(`Auto-expanded parent ${parentId} after adding section`);
       }
     };
 
