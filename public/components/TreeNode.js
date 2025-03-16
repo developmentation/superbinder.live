@@ -83,8 +83,8 @@ export default {
       }
     };
 
-    const startEditing = () => {
-      emit('start-editing', props.node);
+    const startEditing = (node) => {
+      emit('start-editing', node|| props.node);
     };
 
     const finishEditing = () => {
@@ -212,7 +212,7 @@ export default {
             <button v-if="!isLeaf(node)" @click.stop="triggerFileUpload(node.id)" class="text-[#3b82f6] hover:text-[#2563eb] p-1">
               <i class="pi pi-upload text-sm"></i>
             </button>
-            <button @click.stop="startEditing" class="text-[#f59e0b] hover:text-[#d97706] p-1">
+            <button @click.stop="startEditing(node)" class="text-[#f59e0b] hover:text-[#d97706] p-1">
               <i class="pi pi-pencil text-sm"></i>
             </button>
             <button @click.stop="handleRemove" class="text-[#ef4444] hover:text-[#dc2626] p-1">
@@ -241,7 +241,7 @@ export default {
           @dragleave="$emit('dragleave')"
           @drop="$emit('drop', $event, $event.target)"
           @add-section="$emit('add-section', $event)"
-          @start-editing="startEditing"
+          @start-editing="startEditing(childNode)"
           @finish-editing="finishEditing"
           @remove-section="$emit('remove-section', $event)"
           @trigger-file-upload="triggerFileUpload"
