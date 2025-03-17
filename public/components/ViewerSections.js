@@ -14,7 +14,7 @@ export default {
   setup() {
     const { documents, selectedDocument, setSelectedDocument, addDocument, retrieveAndRenderFiles } = useDocuments();
     const { artifacts, selectedArtifact, setSelectedArtifact } = useArtifacts();
-    const { uploadFiles } = useFiles();
+    const { uploadFiles, files } = useFiles();
     const { sections, addSection } = useSections();
     const selectedKeys = Vue.ref({});
     const expandedKeys = Vue.ref({});
@@ -86,13 +86,17 @@ export default {
       event.target.value = '';
     };
 
+
+    //Revisit this for more efficiency
     const processFiles = async () => {
       isProcessingFiles.value = true;
       try {
         const unprocessedDocs = documents.value.filter(doc => !(doc.data.pages || doc.data.processedContent));
+        console.log("processFiles", unprocessedDocs)
         for (const doc of unprocessedDocs) {
-          if (doc.data.type === 'pdf' && doc.data.originalContent && !doc.data.pages) {
-            const { pages, textContent } = await regeneratePdfPages(doc.data.originalContent);
+          if (doc.data.type === 'pdf' && !doc.data.pagesText) {
+            await retrieveAndRenderFiles();
+            const { pages, textContent } = await regeneratePdfPages(files.value[doc.id].data);
             doc.data.pages = pages;
             doc.data.pagesText = textContent;
             doc.data.status = 'complete';
