@@ -91,14 +91,13 @@ const entityConfigs = {
   goals: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-goal', update: 'update-goal', remove: 'remove-goal', reorder: 'reorder-goals' } },
   questions: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-question', update: 'update-question', remove: 'remove-question', reorder: 'reorder-questions' } },
   answers: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-answer', update: 'update-answer', remove: 'delete-answer', vote: 'vote-answer' } },
-  artifacts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-artifact', update: null, remove: 'remove-artifact', reorder: null } },
+  artifacts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-artifact', update: 'update-artifact', remove: 'remove-artifact', reorder: null } },
   transcripts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-transcript', update: null, remove: 'remove-transcript', reorder: null } },
   llm: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-llm', draft: 'draft-llm' } },
   collab: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-collab', update: 'update-collab', remove: 'delete-collab', draft: 'draft-collab' } },
   breakout: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-breakout', update: 'update-breakout', remove: 'delete-breakout', reorder: null } },
   sections: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-section', update: 'update-section', remove: 'remove-section', reorder: 'reorder-section' } },
   channels: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-channel', update: 'update-channel', remove: 'remove-channel', reorder: null } },
-  artifacts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-artifact', update: 'update-artifact', remove: 'remove-artifact', reorder: null } },
 };
 
 /**
@@ -140,7 +139,11 @@ function validateLLMData(data) {
 async function loadStateFromServer(channelName, entityType) {
   try {
     const model = entityModels[entityType];
-    const state = await model.find({ channel: channelName }).lean();
+    const state = await model
+      .find({ channel: channelName })
+      .sort({ serverTimestamp: 1 }) // Ensure consistent ordering
+      .lean();
+    console.log(`loadStateFromServer: ${channelName} - ${entityType}`, { count: state.length });
     return state.map(doc => ({
       id: doc.id,
       userUuid: doc.userUuid,
@@ -238,19 +241,14 @@ async function upsertChannel(channelName, userUuid, displayName) {
     const timestamp = Date.now();
     const userEntry = { userUuid, displayName, joinedAt: timestamp };
 
-    // Check if the channel exists in the database
     const existingChannel = await entityModels['channels'].findOne({ id: channelName });
-
     if (existingChannel) {
-      // Channel exists, update the users array
       const users = existingChannel.data.users || [];
       const userExists = users.some(user => user.userUuid === userUuid);
 
       if (!userExists) {
-        // Add the user if they don't already exist
         users.push(userEntry);
       } else {
-        // Update the user's displayName and joinedAt if they already exist
         const userIndex = users.findIndex(user => user.userUuid === userUuid);
         users[userIndex] = userEntry;
       }
@@ -260,7 +258,7 @@ async function upsertChannel(channelName, userUuid, displayName) {
         {
           $set: {
             'data.users': users,
-            userUuid, // Update the last user who modified the channel
+            userUuid,
             timestamp,
             serverTimestamp: timestamp,
           },
@@ -269,7 +267,6 @@ async function upsertChannel(channelName, userUuid, displayName) {
 
       return { id: channelName, channel: channelName, userUuid, data: { locked: existingChannel.data.locked, users }, timestamp, serverTimestamp: timestamp };
     } else {
-      // Channel doesn't exist, create a new one
       const channelData = {
         id: channelName,
         channel: channelName,
@@ -547,56 +544,64 @@ function createRealTimeServers(server, corsOptions) {
         socket.join(channelName);
         socket.userUuid = userUuid;
 
-        // Check if the channel exists in the database and load it into memory if necessary
+        // Fetch or create channel document from MongoDB
         let channelDoc = await entityModels['channels'].findOne({ id: channelName }).lean();
         if (!channelDoc) {
-          // If the channel doesn't exist in the database, create it
           channelDoc = await upsertChannel(channelName, userUuid, displayName);
         }
 
-        // Load channel state into memory if not already present
+        // Always fetch the latest state from MongoDB for all entity types
+        const freshState = {};
+        for (const entityType of Object.keys(entityConfigs)) {
+          freshState[entityType] = await loadStateFromServer(channelName, entityType);
+        }
+
+        // Update or initialize the in-memory channels Map with the fresh state
         if (!channels.has(channelName)) {
-          const initialState = {};
-          for (const entityType of Object.keys(entityConfigs)) {
-            initialState[entityType] = await loadStateFromServer(channelName, entityType);
-          }
           channels.set(channelName, {
             users: {},
             sockets: {},
-            state: initialState,
+            state: freshState,
             locked: channelDoc.data.locked || false,
           });
-
-          // Populate the in-memory users map from the database
+        } else {
           const channel = channels.get(channelName);
-          channelDoc.data.users.forEach(user => {
-            channel.users[user.userUuid] = {
-              displayName: user.displayName,
-              color: user.color || generateMutedDarkColor(), // Ensure color exists
-              joinedAt: user.joinedAt,
-            };
-          });
+          channel.state = freshState;
+          channel.locked = channelDoc.data.locked || false;
         }
 
         const channel = channels.get(channelName);
+
+        // Populate or update users from the database
+        channelDoc.data.users.forEach(user => {
+          if (!channel.users[user.userUuid]) {
+            channel.users[user.userUuid] = {
+              displayName: user.displayName,
+              color: user.color || generateMutedDarkColor(),
+              joinedAt: user.joinedAt,
+            };
+          }
+        });
+
+        // Add or update the joining user
+        const userColor = channel.users[userUuid]?.color || generateMutedDarkColor();
+        channel.users[userUuid] = { displayName, color: userColor, joinedAt: Date.now() };
+        channel.sockets[userUuid] = socket;
+
+        // Ensure the channel document reflects the latest user list
+        await upsertChannel(channelName, userUuid, displayName);
+
         if (channel.locked) {
           socket.emit('message', { type: 'error', message: 'Channel is Locked', timestamp: Date.now() });
           return;
         }
 
-        // Update the channel document with the new user (upsert already handles this)
-        await upsertChannel(channelName, userUuid, displayName);
-
-        // Update in-memory state
-        const userColor = channel.users[userUuid]?.color || generateMutedDarkColor();
-        channel.users[userUuid] = { displayName, color: userColor, joinedAt: Date.now() };
-        channel.sockets[userUuid] = socket;
-
+        // Send the fresh state to the joining user
         const initStateMessage = {
           type: 'init-state',
           id: null,
           userUuid,
-          data: channel.state,
+          data: freshState,
           timestamp: Date.now(),
           serverTimestamp: Date.now(),
         };
@@ -702,6 +707,7 @@ async function handleMessage(dataObj, socket) {
       case 'delete-answer':
       case 'vote-answer':
       case 'add-artifact':
+      case 'update-artifact':
       case 'remove-artifact':
       case 'add-transcript':
       case 'remove-transcript':
@@ -717,11 +723,6 @@ async function handleMessage(dataObj, socket) {
       case 'add-section':
       case 'update-section':
       case 'remove-section':
-
-      case 'add-artifact':
-      case 'update-artifact':
-      case 'remove-artifact':
-        
       case 'reorder-section':
       case 'add-channel':
       case 'remove-channel':
