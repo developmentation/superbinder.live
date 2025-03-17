@@ -73,33 +73,33 @@ export function useHistory() {
         return Array.from(resultMap.values());
       };
 
-      // useAgents().agents.value = mergeArrays(useAgents().agents.value, historyData.agents);
-      // useChat().messages.value = mergeArrays(useChat().messages.value, historyData.chat);
-      // useClips().clips.value = mergeArrays(useClips().clips.value, historyData.clips);
-      // useClips().bookmarks.value = mergeArrays(useClips().bookmarks.value, historyData.bookmarks);
-      // useDocuments().documents.value = mergeArrays(useDocuments().documents.value, historyData.documents);
-      // useGoals().goals.value = mergeArrays(useGoals().goals.value, historyData.goals);
-      // useQuestions().questions.value = mergeArrays(useQuestions().questions.value, historyData.questions);
-      // useQuestions().answers.value = mergeArrays(useQuestions().answers.value, historyData.answers);
-      // useArtifacts().artifacts.value = mergeArrays(useArtifacts().artifacts.value || [], historyData.artifacts);
-      // useTranscripts().transcripts.value = mergeArrays(useTranscripts().transcripts.value || [], historyData.transcripts);
-      // useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakout);
-      // useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
-      // useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
+      useAgents().agents.value = mergeArrays(useAgents().agents.value, historyData.agents);
+      useChat().messages.value = mergeArrays(useChat().messages.value, historyData.chat);
+      useClips().clips.value = mergeArrays(useClips().clips.value, historyData.clips);
+      useClips().bookmarks.value = mergeArrays(useClips().bookmarks.value, historyData.bookmarks);
+      useDocuments().documents.value = mergeArrays(useDocuments().documents.value, historyData.documents);
+      useGoals().goals.value = mergeArrays(useGoals().goals.value, historyData.goals);
+      useQuestions().questions.value = mergeArrays(useQuestions().questions.value, historyData.questions);
+      useQuestions().answers.value = mergeArrays(useQuestions().answers.value, historyData.answers);
+      useArtifacts().artifacts.value = mergeArrays(useArtifacts().artifacts.value || [], historyData.artifacts);
+      useTranscripts().transcripts.value = mergeArrays(useTranscripts().transcripts.value || [], historyData.transcripts);
+      useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakout);
+      useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
+      useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
       
-      useAgents().agents.value =  historyData.agents;
-      useChat().messages.value = historyData.chat;
-      useClips().clips.value = historyData.clips;
-      useClips().bookmarks.value = historyData.bookmarks;
-      useDocuments().documents.value = historyData.documents;
-      useGoals().goals.value = historyData.goals;
-      useQuestions().questions.value = historyData.questions;
-      useQuestions().answers.value =historyData.answers;
-      useArtifacts().artifacts.value =  historyData.artifacts;
-      useTranscripts().transcripts.value = historyData.transcripts;
-      useCollaboration().breakouts.value = historyData.breakout;
-      useCollaboration().collabs.value = historyData.collab;
-      useSections().sections.value = historyData.sections;
+      // useAgents().agents.value =  historyData.agents;
+      // useChat().messages.value = historyData.chat;
+      // useClips().clips.value = historyData.clips;
+      // useClips().bookmarks.value = historyData.bookmarks;
+      // useDocuments().documents.value = historyData.documents;
+      // useGoals().goals.value = historyData.goals;
+      // useQuestions().questions.value = historyData.questions;
+      // useQuestions().answers.value =historyData.answers;
+      // useArtifacts().artifacts.value =  historyData.artifacts;
+      // useTranscripts().transcripts.value = historyData.transcripts;
+      // useCollaboration().breakouts.value = historyData.breakout;
+      // useCollaboration().collabs.value = historyData.collab;
+      // useSections().sections.value = historyData.sections;
       
 
     } else {
