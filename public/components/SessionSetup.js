@@ -20,12 +20,12 @@ export default {
             />
           </div>
           <div class="mb-4">
-            <label class="block text-gray-300 mb-2">Channel Name *</label>
+            <label class="block text-gray-300 mb-2">Binder Name *</label>
             <input
               v-model="channelName"
               type="text"
               class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
-              placeholder="Channel to join or create (alphanumeric, space, underscore, dash)"
+              placeholder="Binder name (alphanumeric, space, underscore, dash)"
               required
               @input="updateChannelName"
             />
@@ -42,10 +42,10 @@ export default {
               type="button"
               @click="createUuid"
               class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-              title="Unique Channel"
+              title="Unique Binder"
             >
               <i class="pi pi-key"></i>
-              <span>Unique Channel</span>
+              <span>Unique Binder</span>
             </button>
 
             <button

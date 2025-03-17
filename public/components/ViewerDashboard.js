@@ -24,14 +24,14 @@ export default {
       <div class="bg-[#1a2233] p-1 border-b border-[#2d3748] flex items-center justify-between glass-effect mb-4 px-3">
         <div class="flex items-center space-x-3">
           <h1 class="text-lg font-semibold text-[#34d399]">
-            Channel: {{ channelName }} ({{ participantCount }} participants)
+            Binder: {{ channelName }} ({{ participantCount }} participants)
           </h1>
         </div>
         <div class="flex items-center space-x-3">
           <button @click="toggleRoomLock" class="p-2 text-[#e2e8f0] hover:text-[#34d399] transition-colors" title="Toggle Room Lock">
             <i :class="isRoomLocked ? 'pi pi-lock' : 'pi pi-unlock'" class="text-xl"></i>
           </button>
-          <button @click="removeChannel" class="p-2 text-[#e2e8f0] hover:text-[#ef4444] transition-colors" title="Remove Channel">
+          <button @click="removeChannel" class="p-2 text-[#e2e8f0] hover:text-[#ef4444] transition-colors" title="Remove Binder">
             <i class="pi pi-trash text-xl"></i>
           </button>
         </div>

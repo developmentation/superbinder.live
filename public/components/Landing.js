@@ -66,6 +66,9 @@ export default {
             <!-- <img :src="previewImg" alt="SuperBinder Preview" class="h-12 w-auto opacity-90" /> -->
             <h2 class="text-3xl font-bold text-white">Experience Real-Time Collaboration</h2>
             <span class="text-gray-300 text-lg">Sync up and create together.</span>
+             <a href="/binder" class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-semibold transition-all transform hover:scale-105">
+                  Try it Now
+                </a>
           </div>
         </div>
       </section>
@@ -158,19 +161,19 @@ export default {
         description: "Work together instantly with Socket.io websockets keeping everyone in sync."
       },
       {
-        title: "Voice to Text",
-        icon: "pi pi-microphone",
-        description: "Use DeepGram’s API for real-time speech transcription right in your browser."
+        title: "Custom Agents",
+        icon: "pi pi-microchip-ai",
+        description: "Build and share custom agents to take on distinct tasks with unique datasets."
       },
+      // {
+      //   title: "Voice to Text",
+      //   icon: "pi pi-microphone",
+      //   description: "Use DeepGram’s API for real-time speech transcription right in your browser."
+      // },
       {
         title: "Multi-User Collaboration",
         icon: "pi pi-users",
         description: "Multiple humans and AI agents interact live on the same documents."
-      },
-      {
-        title: "Device Harmony",
-        icon: "pi pi-mobile",
-        description: "Some devices listen, others research—all synced perfectly."
       },
       {
         title: "AI Outputs",
@@ -178,37 +181,36 @@ export default {
         description: "See AI-generated content delivered to all users simultaneously."
       },
       {
-        title: "Fun Interface",
-        icon: "pi pi-star",
-        description: "A lively, engaging platform that makes collaboration exciting!"
-      }
+        title: "Fast",
+        icon: "pi pi-lightbulb",
+        description: "Start a project in seconds and be up and running with a shared pool of agents in minutes."
+      },
+      {
+        title: "Open Source",
+        icon: "pi pi-github",
+        description: "Always free, always open source."
+      },
     ]);
 
     const techFeatures = Vue.ref([
       {
         icon: "pi pi-sync",
-        title: "Websocket Power",
+        title: "Socket.IO (Websockets) Power",
         description: "Real-time updates via Socket.io for seamless collaboration."
       },
       {
-        icon: "pi pi-microphone",
-        title: "Voice Integration",
-        description: "DeepGram-powered speech-to-text for instant input."
+        icon: "pi pi-file",
+        title: "File Sharing",
+        description: "Build knowledge together with other peole and AI."
       },
-      {
-        icon: "pi pi-server",
-        title: "Scalable System",
-        description: "Handles multiple users and AI agents with ease."
-      }
     ]);
 
     const stack = Vue.ref([
-      "Vue 3.2",
-      "Socket.io",
-      "DeepGram",
+      "Vue 3.5",
+      "Node.js",
+      "Socket.IO",
       "Tailwind CSS",
-      "WebSockets",
-      "JavaScript"
+      "MongoDB",
     ]);
 
     return {
