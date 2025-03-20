@@ -10,7 +10,7 @@ export default {
       type: Number,
       default: 1,
     },
-    headerOffset: { // New prop for sticky header height
+    headerOffset: {
       type: Number,
       default: 0,
     },
@@ -32,9 +32,11 @@ export default {
     );
 
     const setFirstPageHeight = () => {
-      if (!firstPageHeight.value && pageRefs.value[0]) {
+      if (pageRefs.value[0]) {
         firstPageHeight.value = pageRefs.value[0].offsetHeight;
         console.log(`First page height set to: ${firstPageHeight.value}px`);
+      } else {
+        firstPageHeight.value = null;
       }
     };
 
@@ -131,7 +133,9 @@ export default {
     Vue.onMounted(() => {
       Vue.nextTick(() => {
         if (allPages.length > 0) {
-          allPages[0].isLoaded = true;
+          for (let i = 0; i < allPages.length; i++) {
+            allPages[i].isLoaded = true;
+          }
           Vue.nextTick(() => {
             setFirstPageHeight();
             updateVisibleRange();
@@ -160,11 +164,11 @@ export default {
             allPages.push({
               index,
               html: html || '',
-              isLoaded: index === 0,
+              isLoaded: true,
             });
           });
           Vue.nextTick(() => {
-            setFirstPageHeight();
+            setFirstPageHeight(); // Recheck page height on pages update
             updateVisibleRange();
           });
         }

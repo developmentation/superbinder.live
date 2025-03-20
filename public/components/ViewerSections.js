@@ -1,16 +1,15 @@
 // components/ViewerSections.js
 import SectionTreeViewer from './SectionTreeViewer.js';
-import ViewPDFs from './ViewPDFs.js';
-import ViewDocs from './ViewDocs.js';
+import ViewerEditor from './ViewerEditor.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
 import { useFiles } from '../composables/useFiles.js';
 import { useSections } from '../composables/useSections.js';
-import { regeneratePdfPages } from '../utils/files/fileProcessor.js';
+import { rasterizePDF } from '../utils/files/processorPDF.js';
 
 export default {
   name: 'ViewerSections',
-  components: { SectionTreeViewer, ViewPDFs, ViewDocs },
+  components: { SectionTreeViewer, ViewerEditor },
   setup() {
     const { documents, selectedDocument, setSelectedDocument, addDocument, retrieveAndRenderFiles } = useDocuments();
     const { artifacts, selectedArtifact, setSelectedArtifact } = useArtifacts();
@@ -19,7 +18,6 @@ export default {
     const selectedKeys = Vue.ref({});
     const expandedKeys = Vue.ref({});
     const isLoadingFiles = Vue.ref(false);
-    const isProcessingFiles = Vue.ref(false);
 
     const treeNodes = Vue.computed(() => {
       const docNodes = documents.value.map(doc => ({
@@ -49,13 +47,14 @@ export default {
     });
 
     const handleNodeSelect = (node) => {
+      console.log('Selected node:', node);
       if (node.type === 'document') {
         const doc = documents.value.find(d => d.id === node.id);
-        setSelectedDocument(doc);
+        setSelectedDocument({ ...doc, type: 'document' });
         setSelectedArtifact(null);
       } else if (node.type === 'artifact') {
         const artifact = artifacts.value.find(a => a.id === node.id);
-        setSelectedArtifact(artifact);
+        setSelectedArtifact({ ...artifact, type: 'artifact' });
         setSelectedDocument(null);
       }
     };
@@ -71,6 +70,7 @@ export default {
       }
 
       try {
+        isLoadingFiles.value = true;
         const { results } = await uploadFiles(Array.from(files), uuids);
         const failures = results.filter(result => !result.saved || (result.uuid && !result.renamedCorrectly));
         if (failures.length > 0) {
@@ -82,32 +82,36 @@ export default {
       } catch (error) {
         console.error('Error during upload process:', error);
         alert('Failed to upload files. Please try again.');
+      } finally {
+        event.target.value = '';
+        isLoadingFiles.value = false;
       }
-      event.target.value = '';
     };
 
+    const renderFiles = async () => {
+      const pdfDocs = documents.value.filter(doc => doc.data.type === 'pdf' && !doc.data.pages?.length);
+      if (pdfDocs.length === 0) return;
 
-    //Revisit this for more efficiency
-    const processFiles = async () => {
-      isProcessingFiles.value = true;
       try {
-        const unprocessedDocs = documents.value.filter(doc => !(doc.data.pages || doc.data.processedContent));
-        console.log("processFiles", unprocessedDocs)
-        for (const doc of unprocessedDocs) {
-          if (doc.data.type === 'pdf' && !doc.data.pagesText) {
-            await retrieveAndRenderFiles();
-            const { pages, textContent } = await regeneratePdfPages(files.value[doc.id].data);
+        isLoadingFiles.value = true;
+        await retrieveAndRenderFiles();
+        for (const doc of pdfDocs) {
+          const file = files.value[doc.id];
+          if (file && file.data) {
+            const { pages } = await rasterizePDF(file.data);
             doc.data.pages = pages;
-            doc.data.pagesText = textContent;
             doc.data.status = 'complete';
-          } else if (['docx', 'txt', 'html', 'css', 'js', 'json', 'md', 'xlsx'].includes(doc.data.type)) {
-            await retrieveAndRenderFiles();
+            documents.value = [...documents.value];
+            if (selectedDocument.value && selectedDocument.value.id === doc.id) {
+              setSelectedDocument({ ...doc, type: 'document' });
+            }
           }
         }
       } catch (error) {
-        console.error('Error processing files:', error);
+        console.error('Error rendering files:', error);
+        alert('Failed to render files.');
       } finally {
-        isProcessingFiles.value = false;
+        isLoadingFiles.value = false;
       }
     };
 
@@ -134,17 +138,20 @@ export default {
       selectedKeys,
       expandedKeys,
       isLoadingFiles,
-      isProcessingFiles,
       handleNodeSelect,
       handleFileUpload,
-      processFiles,
+      renderFiles,
       handleAddRootSection,
       expandAll,
       collapseAll,
+      retrieveAndRenderFiles,
     };
   },
   template: `
     <div class="h-full flex flex-col overflow-hidden">
+      <div v-if="isLoadingFiles" class="bg-blue-500 text-white text-sm p-2 text-center">
+        {{ isLoadingFiles ? 'Loading/Rendering Files...' : '' }}
+      </div>
       <div class="flex flex-col md:flex-row h-full">
         <!-- SectionTreeViewer (Left Column) -->
         <div class="w-full md:w-1/2 border-r border-[#2d3748] overflow-hidden">
@@ -173,12 +180,18 @@ export default {
                 <i class="pi pi-angle-double-up"></i>
               </button>
               <button
-                @click="processFiles"
-                :disabled="isProcessingFiles"
+                @click="retrieveAndRenderFiles"
+                :disabled="isLoadingFiles"
                 class="py-1 px-3 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-lg text-sm disabled:bg-[#4b5563] disabled:cursor-not-allowed flex items-center"
               >
-                <i class="pi pi-refresh mr-2" v-if="isProcessingFiles"></i>
-                {{ isProcessingFiles ? 'Processing Files...' : 'Load and Process Files' }}
+                {{ isLoadingFiles ? 'Loading Files...' : 'Load Files' }}
+              </button>
+              <button
+                @click="renderFiles"
+                :disabled="isLoadingFiles"
+                class="py-1 px-3 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-lg text-sm disabled:bg-[#4b5563] disabled:cursor-not-allowed flex items-center"
+              >
+                {{ isLoadingFiles ? 'Rendering Files...' : 'Render Files' }}
               </button>
             </div>
           </div>
@@ -198,22 +211,11 @@ export default {
 
         <!-- Document/Artifact Viewer (Right Column) -->
         <div class="w-full md:w-1/2 overflow-hidden">
-          <div v-if="selectedDocument" class="h-full">
-            <ViewPDFs
-              v-if="selectedDocument.data.type === 'pdf'"
-              :document="selectedDocument"
-            />
-            <ViewDocs
-              v-else
-              :document="selectedDocument"
-            />
-          </div>
-          <div v-else-if="selectedArtifact" class="h-full p-4 bg-[#1a2233] overflow-y-auto">
-            <h3 class="text-lg font-semibold text-[#4dabf7] mb-2">{{ selectedArtifact.data.name }}</h3>
-            <div v-for="(text, index) in selectedArtifact.data.pagesText" :key="index" class="text-[#e2e8f0] mb-2">
-              {{ text }}
-            </div>
-          </div>
+          <viewer-editor
+            v-if="selectedDocument || selectedArtifact"
+            :item="selectedDocument || selectedArtifact"
+            class="h-full"
+          />
           <div v-else class="h-full flex items-center justify-center text-[#94a3b8] text-sm">
             Select a document or artifact to view.
           </div>

@@ -1,8 +1,9 @@
 // components/SectionTreeViewer.js
 import { useSections } from '../composables/useSections.js';
 import { useDocuments } from '../composables/useDocuments.js';
-import { useArtifacts } from '../composables/useArtifacts.js'; // New import
+import { useArtifacts } from '../composables/useArtifacts.js';
 import { useFiles } from '../composables/useFiles.js';
+import { rasterizePDF } from '../utils/files/processorPDF.js';
 import TreeNode from './TreeNode.js';
 
 export default {
@@ -21,8 +22,8 @@ export default {
   setup(props, { emit }) {
     const { sections, addSection, updateSection, removeSection, reorderSections } = useSections();
     const { documents, addDocument, updateDocument } = useDocuments();
-    const { artifacts, updateArtifact } = useArtifacts(); // New
-    const { uploadFiles } = useFiles();
+    const { artifacts, updateArtifact, setSelectedArtifact } = useArtifacts();
+    const { uploadFiles, retrieveFiles, files } = useFiles();
     const fileInput = Vue.ref(null);
     const draggedNode = Vue.ref(null);
     const dropTarget = Vue.ref(null);
@@ -33,11 +34,13 @@ export default {
       const nodeMap = new Map();
 
       sections.value.forEach((section) => {
+        console.log('Processing section:', section);
         nodeMap.set(section.id, {
           ...section,
           type: 'section',
           data: {
             ...section.data,
+            name: section.data.name || 'Unnamed Section',
             _children: [],
             _checkStatus: props.selectedKeys[section.id] ? 'checked' : 'unchecked',
             _expanded: !!props.expandedKeys[section.id],
@@ -46,6 +49,7 @@ export default {
       });
 
       documents.value.forEach((doc) => {
+        console.log('Processing document:', doc);
         const sectionId = doc.data.sectionId || null;
         const docNode = {
           ...doc,
@@ -65,6 +69,7 @@ export default {
       });
 
       artifacts.value.forEach((artifact) => {
+        console.log('Processing artifact:', artifact);
         const sectionId = artifact.data.sectionId || null;
         const artifactNode = {
           ...artifact,
@@ -106,7 +111,12 @@ export default {
     });
 
     function getFileIcon(fileName) {
-      const extension = fileName.split('.').pop().toLowerCase();
+      console.log('getFileIcon called with fileName:', fileName);
+      if (!fileName || typeof fileName !== 'string') {
+        console.warn('getFileIcon: fileName is not a string, returning default icon');
+        return 'pi pi-file';
+      }
+      const extension = fileName.split('.').pop()?.toLowerCase() || '';
       const iconMap = {
         pdf: 'pi pi-file-pdf',
         docx: 'pi pi-file-word',
@@ -117,6 +127,7 @@ export default {
     }
 
     function isLeaf(node) {
+      console.log('isLeaf check for node:', node, 'type:', node.type);
       return node.type === 'document' || node.type === 'artifact';
     }
 
@@ -211,16 +222,16 @@ export default {
         const sectionId = targetNode.id;
         if (draggedNode.value.data.sectionId !== sectionId) {
           if (draggedNode.value.type === 'document') {
-            updateDocument(draggedNode.value.id, draggedNode.value.data.name, sectionId);
+            updateDocument(draggedNode.value.id, { name: draggedNode.value.data.name, sectionId });
           } else if (draggedNode.value.type === 'artifact') {
-            updateArtifact(draggedNode.value.id, draggedNode.value.data.name, sectionId);
+            updateArtifact(draggedNode.value.id, { name: draggedNode.value.data.name, sectionId });
           }
         }
       } else if (draggedNode.value && !targetNode) {
         if (draggedNode.value.type === 'document') {
-          updateDocument(draggedNode.value.id, draggedNode.value.data.name, null);
+          updateDocument(draggedNode.value.id, { name: draggedNode.value.data.name, sectionId: null });
         } else if (draggedNode.value.type === 'artifact') {
-          updateArtifact(draggedNode.value.id, draggedNode.value.data.name, null);
+          updateArtifact(draggedNode.value.id, { name: draggedNode.value.data.name, sectionId: null });
         }
       }
       draggedNode.value = null;
@@ -245,7 +256,7 @@ export default {
       if (sectionId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [sectionId]: true });
       }
-      emit('upload-files', event, sectionId); // Emit to ViewerSections
+      emit('upload-files', event, sectionId);
     };
 
     const startEditing = (node) => {
@@ -266,6 +277,47 @@ export default {
       addSection("New Section", parentId);
       if (parentId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [parentId]: true });
+      }
+    };
+
+    const handleRenderFile = async (id) => {
+      const doc = documents.value.find(d => d.id === id);
+      const artifact = artifacts.value.find(a => a.id === id);
+
+      // Define known image types (excluding 'svg' since it's handled separately)
+      const imageTypes = ['png', 'jpg', 'jpeg', 'webp'];
+
+      if (doc && (doc.data.type === 'pdf' || imageTypes.includes(doc.data.type) || doc.data.type === 'svg')) {
+        try {
+          if (!files.value[id]) {
+            await retrieveFiles([id]);
+          }
+          const file = files.value[id];
+          if (file && file.data) {
+            if (doc.data.type === 'pdf') {
+              const { pages } = await rasterizePDF(file.data);
+              doc.data.pages = pages;
+              doc.data.status = 'complete';
+              documents.value = [...documents.value];
+              updateDocument(id, { status: 'complete' });
+            } else if (imageTypes.includes(doc.data.type) || doc.data.type === 'svg') {
+              const blob = new Blob([file.data], { type: doc.data.mimeType });
+              const url = URL.createObjectURL(blob);
+              doc.data.pages = [url];
+              doc.data.status = 'complete';
+              documents.value = [...documents.value];
+              updateDocument(id, { status: 'complete' });
+            }
+            emit('node-select', doc);
+          }
+        } catch (error) {
+          console.error(`Error rendering document ${id}:`, error);
+        }
+      } else if (artifact) {
+        setSelectedArtifact(artifact);
+        emit('node-select', artifact);
+      } else if (doc) {
+        emit('node-select', doc);
       }
     };
 
@@ -292,6 +344,7 @@ export default {
       newName,
       startEditing,
       finishEditing,
+      handleRenderFile,
       getFileIcon,
       isLeaf,
     };
@@ -324,6 +377,7 @@ export default {
           @finish-editing="finishEditing"
           @remove-section="removeSection"
           @trigger-file-upload="triggerFileUpload"
+          @render-file="handleRenderFile"
           @node-select="handleNodeSelect"
         />
       </div>
@@ -333,7 +387,7 @@ export default {
         class="hidden"
         @change="handleFileUpload"
         multiple
-        accept=".docx,.pdf,.pptx,.html,.txt,.js,.json,.css,.md,.xlsx"
+        accept=".docx,.pdf,.pptx,.html,.txt,.js,.json,.css,.md,.xlsx,.png,.jpg,.jpeg,.webp,.svg"
       />
     </div>
   `,

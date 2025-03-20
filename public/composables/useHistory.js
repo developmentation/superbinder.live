@@ -28,7 +28,6 @@ export function useHistory() {
       collab: [...(useCollaboration().collabs.value || [])],
       sections: [...(useSections().sections.value || [])],
     };
-    // console.log('Gathered local history in useHistory:', JSON.stringify(history, null, 2));
     return history;
   }
 
@@ -38,34 +37,35 @@ export function useHistory() {
       return;
     }
     const historyData = data.data || data;
-    // console.log('Syncing channel data received:', JSON.stringify(historyData, null, 2));
     const hasData = Object.keys(historyData).some(key => Array.isArray(historyData[key]) && historyData[key].length > 0);
     if (hasData) {
-      // Merge function that compares timestamps for matching IDs
-      const mergeArrays = (existing, incoming) => {
+      const mergeArrays = (existing, incoming, preservePages = false) => {
         const resultMap = new Map();
 
-        // Add all existing items to the map
         existing.forEach(item => {
           if (item.id) resultMap.set(item.id, item);
         });
 
-        // Process incoming items
         (incoming || []).forEach(item => {
-          if (!item.id) return; // Skip items without IDs
+          if (!item.id) return;
 
           const existingItem = resultMap.get(item.id);
           
           if (existingItem) {
-            // If item exists, compare timestamps and keep the newer one
             const existingTime = existingItem.timestamp ? new Date(existingItem.timestamp).getTime() : 0;
             const incomingTime = item.timestamp ? new Date(item.timestamp).getTime() : 0;
             
             if (incomingTime > existingTime) {
+              if (preservePages && existingItem.data && existingItem.data.pages) {
+                // Preserve data.pages from the existing item
+                item.data = { ...item.data, pages: existingItem.data.pages };
+              }
               resultMap.set(item.id, item);
+            } else if (incomingTime === existingTime) {
+              // If timestamps are equal, preserve the existing item (including data.pages)
+              return;
             }
           } else {
-            // If item doesn't exist, add it
             resultMap.set(item.id, item);
           }
         });
@@ -77,7 +77,7 @@ export function useHistory() {
       useChat().messages.value = mergeArrays(useChat().messages.value, historyData.chat);
       useClips().clips.value = mergeArrays(useClips().clips.value, historyData.clips);
       useClips().bookmarks.value = mergeArrays(useClips().bookmarks.value, historyData.bookmarks);
-      useDocuments().documents.value = mergeArrays(useDocuments().documents.value, historyData.documents);
+      useDocuments().documents.value = mergeArrays(useDocuments().documents.value, historyData.documents, true); // Preserve data.pages
       useGoals().goals.value = mergeArrays(useGoals().goals.value, historyData.goals);
       useQuestions().questions.value = mergeArrays(useQuestions().questions.value, historyData.questions);
       useQuestions().answers.value = mergeArrays(useQuestions().answers.value, historyData.answers);
@@ -86,37 +86,17 @@ export function useHistory() {
       useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakout);
       useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
       useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
-      
-      // useAgents().agents.value =  historyData.agents;
-      // useChat().messages.value = historyData.chat;
-      // useClips().clips.value = historyData.clips;
-      // useClips().bookmarks.value = historyData.bookmarks;
-      // useDocuments().documents.value = historyData.documents;
-      // useGoals().goals.value = historyData.goals;
-      // useQuestions().questions.value = historyData.questions;
-      // useQuestions().answers.value =historyData.answers;
-      // useArtifacts().artifacts.value =  historyData.artifacts;
-      // useTranscripts().transcripts.value = historyData.transcripts;
-      // useCollaboration().breakouts.value = historyData.breakout;
-      // useCollaboration().collabs.value = historyData.collab;
-      // useSections().sections.value = historyData.sections;
-      
-
     } else {
-
       console.log('No meaningful data in history, skipping sync:', historyData);
-      // console.warn('No meaningful data in history, skipping sync:', historyData);
     }
   }
 
   eventBus.$on('request-history-data', (callback) => {
     const history = gatherLocalHistory();
-    // console.log('History requested via eventBus, returning:', JSON.stringify(history, null, 2));
     callback(history);
   });
 
   eventBus.$on('sync-history-data', (data) => {
-    // console.log('Received sync-history-data event:', JSON.stringify(data, null, 2));
     syncChannelData(data);
   });
 

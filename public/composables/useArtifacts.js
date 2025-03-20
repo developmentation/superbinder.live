@@ -1,4 +1,4 @@
-// composables/useArtifacts.js
+// ./composables/useArtifacts.js
 import { useRealTime } from './useRealTime.js';
 
 const artifacts = Vue.ref([]);
@@ -18,7 +18,7 @@ export function useArtifacts() {
     if (!processedEvents.has(eventKey)) {
       processedEvents.add(eventKey);
       if (!artifacts.value.some(a => a.id === id)) {
-        artifacts.value.push({ id, userUuid: eventUserUuid, data, timestamp });
+        artifacts.value.push({ id, userUuid: eventUserUuid, data });
         artifacts.value = [...artifacts.value];
       }
       setTimeout(() => processedEvents.delete(eventKey), 1000);
@@ -33,26 +33,28 @@ export function useArtifacts() {
     }
   }
 
-  function handleRenameArtifact(eventObj) {
+  function handleUpdateArtifact(eventObj) {
     const { id, userUuid: eventUserUuid, data, timestamp } = eventObj;
+    console.log('handleUpdateArtifact:', { id, userUuid: eventUserUuid, data, timestamp }); // Debug
     const index = artifacts.value.findIndex(a => a.id === id);
     if (index !== -1) {
-      artifacts.value[index].data.name = data.name;
+      artifacts.value[index].data = { ...artifacts.value[index].data, ...data };
       artifacts.value = [...artifacts.value];
       if (selectedArtifact.value && selectedArtifact.value.id === id) {
-        setSelectedArtifact({ ...selectedArtifact.value, data: { ...selectedArtifact.value.data, name: data.name } });
+        setSelectedArtifact({ ...selectedArtifact.value, data: artifacts.value[index].data });
       }
+      console.log('Updated artifact:', artifacts.value[index]); // Debug
     }
   }
 
   const addArtifactHandler = on('add-artifact', handleAddArtifact);
   const removeArtifactHandler = on('remove-artifact', handleRemoveArtifact);
-  const renameArtifactHandler = on('update-artifact', handleRenameArtifact);
+  const updateArtifactHandler = on('update-artifact', handleUpdateArtifact);
 
   eventHandlers.set(useArtifacts, {
     addArtifact: addArtifactHandler,
     removeArtifact: removeArtifactHandler,
-    renameArtifact: renameArtifactHandler,
+    updateArtifact: updateArtifactHandler,
   });
 
   function addArtifact(name, pagesText, sectionId = null) {
@@ -60,33 +62,30 @@ export function useArtifacts() {
     const serverPayload = {
       id: uuid,
       userUuid: userUuid.value,
-      data: {
-        name,
-        pagesText: Array.isArray(pagesText) ? pagesText : [pagesText],
-        sectionId,
-      },
+      data: { name, pagesText, sectionId, type: 'md' }, // Added type: 'md'
       timestamp: Date.now(),
     };
-    artifacts.value.push({ id: uuid, userUuid: userUuid.value, data: serverPayload.data, timestamp: serverPayload.timestamp });
+    artifacts.value.push({ id: uuid, userUuid: userUuid.value, data: { name, pagesText, sectionId, type: 'md' } });
     artifacts.value = [...artifacts.value];
     emit('add-artifact', serverPayload);
     return { id: uuid };
   }
 
-  function updateArtifact(id, name, sectionId = null) {
+  function updateArtifact(id, updates) {
+    console.log('updateArtifact called:', { id, updates }); // Debug
     const index = artifacts.value.findIndex(a => a.id === id);
     if (index !== -1) {
-      const data = { ...artifacts.value[index].data, name, sectionId };
+      const updatedData = { ...artifacts.value[index].data, ...updates };
       const payload = {
         id,
         userUuid: userUuid.value,
-        data: { name, sectionId },
+        data: updatedData,
         timestamp: Date.now(),
       };
-      artifacts.value[index].data = data;
+      artifacts.value[index].data = updatedData;
       artifacts.value = [...artifacts.value];
       if (selectedArtifact.value && selectedArtifact.value.id === id) {
-        setSelectedArtifact({ ...selectedArtifact.value, data });
+        setSelectedArtifact({ ...selectedArtifact.value, data: updatedData });
       }
       emit('update-artifact', payload);
     }
@@ -112,7 +111,7 @@ export function useArtifacts() {
     if (handlers) {
       off('add-artifact', handlers.addArtifact);
       off('remove-artifact', handlers.removeArtifact);
-      off('update-artifact', handlers.renameArtifact);
+      off('update-artifact', handlers.updateArtifact);
       eventHandlers.delete(useArtifacts);
     }
     processedEvents.clear();
@@ -122,8 +121,8 @@ export function useArtifacts() {
     artifacts,
     selectedArtifact,
     addArtifact,
-    updateArtifact,
     removeArtifact,
+    updateArtifact,
     setSelectedArtifact,
     cleanup,
   };

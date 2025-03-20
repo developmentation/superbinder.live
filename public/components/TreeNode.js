@@ -1,7 +1,7 @@
 // components/TreeNode.js
 import { useSections } from '../composables/useSections.js';
 import { useDocuments } from '../composables/useDocuments.js';
-import { useArtifacts } from '../composables/useArtifacts.js'; // New import
+import { useArtifacts } from '../composables/useArtifacts.js';
 
 export default {
   name: 'TreeNode',
@@ -48,11 +48,12 @@ export default {
     'remove-section',
     'trigger-file-upload',
     'node-select',
+    'render-file',
   ],
   setup(props, { emit }) {
     const { updateSection } = useSections();
     const { updateDocument, removeDocument } = useDocuments();
-    const { updateArtifact, removeArtifact } = useArtifacts(); // New
+    const { updateArtifact, removeArtifact } = useArtifacts();
     const editingName = Vue.ref(props.node.data.name);
 
     const checkboxClasses = Vue.computed(() => ({
@@ -69,11 +70,7 @@ export default {
       if (props.node.type === 'artifact') {
         return { 'bg-[#1e3a8a]': true }; // Dark mode blue for artifacts
       }
-      const isProcessed = props.node.data.pages || props.node.data.processedContent;
-      return {
-        'bg-[#97330a]': !isProcessed, // Orange for unprocessed documents
-        'bg-[#10602f]': isProcessed,  // Green for processed documents
-      };
+      return { 'bg-[#2d3748]': true }; // Consistent color for documents
     });
 
     const handleAddSection = () => {
@@ -98,9 +95,9 @@ export default {
       const updatedName = editingName.value.trim();
       if (updatedName) {
         if (props.node.type === 'document') {
-          updateDocument(props.node.id, updatedName, props.node.data.sectionId);
+          updateDocument(props.node.id, { name: updatedName, sectionId: props.node.data.sectionId });
         } else if (props.node.type === 'artifact') {
-          updateArtifact(props.node.id, updatedName, props.node.data.sectionId);
+          updateArtifact(props.node.id, { name: updatedName, sectionId: props.node.data.sectionId });
         } else {
           updateSection(props.node.id, updatedName);
         }
@@ -110,6 +107,10 @@ export default {
 
     const triggerFileUpload = (nodeId) => {
       emit('trigger-file-upload', nodeId || props.node.id);
+    };
+
+    const handleRenderFile = () => {
+      emit('render-file', props.node.id);
     };
 
     const handleNodeClick = (event) => {
@@ -136,6 +137,7 @@ export default {
       startEditing,
       finishEditing,
       triggerFileUpload,
+      handleRenderFile,
       handleNodeClick,
     };
   },
@@ -194,7 +196,7 @@ export default {
               v-if="!editingNodeId || editingNodeId !== node.id"
               class="truncate text-[#e2e8f0] text-sm"
             >
-              {{ node.data.name }}
+              {{ node.data.name || 'Unnamed' }}
             </span>
             <input
               v-else
@@ -215,6 +217,9 @@ export default {
             </button>
             <button @click.stop="startEditing(node)" class="text-[#f59e0b] hover:text-[#d97706] p-1">
               <i class="pi pi-pencil text-sm"></i>
+            </button>
+            <button v-if="isLeaf(node) && (node.data.type === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].includes(node.data.type) || node.data.type === 'svg') && !node.data.pages" @click.stop="handleRenderFile" class="text-[#3b82f6] hover:text-[#2563eb] p-1">
+              <i class="pi pi-eye text-sm"></i>
             </button>
             <button @click.stop="handleRemove" class="text-[#ef4444] hover:text-[#dc2626] p-1">
               <i class="pi pi-trash text-sm"></i>
@@ -245,6 +250,7 @@ export default {
           @finish-editing="finishEditing"
           @remove-section="$emit('remove-section', $event)"
           @trigger-file-upload="triggerFileUpload"
+          @render-file="$emit('render-file', $event)"
           @node-select="$emit('node-select', $event)"
         />
       </div>

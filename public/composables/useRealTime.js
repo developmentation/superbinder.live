@@ -257,7 +257,7 @@ export function useRealTime() {
     off('remove-clip');
     off('add-document');
     off('remove-document');
-    off('rename-document');
+    off('update-document');
     off('add-question');
     off('update-question');
     off('remove-question');
