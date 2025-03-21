@@ -28,13 +28,11 @@ export default {
     const draggedNode = Vue.ref(null);
     const dropTarget = Vue.ref(null);
     const editingNodeId = Vue.ref(null);
-    const newName = Vue.ref('');
 
     const treeNodes = Vue.computed(() => {
       const nodeMap = new Map();
 
       sections.value.forEach((section) => {
-        console.log('Processing section:', section);
         nodeMap.set(section.id, {
           ...section,
           type: 'section',
@@ -49,7 +47,6 @@ export default {
       });
 
       documents.value.forEach((doc) => {
-        console.log('Processing document:', doc);
         const sectionId = doc.data.sectionId || null;
         const docNode = {
           ...doc,
@@ -69,7 +66,6 @@ export default {
       });
 
       artifacts.value.forEach((artifact) => {
-        console.log('Processing artifact:', artifact);
         const sectionId = artifact.data.sectionId || null;
         const artifactNode = {
           ...artifact,
@@ -111,9 +107,7 @@ export default {
     });
 
     function getFileIcon(fileName) {
-      console.log('getFileIcon called with fileName:', fileName);
       if (!fileName || typeof fileName !== 'string') {
-        console.warn('getFileIcon: fileName is not a string, returning default icon');
         return 'pi pi-file';
       }
       const extension = fileName.split('.').pop()?.toLowerCase() || '';
@@ -127,7 +121,6 @@ export default {
     }
 
     function isLeaf(node) {
-      console.log('isLeaf check for node:', node, 'type:', node.type);
       return node.type === 'document' || node.type === 'artifact';
     }
 
@@ -260,17 +253,41 @@ export default {
     };
 
     const startEditing = (node) => {
+      console.log('SectionTreeViewer startEditing:', { id: node.id, type: node.type, name: node.data.name });
       editingNodeId.value = node.id;
-      newName.value = node.data.name;
       Vue.nextTick(() => {
         const input = document.querySelector(`#edit-${node.id}`);
         if (input) input.focus();
       });
     };
 
-    const finishEditing = (nodeId, updatedName) => {
+    const finishEditing = (node) => {
+      const updatedName = node.data.name;
+      console.log('SectionTreeViewer finishEditing:', {
+        id: node.id,
+        type: node.type,
+        originalName: treeNodes.value.find(n => n.id === node.id)?.data.name || documents.value.find(d => d.id === node.id)?.data.name || artifacts.value.find(a => a.id === node.id)?.data.name,
+        updatedName,
+        sectionId: node.data.sectionId,
+      });
+
+      if (updatedName && updatedName.trim() && updatedName.trim() !== (treeNodes.value.find(n => n.id === node.id)?.data.name || documents.value.find(d => d.id === node.id)?.data.name || artifacts.value.find(a => a.id === node.id)?.data.name)) {
+        if (node.type === 'section') {
+          console.log(`Updating section with id ${node.id} to name ${updatedName.trim()}`);
+          updateSection(node.id, updatedName.trim());
+        } else if (node.type === 'document') {
+          console.log(`Updating document with id ${node.id} to name ${updatedName.trim()}, sectionId: ${node.data.sectionId}`);
+          updateDocument(node.id, { name: updatedName.trim(), sectionId: node.data.sectionId });
+        } else if (node.type === 'artifact') {
+          console.log(`Updating artifact with id ${node.id} to name ${updatedName.trim()}, sectionId: ${node.data.sectionId}`);
+          updateArtifact(node.id, { name: updatedName.trim(), sectionId: node.data.sectionId });
+        } else {
+          console.error(`Unknown node type: ${node.type} for node id ${node.id}`);
+        }
+      } else {
+        console.log('No update performed: name unchanged or invalid');
+      }
       editingNodeId.value = null;
-      newName.value = '';
     };
 
     const handleAddSection = (parentId) => {
@@ -284,7 +301,6 @@ export default {
       const doc = documents.value.find(d => d.id === id);
       const artifact = artifacts.value.find(a => a.id === id);
 
-      // Define known image types (excluding 'svg' since it's handled separately)
       const imageTypes = ['png', 'jpg', 'jpeg', 'webp'];
 
       if (doc && (doc.data.type === 'pdf' || imageTypes.includes(doc.data.type) || doc.data.type === 'svg')) {
@@ -341,7 +357,6 @@ export default {
       triggerFileUpload,
       handleFileUpload,
       editingNodeId,
-      newName,
       startEditing,
       finishEditing,
       handleRenderFile,
@@ -363,7 +378,6 @@ export default {
           :selected-keys="selectedKeys"
           :expanded-keys="expandedKeys"
           :editing-node-id="editingNodeId"
-          :new-name="newName"
           :get-file-icon="getFileIcon"
           :is-leaf="isLeaf"
           @toggle-select="toggleSelect"

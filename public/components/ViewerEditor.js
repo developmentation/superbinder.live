@@ -36,7 +36,7 @@ export default {
       if (type === 'xlsx' || type === 'csv') return ['Table', 'JSON'];
       if (type === 'md' || props.item.type === 'artifact') return ['Markdown'];
       if (type === 'svg') return ['Image', 'Text'];
-      if (imageTypes.includes(type)) return ['Image'];
+      if (imageTypes.includes(type)) return ['Image', 'Text']; // Added 'Text' for images
       return ['Text'];
     });
 
@@ -109,6 +109,10 @@ export default {
         } else {
           return ['<p>Please click the eye icon to load the image.</p>'];
         }
+      }
+      if ((imageTypes.includes(type) || type === 'svg') && displayMode.value === 'Text') {
+        console.log('Image/SVG Text mode, rendering pagesText:', pagesText);
+        return pagesText?.length ? pagesText : [''];
       }
       if (type === 'svg' && displayMode.value === 'Image') {
         console.log('SVG Image mode, rendering SVG:', pagesText);

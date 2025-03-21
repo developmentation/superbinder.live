@@ -22,10 +22,6 @@ export default {
       type: [String, Number],
       default: null,
     },
-    newName: {
-      type: String,
-      default: '',
-    },
     getFileIcon: {
       type: Function,
       required: true,
@@ -51,10 +47,15 @@ export default {
     'render-file',
   ],
   setup(props, { emit }) {
-    const { updateSection } = useSections();
-    const { updateDocument, removeDocument } = useDocuments();
-    const { updateArtifact, removeArtifact } = useArtifacts();
-    const editingName = Vue.ref(props.node.data.name);
+    const { removeDocument } = useDocuments();
+    const { removeArtifact } = useArtifacts();
+    const localNewName = Vue.ref(''); // Local state for editing the name
+    const hasFinishedEditing = Vue.ref(false); // Flag to prevent double emission
+
+    // Watch localNewName for debugging
+    Vue.watch(localNewName, (newVal, oldVal) => {
+      console.log(`localNewName changed for node ${props.node.id}:`, { oldVal, newVal });
+    });
 
     const checkboxClasses = Vue.computed(() => ({
       'border-[#4b5563] bg-[#2d3748]': props.node.data._checkStatus === 'unchecked',
@@ -88,21 +89,33 @@ export default {
     };
 
     const startEditing = (node) => {
-      emit('start-editing', node || props.node);
+      const nodeToEdit = node || props.node;
+      localNewName.value = nodeToEdit.data.name || ''; // Initialize with current name
+      hasFinishedEditing.value = false; // Reset flag for new edit session
+      // console.log('TreeNode startEditing:', { id: nodeToEdit.id, type: nodeToEdit.type, name: nodeToEdit.data.name });
+      emit('start-editing', nodeToEdit);
     };
 
-    const finishEditing = () => {
-      const updatedName = editingName.value.trim();
-      if (updatedName) {
-        if (props.node.type === 'document') {
-          updateDocument(props.node.id, { name: updatedName, sectionId: props.node.data.sectionId });
-        } else if (props.node.type === 'artifact') {
-          updateArtifact(props.node.id, { name: updatedName, sectionId: props.node.data.sectionId });
-        } else {
-          updateSection(props.node.id, updatedName);
-        }
+    const finishEditing = (node) => {
+      if (hasFinishedEditing.value) return; // Prevent double emission
+      hasFinishedEditing.value = true;
+      const nodeToEdit = node || props.node;
+      // console.log('TreeNode finishEditing:', { id: nodeToEdit.id, type: nodeToEdit.type, originalName: nodeToEdit.data.name, updatedName: localNewName.value });
+      emit('finish-editing', { ...nodeToEdit, data: { ...nodeToEdit.data, name: localNewName.value } });
+      localNewName.value = ''; // Reset after emitting
+      // Force the input to lose focus
+      const input = document.querySelector(`#edit-${nodeToEdit.id}`);
+      if (input) input.blur();
+    };
+
+    const handleFinishEditing = (updatedNode) => {
+      // Only re-emit if this TreeNode is the one being edited
+      if (props.editingNodeId === updatedNode.id) {
+        // console.log('TreeNode handleFinishEditing (re-emitting):', { id: updatedNode.id, type: updatedNode.type, updatedName: updatedNode.data.name });
+        emit('finish-editing', updatedNode);
+      } else {
+        // console.log('TreeNode handleFinishEditing (not re-emitting):', { id: updatedNode.id, currentNodeId: props.node.id, editingNodeId: props.editingNodeId });
       }
-      emit('finish-editing', props.node.id, updatedName || props.node.data.name);
     };
 
     const triggerFileUpload = (nodeId) => {
@@ -131,11 +144,12 @@ export default {
     return {
       checkboxClasses,
       nodeClasses,
-      editingName,
+      localNewName,
       handleAddSection,
       handleRemove,
       startEditing,
       finishEditing,
+      handleFinishEditing,
       triggerFileUpload,
       handleRenderFile,
       handleNodeClick,
@@ -200,9 +214,9 @@ export default {
             </span>
             <input
               v-else
-              v-model="editingName"
-              @keypress.enter="finishEditing"
-              @blur="finishEditing"
+              :id="'edit-' + node.id"
+              v-model="localNewName"
+              @keypress.enter="finishEditing(node)"
               class="bg-transparent text-[#e2e8f0] border-b border-[#4b5563] focus:border-[#3b82f6] outline-none flex-1 min-w-0 text-sm"
               placeholder="Rename node"
             />
@@ -236,7 +250,6 @@ export default {
           :selected-keys="selectedKeys"
           :expanded-keys="expandedKeys"
           :editing-node-id="editingNodeId"
-          :new-name="editingName"
           :get-file-icon="getFileIcon"
           :is-leaf="isLeaf"
           @toggle-select="$emit('toggle-select', $event)"
@@ -246,8 +259,8 @@ export default {
           @dragleave="$emit('dragleave')"
           @drop="$emit('drop', $event, $event.target)"
           @add-section="$emit('add-section', $event)"
-          @start-editing="startEditing(childNode)"
-          @finish-editing="finishEditing"
+          @start-editing="startEditing"
+          @finish-editing="handleFinishEditing"
           @remove-section="$emit('remove-section', $event)"
           @trigger-file-upload="triggerFileUpload"
           @render-file="$emit('render-file', $event)"
