@@ -32,6 +32,7 @@ export default {
     const treeNodes = Vue.computed(() => {
       const nodeMap = new Map();
 
+      // Add sections to the map
       sections.value.forEach((section) => {
         nodeMap.set(section.id, {
           ...section,
@@ -46,6 +47,7 @@ export default {
         });
       });
 
+      // Add documents to the map
       documents.value.forEach((doc) => {
         const sectionId = doc.data.sectionId || null;
         const docNode = {
@@ -53,6 +55,7 @@ export default {
           type: 'document',
           data: {
             ...doc.data,
+            name: doc.data.name || `Document ${doc.id.slice(0, 8)}`, // Fallback name
             _children: [],
             _checkStatus: props.selectedKeys[doc.id] ? 'checked' : 'unchecked',
             _expanded: false,
@@ -65,6 +68,7 @@ export default {
         }
       });
 
+      // Add artifacts to the map
       artifacts.value.forEach((artifact) => {
         const sectionId = artifact.data.sectionId || null;
         const artifactNode = {
@@ -85,6 +89,7 @@ export default {
         }
       });
 
+      // Build the tree structure
       const nodes = [];
       nodeMap.forEach((node) => {
         if (node.data.sectionId && nodeMap.has(node.data.sectionId)) {
@@ -95,10 +100,21 @@ export default {
         }
       });
 
-      nodes.sort((a, b) => (a.data.order || 0) - (b.data.order || 0));
+      // Sort root-level nodes: sections by order, documents/artifacts alphabetically
+      nodes.sort((a, b) => {
+        if (a.type === 'section' && b.type === 'section') {
+          return (a.data.order || 0) - (b.data.order || 0);
+        }
+        if (a.type !== 'section' && b.type !== 'section') {
+          return a.data.name.localeCompare(b.data.name);
+        }
+        return a.type === 'section' ? -1 : 1; // Sections come before documents/artifacts
+      });
+
+      // Sort children within each section alphabetically for documents and artifacts
       nodes.forEach((node) => {
         if (node.data._children.length) {
-          node.data._children.sort((a, b) => (a.data.order || 0) - (b.data.order || 0));
+          node.data._children.sort((a, b) => a.data.name.localeCompare(b.data.name));
         }
         updateCheckStatus(node);
       });

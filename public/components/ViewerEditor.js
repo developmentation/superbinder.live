@@ -23,10 +23,9 @@ export default {
     const editedContent = Vue.ref([]);
     const lazyScrollViewer = Vue.ref(null);
     const jumpToPageInput = Vue.ref('');
-    const currentPage = Vue.ref(0); // Track the current page for OCR
+    const currentPage = Vue.ref(0);
     const md = markdownit({ html: true, linkify: true, typographer: true, breaks: true });
 
-    // Define known image types (excluding 'svg' since it's handled separately)
     const imageTypes = ['png', 'jpg', 'jpeg', 'webp'];
 
     const dropdownOptions = Vue.computed(() => {
@@ -36,7 +35,7 @@ export default {
       if (type === 'xlsx' || type === 'csv') return ['Table', 'JSON'];
       if (type === 'md' || props.item.type === 'artifact') return ['Markdown'];
       if (type === 'svg') return ['Image', 'Text'];
-      if (imageTypes.includes(type)) return ['Image', 'Text']; // Added 'Text' for images
+      if (imageTypes.includes(type)) return ['Image', 'Text'];
       return ['Text'];
     });
 
@@ -234,12 +233,17 @@ export default {
       selection.addRange(range);
     };
 
-    const handleInput = (index, event) => {
+    const handleDocxInput = (index, event) => {
       const element = event.target;
       const position = saveCursorPosition(element);
       editedContent.value[index] = element.innerHTML;
-      console.log('handleInput: updated editedContent:', editedContent.value);
+      console.log('handleDocxInput: updated editedContent:', editedContent.value);
       Vue.nextTick(() => restoreCursorPosition(element, position));
+    };
+
+    const handleTextInput = (index, event) => {
+      editedContent.value[index] = event.target.value;
+      console.log('handleTextInput: updated editedContent:', editedContent.value);
     };
 
     const handlePageVisible = (pageIndex) => {
@@ -291,7 +295,8 @@ export default {
       renderedContent,
       startEditing,
       finishEditing,
-      handleInput,
+      handleDocxInput,
+      handleTextInput,
       handlePageVisible,
       ocrPage,
       ocrAll,
@@ -329,6 +334,7 @@ export default {
         <button v-if="item.data.type && ['png', 'jpg', 'jpeg', 'webp'].includes(item.data.type) && displayMode === 'Image' && !isEditing" @click="ocrPage(0)" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">
           OCR Image
         </button>
+        <h2 class="p-1 text-sm font-bold text-gray-500">{{item.data.name}}</h2>
       </div>
       <div class="flex-1 overflow-y-auto">
         <lazy-scroll-viewer
@@ -338,29 +344,30 @@ export default {
           class="pdf-viewer"
           @page-visible="handlePageVisible"
         />
-        <div v-else-if="isEditing" class="p-4">
-          <div v-if="item.data.type === 'docx' && displayMode === 'HTML'" class="bg-[#2d3748] p-2 rounded-lg h-full">
+        <div v-else-if="isEditing" class="p-4 h-full">
+          <div v-if="item.data.type === 'docx' && displayMode === 'HTML'" class="bg-[#2d3748] p-2 rounded-lg h-full overflow-y-auto">
             <div
               v-for="(content, index) in editedContent"
               :key="index"
               contenteditable="true"
-              @input="handleInput(index, $event)"
-              class="text-[#e2e8f0] outline-none h-full"
+              @input="handleDocxInput(index, $event)"
+              class="text-[#e2e8f0] outline-none w-full whitespace-pre-wrap"
               v-html="content"
             ></div>
           </div>
-          <div v-else class="bg-[#2d3748] p-2 rounded-lg h-full">
-            <div
+          <div v-else class="bg-[#2d3748] p-2 rounded-lg h-full overflow-y-none">
+            <textarea
               v-for="(content, index) in editedContent"
               :key="index"
-              contenteditable="true"
-              @input="handleInput(index, $event)"
-              class="text-[#e2e8f0] outline-none h-full whitespace-pre-wrap"
-              v-html="content"
-            ></div>
+              v-model="editedContent[index]"
+              @input="handleTextInput(index, $event)"
+              class="text-[#e2e8f0] bg-[#2d3748] outline-none w-full h-full resize-none border-none whitespace-pre-wrap"
+            ></textarea>
           </div>
         </div>
         <div v-else class="p-4 text-[#e2e8f0] whitespace-pre-wrap" v-html="renderedContent.join('<hr>')"></div>
+        <!-- Spacer div to ensure scrollable space at the bottom -->
+        <div class="h-[200px]"></div>
       </div>
     </div>
   `,
