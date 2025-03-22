@@ -441,6 +441,8 @@ export function useCollaboration() {
     triggerLLM(
       messageId,
       { provider: 'gemini', model: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' },
+      // { provider: 'anthropic', model: 'claude-3-7-sonnet-20250219', name: 'claude-3-7-sonnet-20250219' },
+      // { provider: 'openai', model: 'gpt-4o', name: 'gpt-4o' },
       0.5,
       '',
       triggerText,
