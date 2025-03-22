@@ -13,7 +13,7 @@ export default {
   },
   setup(props) {
     const { userUuid, emit } = useRealTime();
-    const { updateDocument } = useDocuments();
+    const { updateDocument, updateDocumentOcr } = useDocuments(); // Add updateDocumentOcr
     const { updateArtifact } = useArtifacts();
     const { ocrFiles, retrieveFiles, files } = useFiles();
 
@@ -24,6 +24,7 @@ export default {
     const lazyScrollViewer = Vue.ref(null);
     const jumpToPageInput = Vue.ref('');
     const currentPage = Vue.ref(0);
+    const isOcrLoading = Vue.ref(false);
     const md = markdownit({ html: true, linkify: true, typographer: true, breaks: true });
 
     const imageTypes = ['png', 'jpg', 'jpeg', 'webp'];
@@ -248,42 +249,43 @@ export default {
 
     const handlePageVisible = (pageIndex) => {
       currentPage.value = pageIndex;
+      jumpToPageInput.value = (pageIndex + 1).toString(); // Update Jump To input with current page
       console.log('Current page updated:', currentPage.value);
     };
 
-    
-    // In ViewerEditor.js setup()
-const ocrPage = async (pageIndex) => {
-  try {
-    const ocrResults = await ocrFiles([props.item.id], [props.item]);
-    // if (ocrResults.length > 0) {
-      editedContent.value[pageIndex] = ocrResults; // Single result for specific page
-      finishEditing();
-    // }
-  } catch (error) {
-    console.error('OCR page failed:', error);
-  }
-};
-
-const ocrAll = async () => {
-  try {
-    const ocrResults = await ocrFiles([props.item.id], [props.item]);
-    editedContent.value = ocrResults; // Array of results
-    finishEditing();
-  } catch (error) {
-    console.error('OCR all failed:', error);
-  }
-};
-
+    const ocrPage = async () => {
+      try {
+        isOcrLoading.value = true;
+        const pageToOcr = props.item.data.type === 'pdf' ? currentPage.value : 0; // PDF uses current page, images use 0
+        const ocrResults = await ocrFiles([props.item.id], [props.item], [pageToOcr]);
+        const { uuids, text, pages } = ocrResults;
+        if (uuids[0] === props.item.id) {
+          const pageIndex = pages[0];
+          const ocrText = text[0];
+          editedContent.value[pageIndex] = ocrText; // Update local content
+          const updateFn = props.item.type === 'document' ? updateDocumentOcr : updateArtifact;
+          if (props.item.type === 'document') {
+            updateFn(props.item.id, pageIndex, ocrText); // Use new function for documents
+          } else {
+            // For artifacts, update the entire pagesText (assuming single page for now)
+            updateFn(props.item.id, { pagesText: [ocrText] });
+          }
+        }
+      } catch (error) {
+        console.error('OCR page failed:', error);
+      } finally {
+        isOcrLoading.value = false;
+      }
+    };
 
     const jumpToPage = () => {
       const pageNum = parseInt(jumpToPageInput.value, 10);
       if (isNaN(pageNum) || pageNum < 1 || pageNum > props.item.data.pages?.length) {
-        jumpToPageInput.value = '';
+        jumpToPageInput.value = (currentPage.value + 1).toString(); // Reset to current page
         return;
       }
       lazyScrollViewer.value.scrollToPage(pageNum - 1);
-      jumpToPageInput.value = '';
+      jumpToPageInput.value = (currentPage.value + 1).toString(); // Reflect current page after jump
     };
 
     return {
@@ -293,6 +295,7 @@ const ocrAll = async () => {
       lazyScrollViewer,
       jumpToPageInput,
       currentPage,
+      isOcrLoading,
       dropdownOptions,
       renderedContent,
       startEditing,
@@ -301,7 +304,6 @@ const ocrAll = async () => {
       handleTextInput,
       handlePageVisible,
       ocrPage,
-      ocrAll,
       jumpToPage,
     };
   },
@@ -320,22 +322,24 @@ const ocrAll = async () => {
         <button v-if="isEditing" @click="finishEditing" class="py-1 px-2 bg-[#10b981] text-white rounded-lg text-sm">
           Done
         </button>
-        <template v-if="item.data.type === 'pdf' && displayMode === 'PDF' && !isEditing">
-          <input
-            type="text"
-            inputmode="numeric"
-            v-model="jumpToPageInput"
-            @keyup.enter="jumpToPage"
-            class="w-16 p-1 bg-[#2d3748] text-[#e2e8f0] rounded-lg border border-[#4b5563] text-sm"
-            :placeholder="'1-' + (item.data.pages?.length || 0)"
-          />
+        <template v-if="(item.data.type === 'pdf' && displayMode === 'PDF') || (item.data.type && ['png', 'jpg', 'jpeg', 'webp'].includes(item.data.type) && displayMode === 'Image') && !isEditing">
+          <div class="flex items-center gap-1">
+            <input
+              type="text"
+              inputmode="numeric"
+              v-model="jumpToPageInput"
+              @keyup.enter="jumpToPage"
+              class="w-16 p-1 bg-[#2d3748] text-[#e2e8f0] rounded-lg border border-[#4b5563] text-sm"
+              :placeholder="'1-' + (item.data.pages?.length || 0)"
+            />
+            <span class="text-[#e2e8f0] text-sm">of {{ item.data.pages?.length || 0 }}</span>
+          </div>
           <button @click="jumpToPage" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">Go</button>
-          <button @click="ocrPage(currentPage)" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">OCR</button>
-          <button @click="ocrAll" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">OCR All</button>
+          <button @click="ocrPage" :disabled="isOcrLoading" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm disabled:bg-[#4b5563] disabled:cursor-not-allowed flex items-center">
+            <span>OCR</span>
+            <i v-if="isOcrLoading" class="pi pi-spin pi-spinner ml-2"></i>
+          </button>
         </template>
-        <button v-if="item.data.type && ['png', 'jpg', 'jpeg', 'webp'].includes(item.data.type) && displayMode === 'Image' && !isEditing" @click="ocrPage(0)" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">
-          OCR Image
-        </button>
         <h2 class="p-1 text-sm font-bold text-gray-500">{{item.data.name}}</h2>
       </div>
       <div class="flex-1 overflow-y-auto">

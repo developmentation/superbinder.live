@@ -157,6 +157,38 @@ export function useDocuments() {
     }
   }
 
+  function updateDocumentOcr(id, pageIndex, ocrText) {
+    console.log('updateDocumentOcr called:', { id, pageIndex, ocrText });
+    const index = documents.value.findIndex(d => d.id === id);
+    if (index !== -1) {
+      const currentData = { ...documents.value[index].data };
+      const updatedPagesText = [...currentData.pagesText];
+      // Ensure pagesText is long enough to accommodate the pageIndex
+      while (updatedPagesText.length <= pageIndex) {
+        updatedPagesText.push('');
+      }
+      updatedPagesText[pageIndex] = ocrText;
+
+      const updatedLocalData = { ...currentData, pagesText: updatedPagesText };
+      const { pages, originalContent, ...updatedServerData } = updatedLocalData; // Exclude pages and originalContent from server data
+      const payload = {
+        id,
+        userUuid: userUuid.value,
+        data: updatedServerData,
+        timestamp: Date.now(),
+      };
+
+      documents.value[index].data = updatedLocalData;
+      documents.value = [...documents.value];
+      if (selectedDocument.value && selectedDocument.value.id === id) {
+        setSelectedDocument({ ...selectedDocument.value, data: updatedLocalData });
+      }
+      emit('update-document', payload);
+    } else {
+      console.warn(`Document with id ${id} not found for OCR update`);
+    }
+  }
+
   function removeDocument(id) {
     const payload = {
       id,
@@ -231,6 +263,7 @@ export function useDocuments() {
     addDocument,
     removeDocument,
     updateDocument,
+    updateDocumentOcr, // Export the new function
     setSelectedDocument,
     retrieveAndRenderFiles,
     cleanup,

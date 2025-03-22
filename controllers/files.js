@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { upload } = require('../tools/uploads.js');
-const { ocrUpload } = require('../tools/ocrUploads.js'); // New import
+const { ocrUpload } = require('../tools/ocrUploads.js');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const filesController = {};
@@ -171,28 +171,28 @@ filesController.ocrFile = async (req, res) => {
         return res.status(400).json({ message: 'No files uploaded' });
       }
 
-      const supportedMimeTypes = ['image/png', 'image/jpeg', 'image/webp'];
+      const supportedMimeTypes = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
       const maxFileCount = 3000;
 
       if (req.files.length > maxFileCount) {
         return res.status(400).json({ message: `Too many files uploaded (${req.files.length}). Maximum allowed is ${maxFileCount}.` });
       }
 
-      // Process files with provided MIME types from memory
+      // Process files with provided MIME types and page numbers
       const fileData = req.files.map(file => {
         const uuid = file.originalname; // Assuming filename is UUID
         const mimeType = req.body[`mimeType_${uuid}`];
+        const page = parseInt(req.body[`page_${uuid}`], 10) || 0; // Default to 0 if not provided
         if (!supportedMimeTypes.includes(mimeType)) {
           console.warn(`Unsupported MIME type for file ${uuid}: ${mimeType}`);
           return null;
         }
-
         const base64Image = file.buffer.toString('base64');
-        return { base64Image, mimeType };
+        return { uuid, base64Image, mimeType, page };
       }).filter(data => data !== null);
 
       if (fileData.length === 0) {
-        return res.status(400).json({ message: 'No valid files uploaded. Supported MIME types: image/png, image/jpeg, image/webp' });
+        return res.status(400).json({ message: 'No valid files uploaded. Supported MIME types: image/png, image/jpeg, image/webp, application/pdf' });
       }
 
       const apiKey = process.env.GEMINI_API_KEY;
@@ -200,67 +200,64 @@ filesController.ocrFile = async (req, res) => {
         return res.status(500).json({ message: 'GEMINI_API_KEY environment variable is not set' });
       }
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
 
       const customPrompt = `
-        Interpret the following image(s) and extract out and describe their key features in a JSON schema, as follows:
+
+  Interpret the following image(s) and extract out and describe their key features in a JSON schema, as follows:
         {
           "text": "string", // The extracted text from the image
+          "interpretation": "string", // provide the best analysis of what you are seeing
+            "otherContent": "string" // The content of the feature (e.g., text, table data), not repeating what is already above
+            "otherData": "array" // any data driven elements, like bar graphs, pie charts, tables, or other elements from which the data can be interpreted into JSON format
           "features": [
             {
               "type": "string", // e.g., "text", "table", "image", "heading"
               "description": "string", // Brief description of the feature
-              "content": "string" // The content of the feature (e.g., text, table data)
-            }
+            
+              }
+
           ]
         }
         Please process each image and return an array of results in this exact JSON format, one entry per image.
+
       `;
 
-      const request = {
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              ...fileData.map(data => ({
-                inlineData: {
-                  data: data.base64Image,
-                  mimeType: data.mimeType,
+      const ocrResults = await Promise.all(fileData.map(async ({ uuid, base64Image, mimeType, page }) => {
+        const request = {
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  inlineData: {
+                    data: base64Image,
+                    mimeType: mimeType === 'application/pdf' ? 'image/png' : mimeType, // Treat PDF as pre-rasterized image
+                  },
                 },
-              })),
-              {
-                text: customPrompt,
-              },
-            ],
-          },
-        ],
-      };
+                {
+                  text: customPrompt,
+                },
+              ],
+            },
+          ],
+        };
 
-      const response = await model.generateContent(request);
-      const fullTextResponse = response.response.candidates[0].content.parts[0].text;
+        const response = await model.generateContent(request);
+        const text = response.response.candidates[0].content.parts[0].text;
 
-      // let ocrResults;
-      // try {
-      //   ocrResults = JSON.parse(fullTextResponse);
-      //   if (!Array.isArray(ocrResults)) {
-      //     throw new Error('Expected an array of OCR results');
-      //   }
-      // } catch (parseErr) {
-      //   console.error('Failed to parse Gemini response as JSON:', parseErr.message);
-      //   return res.status(500).json({
-      //     message: 'OCR completed but response parsing failed',
-      //     rawResponse: fullTextResponse,
-      //     error: parseErr.message,
-      //   });
-      // }
+        return { uuid, text, page };
+      }));
 
-      // if (ocrResults.length !== fileData.length) {
-      //   console.warn(`Mismatch between OCR results (${ocrResults.length}) and valid files (${fileData.length})`);
-      // }
+      const uuids = ocrResults.map(result => result.uuid);
+      const text = ocrResults.map(result => result.text);
+      const pages = ocrResults.map(result => result.page);
 
       res.status(200).json({
         message: 'OCR completed successfully',
-        text: fullTextResponse,
+        uuids,
+        text,
+        pages,
       });
     });
   } catch (error) {
