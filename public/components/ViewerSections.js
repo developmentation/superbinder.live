@@ -13,7 +13,7 @@ export default {
   setup() {
     const { documents, selectedDocument, setSelectedDocument, addDocument, retrieveAndRenderFiles } = useDocuments();
     const { artifacts, selectedArtifact, setSelectedArtifact } = useArtifacts();
-    const { uploadFiles, files } = useFiles();
+    const { uploadFiles, files, retrieveFiles } = useFiles();
     const { sections, addSection } = useSections();
     const selectedKeys = Vue.ref({});
     const expandedKeys = Vue.ref({});
@@ -89,27 +89,65 @@ export default {
     };
 
     const renderFiles = async () => {
-      const pdfDocs = documents.value.filter(doc => doc.data.type === 'pdf' && !doc.data.pages?.length);
-      if (pdfDocs.length === 0) return;
+      const imageTypes = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+      const renderableDocs = documents.value.filter(doc => 
+        (doc.data.type === 'pdf' || imageTypes.includes(doc.data.type)) && !doc.data.pages?.length
+      );
+      if (renderableDocs.length === 0) return;
 
       try {
         isLoadingFiles.value = true;
-        await retrieveAndRenderFiles();
-        for (const doc of pdfDocs) {
+        // Collect all UUIDs for PDFs and images that need rendering
+        const idsToFetch = renderableDocs.map(doc => doc.id);
+        if (idsToFetch.length > 0) {
+          await retrieveFiles(idsToFetch); // Fetch all files explicitly
+        }
+
+        for (const doc of renderableDocs) {
           const file = files.value[doc.id];
           if (file && file.data) {
-            const { pages } = await rasterizePDF(file.data);
-            doc.data.pages = pages;
+            if (doc.data.type === 'pdf') {
+              const { pages } = await rasterizePDF(file.data);
+              doc.data.pages = pages;
+            } else if (imageTypes.includes(doc.data.type)) {
+              const blob = new Blob([file.data], { type: doc.data.mimeType });
+              const url = URL.createObjectURL(blob);
+              doc.data.pages = [url];
+            }
             doc.data.status = 'complete';
             documents.value = [...documents.value];
             if (selectedDocument.value && selectedDocument.value.id === doc.id) {
               setSelectedDocument({ ...doc, type: 'document' });
             }
+          } else {
+            console.warn(`File data not found for document ${doc.id} after fetch`);
           }
         }
       } catch (error) {
         console.error('Error rendering files:', error);
         alert('Failed to render files.');
+      } finally {
+        isLoadingFiles.value = false;
+      }
+    };
+
+    // Optional: Update retrieveAndRenderFiles to fetch all renderable files
+    const customRetrieveAndRenderFiles = async () => {
+      const imageTypes = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+      const renderableDocs = documents.value.filter(doc => 
+        (doc.data.type === 'pdf' || imageTypes.includes(doc.data.type)) && !doc.data.pages?.length
+      );
+      if (renderableDocs.length === 0) return;
+
+      try {
+        isLoadingFiles.value = true;
+        const idsToFetch = renderableDocs.map(doc => doc.id);
+        if (idsToFetch.length > 0) {
+          await retrieveFiles(idsToFetch); // Fetch all files explicitly
+        }
+      } catch (error) {
+        console.error('Error loading files:', error);
+        alert('Failed to load files.');
       } finally {
         isLoadingFiles.value = false;
       }
@@ -144,14 +182,14 @@ export default {
       handleAddRootSection,
       expandAll,
       collapseAll,
-      retrieveAndRenderFiles,
+      retrieveAndRenderFiles: customRetrieveAndRenderFiles, // Use custom function
     };
   },
   template: `
     <div class="h-full flex flex-col overflow-hidden">
-      <div v-if="isLoadingFiles" class="bg-blue-500 text-white text-sm p-2 text-center">
+    <!--  <div v-if="isLoadingFiles" class="bg-blue-500 text-white text-sm p-2 text-center">
         {{ isLoadingFiles ? 'Loading/Rendering Files...' : '' }}
-      </div>
+      </div> -->
       <div class="flex flex-col md:flex-row h-full">
         <!-- SectionTreeViewer (Left Column) -->
         <div class="w-full md:w-1/2 border-r border-[#2d3748] overflow-hidden">
