@@ -1,6 +1,5 @@
 // ./composables/useFiles.js
 const files = Vue.ref({});
-
 export function useFiles() {
   async function uploadFiles(fileList, uuids = fileList.map(() => uuidv4())) {
     const formData = new FormData();
@@ -9,7 +8,7 @@ export function useFiles() {
       formData.append('files', file);
     });
 
-    console.log("uploading fileList", fileList)
+    console.log("uploading fileList", fileList);
 
     try {
       const response = await axios.post('/api/files', formData, {
@@ -17,7 +16,6 @@ export function useFiles() {
       });
       const { files: results } = response.data;
       
-      // Check for renaming failures
       const failures = results.filter(result => result.uuid && !result.renamedCorrectly);
       if (failures.length > 0) {
         console.error('Upload failures detected:', failures);
@@ -37,7 +35,6 @@ export function useFiles() {
       const retrievedFiles = response.data.files;
       await Promise.all(retrievedFiles.map(async (file) => {
         if (file.data && !file.error) {
-          // Convert base64 to Uint8Array (browser-compatible)
           const binaryString = atob(file.data);
           const len = binaryString.length;
           const bytes = new Uint8Array(len);
@@ -46,7 +43,7 @@ export function useFiles() {
           }
           files.value[file.uuid] = {
             filename: file.filename,
-            data: bytes, // Store as Uint8Array
+            data: bytes,
             mimeType: file.mimeType,
           };
         }
@@ -54,6 +51,54 @@ export function useFiles() {
       return retrievedFiles;
     } catch (error) {
       console.error('Retrieval failed:', error);
+      throw error;
+    }
+  }
+
+  async function ocrFiles(uuids, documentData) {
+    const supportedMimeTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    const maxFileSize = 7 * 1024 * 1024; // 7MB in bytes per file
+
+    try {
+      // Fetch files if not already in memory
+      await retrieveFiles(uuids);
+
+      // Filter files based on MIME types and size
+      const validFiles = uuids
+        .map(uuid => {
+          const doc = documentData.find(d => d.id === uuid);
+          const file = files.value[uuid];
+          return {
+            uuid,
+            file,
+            mimeType: doc?.data.mimeType,
+            size: doc?.data.size, // Size in bytes from document entity
+          };
+        })
+        .filter(item => 
+          item.file && 
+          supportedMimeTypes.includes(item.mimeType) && 
+          (item.size <= maxFileSize)
+        );
+
+      if (validFiles.length === 0) {
+        throw new Error('No valid files found for OCR. Supported types: image/png, image/jpeg, image/webp; Max size: 7MB per file');
+      }
+
+      const formData = new FormData();
+      validFiles.forEach(item => {
+        const blob = new Blob([item.file.data], { type: item.mimeType });
+        formData.append('files', blob, item.uuid);
+        formData.append(`mimeType_${item.uuid}`, item.mimeType); // Pass MIME type for each file
+      });
+
+      const response = await axios.post('/api/files/ocr', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      return response.data.text; // Array of OCR results
+    } catch (error) {
+      console.error('OCR failed:', error);
       throw error;
     }
   }
@@ -70,6 +115,7 @@ export function useFiles() {
     files,
     uploadFiles,
     retrieveFiles,
+    ocrFiles,
     getFile,
     cleanup,
   };

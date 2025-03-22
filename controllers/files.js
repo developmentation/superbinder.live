@@ -1,40 +1,33 @@
-// ./controllers/files.js (updated to handle renaming to UUIDs)
+// ./controllers/files.js
 const path = require('path');
 const fs = require('fs').promises;
 const { upload } = require('../tools/uploads.js');
+const { ocrUpload } = require('../tools/ocrUploads.js'); // New import
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Controller object
 const filesController = {};
 
 /**
  * POST /api/files
- * Handles multiple file uploads, renaming them to UUIDs and saving to process.env.DATA.
- * Expects req.body.uuids to be a JSON string array of UUIDs matching the order of files.
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
  */
 filesController.addFiles = async (req, res) => {
   try {
-    // Use Multer middleware to handle file uploads
     upload.array('files', 100)(req, res, async (err) => {
       if (err) {
         console.error('Multer error:', err);
         return res.status(400).json({ message: 'File upload failed', error: err.message });
       }
 
-      // Ensure files were uploaded
       if (!req.files || req.files.length === 0) {
         return res.status(400).json({ message: 'No files uploaded' });
       }
 
-      // Validate and set DATA directory
       const dataDir = process.env.DATA || path.resolve(__dirname, '../files');
       if (!dataDir) {
         return res.status(500).json({ message: 'DATA environment variable is not set and default path resolution failed' });
       }
       console.log('Using data directory:', dataDir);
 
-      // Parse UUIDs from request body
       let uuids;
       try {
         uuids = req.body.uuids ? JSON.parse(req.body.uuids) : [];
@@ -42,12 +35,10 @@ filesController.addFiles = async (req, res) => {
         return res.status(400).json({ message: 'Invalid UUIDs format', error: parseErr.message });
       }
 
-      // Validate UUIDs match the number of files if provided
       if (uuids.length > 0 && uuids.length !== req.files.length) {
         return res.status(400).json({ message: `Mismatch between UUIDs (${uuids.length}) and files (${req.files.length})` });
       }
 
-      // Log the files and UUIDs for debugging
       console.log('Uploaded files (before renaming):', req.files.map(file => ({
         originalName: file.originalname,
         filename: file.filename,
@@ -55,10 +46,9 @@ filesController.addFiles = async (req, res) => {
       })));
       console.log('Provided UUIDs:', uuids);
 
-      // Rename files to UUIDs if provided
       const results = await Promise.all(req.files.map(async (file, index) => {
         const originalPath = path.join(dataDir, file.filename);
-        let newFilename = file.originalname; // Default to original name if no UUID
+        let newFilename = file.originalname;
         let newPath = originalPath;
         let renamedCorrectly = true;
 
@@ -71,7 +61,7 @@ filesController.addFiles = async (req, res) => {
           } catch (renameErr) {
             console.error(`Failed to rename ${file.originalname} to ${newFilename}:`, renameErr.message);
             renamedCorrectly = false;
-            newPath = originalPath; // Keep original path if rename fails
+            newPath = originalPath;
           }
         }
 
@@ -93,7 +83,6 @@ filesController.addFiles = async (req, res) => {
         };
       }));
 
-      // Check for renaming failures
       const renamingFailures = results.filter(result => result.uuid && !result.renamedCorrectly);
       if (renamingFailures.length > 0) {
         console.warn('Renaming failures detected:', renamingFailures);
@@ -117,15 +106,9 @@ filesController.addFiles = async (req, res) => {
 
 /**
  * GET /api/files
- * Retrieves files from process.env.DATA based on an array of UUIDs.
- * Expects query parameter ?uuids=["uuid1","uuid2",...].
- * Returns file binaries, filenames, and MIME types.
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
  */
 filesController.retrieveFiles = async (req, res) => {
   try {
-    // Parse UUIDs from query parameter
     let uuids;
     try {
       uuids = req.query.uuids ? JSON.parse(req.query.uuids) : [];
@@ -137,19 +120,16 @@ filesController.retrieveFiles = async (req, res) => {
       return res.status(400).json({ message: 'UUIDs must be a non-empty array' });
     }
 
-    // Validate and set DATA directory
     const dataDir = process.env.DATA || path.resolve(__dirname, '../files');
     if (!dataDir) {
       return res.status(500).json({ message: 'DATA environment variable is not set and default path resolution failed' });
     }
     console.log('Using data directory for retrieval:', dataDir);
 
-    // Retrieve files
     const files = [];
     for (const uuid of uuids) {
       const filePath = path.join(dataDir, uuid);
       try {
-        // Read file binary
         const fileBuffer = await fs.readFile(filePath);
         files.push({
           uuid,
@@ -173,6 +153,119 @@ filesController.retrieveFiles = async (req, res) => {
   } catch (error) {
     console.error('Error retrieving files:', error);
     res.status(500).json({ message: 'Failed to retrieve files', error: error.message });
+  }
+};
+
+/**
+ * POST /api/files/ocr
+ */
+filesController.ocrFile = async (req, res) => {
+  try {
+    ocrUpload.array('files', 3000)(req, res, async (err) => {
+      if (err) {
+        console.error('Multer error:', err);
+        return res.status(400).json({ message: 'File upload failed', error: err.message });
+      }
+
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ message: 'No files uploaded' });
+      }
+
+      const supportedMimeTypes = ['image/png', 'image/jpeg', 'image/webp'];
+      const maxFileCount = 3000;
+
+      if (req.files.length > maxFileCount) {
+        return res.status(400).json({ message: `Too many files uploaded (${req.files.length}). Maximum allowed is ${maxFileCount}.` });
+      }
+
+      // Process files with provided MIME types from memory
+      const fileData = req.files.map(file => {
+        const uuid = file.originalname; // Assuming filename is UUID
+        const mimeType = req.body[`mimeType_${uuid}`];
+        if (!supportedMimeTypes.includes(mimeType)) {
+          console.warn(`Unsupported MIME type for file ${uuid}: ${mimeType}`);
+          return null;
+        }
+
+        const base64Image = file.buffer.toString('base64');
+        return { base64Image, mimeType };
+      }).filter(data => data !== null);
+
+      if (fileData.length === 0) {
+        return res.status(400).json({ message: 'No valid files uploaded. Supported MIME types: image/png, image/jpeg, image/webp' });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: 'GEMINI_API_KEY environment variable is not set' });
+      }
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+      const customPrompt = `
+        Interpret the following image(s) and extract out and describe their key features in a JSON schema, as follows:
+        {
+          "text": "string", // The extracted text from the image
+          "features": [
+            {
+              "type": "string", // e.g., "text", "table", "image", "heading"
+              "description": "string", // Brief description of the feature
+              "content": "string" // The content of the feature (e.g., text, table data)
+            }
+          ]
+        }
+        Please process each image and return an array of results in this exact JSON format, one entry per image.
+      `;
+
+      const request = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              ...fileData.map(data => ({
+                inlineData: {
+                  data: data.base64Image,
+                  mimeType: data.mimeType,
+                },
+              })),
+              {
+                text: customPrompt,
+              },
+            ],
+          },
+        ],
+      };
+
+      const response = await model.generateContent(request);
+      const fullTextResponse = response.response.candidates[0].content.parts[0].text;
+
+      // let ocrResults;
+      // try {
+      //   ocrResults = JSON.parse(fullTextResponse);
+      //   if (!Array.isArray(ocrResults)) {
+      //     throw new Error('Expected an array of OCR results');
+      //   }
+      // } catch (parseErr) {
+      //   console.error('Failed to parse Gemini response as JSON:', parseErr.message);
+      //   return res.status(500).json({
+      //     message: 'OCR completed but response parsing failed',
+      //     rawResponse: fullTextResponse,
+      //     error: parseErr.message,
+      //   });
+      // }
+
+      // if (ocrResults.length !== fileData.length) {
+      //   console.warn(`Mismatch between OCR results (${ocrResults.length}) and valid files (${fileData.length})`);
+      // }
+
+      res.status(200).json({
+        message: 'OCR completed successfully',
+        text: fullTextResponse,
+      });
+    });
+  } catch (error) {
+    console.error('Error performing OCR:', error);
+    res.status(500).json({ message: 'Failed to perform OCR', error: error.message });
   }
 };
 

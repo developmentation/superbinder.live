@@ -15,7 +15,7 @@ export default {
     const { userUuid, emit } = useRealTime();
     const { updateDocument } = useDocuments();
     const { updateArtifact } = useArtifacts();
-    const { retrieveFiles, files } = useFiles();
+    const { ocrFiles, retrieveFiles, files } = useFiles();
 
     const displayMode = Vue.ref('default');
     const initialDisplayMode = Vue.ref('default');
@@ -251,28 +251,30 @@ export default {
       console.log('Current page updated:', currentPage.value);
     };
 
-    const ocrPage = async (pageIndex) => {
-      await retrieveFiles([props.item.id]);
-      const file = files.value[props.item.id];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', new Blob([file.data]));
-      formData.append('pageIndex', pageIndex);
-      const response = await axios.post('/api/files/ocr', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      editedContent.value[pageIndex] = response.data.text;
+    
+    // In ViewerEditor.js setup()
+const ocrPage = async (pageIndex) => {
+  try {
+    const ocrResults = await ocrFiles([props.item.id], [props.item]);
+    // if (ocrResults.length > 0) {
+      editedContent.value[pageIndex] = ocrResults; // Single result for specific page
       finishEditing();
-    };
+    // }
+  } catch (error) {
+    console.error('OCR page failed:', error);
+  }
+};
 
-    const ocrAll = async () => {
-      await retrieveFiles([props.item.id]);
-      const file = files.value[props.item.id];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', new Blob([file.data]));
-      const response = await axios.post('/api/files/ocr', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      editedContent.value = response.data.text;
-      finishEditing();
-    };
+const ocrAll = async () => {
+  try {
+    const ocrResults = await ocrFiles([props.item.id], [props.item]);
+    editedContent.value = ocrResults; // Array of results
+    finishEditing();
+  } catch (error) {
+    console.error('OCR all failed:', error);
+  }
+};
+
 
     const jumpToPage = () => {
       const pageNum = parseInt(jumpToPageInput.value, 10);
