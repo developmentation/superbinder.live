@@ -361,13 +361,13 @@ export default {
               v-html="content"
             ></div>
           </div>
-          <div v-else class="bg-[#2d3748] p-2 rounded-lg h-full overflow-y-none">
+          <div v-else class="  p-2 rounded-lg h-full overflow-y-none">
             <textarea
               v-for="(content, index) in editedContent"
               :key="index"
               v-model="editedContent[index]"
               @input="handleTextInput(index, $event)"
-              class="text-[#e2e8f0] bg-[#2d3748] outline-none w-full h-full resize-none border-none whitespace-pre-wrap"
+              class="text-[#e2e8f0] bg-[#2d3748] outline-none w-full h-full resize-none border-none whitespace-pre-wrap pb-5"
             ></textarea>
           </div>
         </div>
