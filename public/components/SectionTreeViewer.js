@@ -17,7 +17,7 @@ export default {
     const { sections, addSection, updateSection, removeSection, reorderSections } = useSections();
     const { documents, updateDocument } = useDocuments();
     const { artifacts, updateArtifact, setSelectedArtifact } = useArtifacts();
-    const { files } = useFiles(); // Remove uploadFiles, retrieveFiles as they're not used here anymore
+    const { files, retrieveFiles } = useFiles(); // Remove uploadFiles, retrieveFiles as they're not used here anymore
     const fileInput = Vue.ref(null);
     const draggedNode = Vue.ref(null);
     const dropTarget = Vue.ref(null);

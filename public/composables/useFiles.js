@@ -1,6 +1,25 @@
 // ./composables/useFiles.js
 const files = Vue.ref({});
 
+const defaultOcrPrompt = `
+  Interpret the following image(s) and extract out and describe their key features in a JSON schema, as follows:
+  {
+    "text": "string",
+    "interpretation": "string",
+    "otherContent": "string",
+    "otherData": "array",
+    "features": [
+      {
+        "type": "string",
+        "description": "string"
+      }
+    ]
+  }
+  Please process each image and return an array of results in this exact JSON format, one entry per image.
+`;
+
+const ocrPrompt = Vue.ref(defaultOcrPrompt);
+
 export function useFiles() {
   async function uploadFiles(fileList, uuids = fileList.map(() => uuidv4())) {
     const formData = new FormData();
@@ -67,7 +86,6 @@ export function useFiles() {
   
       const isRawFiles = documentData.every(item => item instanceof File);
       if (!isRawFiles) {
-        // Fetch files if using metadata objects
         await retrieveFiles(uuids);
       }
   
@@ -76,25 +94,28 @@ export function useFiles() {
           let doc, file, mimeType, size;
   
           if (isRawFiles) {
-            // Handle raw File objects
             doc = documentData[index];
-            file = doc; // Use the File object directly
+            file = doc;
             mimeType = doc.type;
             size = doc.size;
           } else {
-            // Handle metadata objects
             doc = documentData.find(d => d.id === uuid);
             file = files.value[uuid];
+            if (!file || !file.data) {
+              console.warn(`No valid file data for UUID ${uuid}`);
+              return null;
+            }
             mimeType = doc.data.mimeType;
             size = doc.data.size;
           }
   
           const page = pages[index];
           if (!file || !supportedMimeTypes.includes(mimeType) || size > maxFileSize) {
+            console.warn(`Skipping UUID ${uuid}: file=${!!file}, mimeType=${mimeType}, size=${size}`);
             return null;
           }
   
-          let blobData = file; // Default to raw file data for images
+          let blobData = isRawFiles ? file : file.data;
   
           if (mimeType === 'application/pdf' && !isRawFiles && doc.data.pages?.[page]) {
             const pageContent = doc.data.pages[page];
@@ -127,8 +148,8 @@ export function useFiles() {
               blobData = bytes;
               mimeType = pageContent.split(';')[0].split(':')[1];
             } else {
-              blobData = fetch(pageContent).then(res => res.blob()).then(blob => blob.arrayBuffer());
-              mimeType = 'image/png';
+              console.warn(`Unsupported page content for UUID ${uuid}, page ${page}: ${pageContent}`);
+              return null;
             }
           }
   
@@ -141,6 +162,7 @@ export function useFiles() {
       }
   
       const formData = new FormData();
+      formData.append('prompt', ocrPrompt.value);
       await Promise.all(validFiles.map(async item => {
         const data = await (item.file instanceof Promise ? item.file : Promise.resolve(item.file));
         const blob = new Blob([data], { type: item.mimeType });
@@ -177,6 +199,12 @@ export function useFiles() {
       throw error;
     }
   }
+
+  function resetOcrPrompt() {
+    console.log("resetOcrPrompt in useFiles")
+    ocrPrompt.value = defaultOcrPrompt;
+  }
+
   function getFile(uuid) {
     return files.value[uuid] || null;
   }
@@ -190,6 +218,8 @@ export function useFiles() {
     uploadFiles,
     retrieveFiles,
     ocrFiles,
+    ocrPrompt,
+    resetOcrPrompt, // Expose the reset method
     getFile,
     cleanup,
   };

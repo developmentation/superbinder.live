@@ -1,5 +1,6 @@
 // components/ViewerEditor.js
 import LazyScrollViewer from './LazyScrollViewer.js';
+import OcrPromptEditor from './OcrPromptEditor.js';
 import { useFiles } from '../composables/useFiles.js';
 import { useRealTime } from '../composables/useRealTime.js';
 import { useDocuments } from '../composables/useDocuments.js';
@@ -7,15 +8,15 @@ import { useArtifacts } from '../composables/useArtifacts.js';
 
 export default {
   name: 'ViewerEditor',
-  components: { LazyScrollViewer },
+  components: { LazyScrollViewer, OcrPromptEditor },
   props: {
     item: { type: Object, required: true },
   },
   setup(props) {
     const { userUuid, emit } = useRealTime();
-    const { updateDocument, updateDocumentOcr } = useDocuments(); // Add updateDocumentOcr
+    const { updateDocument, updateDocumentOcr } = useDocuments();
     const { updateArtifact } = useArtifacts();
-    const { ocrFiles, retrieveFiles, files } = useFiles();
+    const { ocrFiles, retrieveFiles, files, ocrPrompt, resetOcrPrompt } = useFiles();
 
     const displayMode = Vue.ref('default');
     const initialDisplayMode = Vue.ref('default');
@@ -25,6 +26,7 @@ export default {
     const jumpToPageInput = Vue.ref('');
     const currentPage = Vue.ref(0);
     const isOcrLoading = Vue.ref(false);
+    const showOcrPromptEditor = Vue.ref(false);
     const md = markdownit({ html: true, linkify: true, typographer: true, breaks: true });
 
     const imageTypes = ['png', 'jpg', 'jpeg', 'webp'];
@@ -104,11 +106,20 @@ export default {
       }
       if (imageTypes.includes(type) && displayMode.value === 'Image') {
         console.log('Image mode, rendering image:', pages);
-        if (pages?.length) {
-          return pages.map(url => `<img src="${url}" style="max-width: 100%; height: auto;" />`);
-        } else {
+        if (!pages?.length) {
+          if (!files.value[props.item.id]) {
+            retrieveFiles([props.item.id]);
+          }
+          const file = files.value[props.item.id];
+          if (file && file.data) {
+            const blob = new Blob([file.data], { type: file.mimeType });
+            const url = URL.createObjectURL(blob);
+            props.item.data.pages = [url];
+            return [`<img src="${url}" style="max-width: 100%; height: auto;" />`];
+          }
           return ['<p>Please click the eye icon to load the image.</p>'];
         }
+        return pages.map(url => `<img src="${url}" style="max-width: 100%; height: auto;" />`);
       }
       if ((imageTypes.includes(type) || type === 'svg') && displayMode.value === 'Text') {
         console.log('Image/SVG Text mode, rendering pagesText:', pagesText);
@@ -249,25 +260,24 @@ export default {
 
     const handlePageVisible = (pageIndex) => {
       currentPage.value = pageIndex;
-      jumpToPageInput.value = (pageIndex + 1).toString(); // Update Jump To input with current page
+      jumpToPageInput.value = (pageIndex + 1).toString();
       console.log('Current page updated:', currentPage.value);
     };
 
     const ocrPage = async () => {
       try {
         isOcrLoading.value = true;
-        const pageToOcr = props.item.data.type === 'pdf' ? currentPage.value : 0; // PDF uses current page, images use 0
+        const pageToOcr = props.item.data.type === 'pdf' ? currentPage.value : 0;
         const ocrResults = await ocrFiles([props.item.id], [props.item], [pageToOcr]);
         const { uuids, text, pages } = ocrResults;
         if (uuids[0] === props.item.id) {
           const pageIndex = pages[0];
           const ocrText = text[0];
-          editedContent.value[pageIndex] = ocrText; // Update local content
+          editedContent.value[pageIndex] = ocrText;
           const updateFn = props.item.type === 'document' ? updateDocumentOcr : updateArtifact;
           if (props.item.type === 'document') {
-            updateFn(props.item.id, pageIndex, ocrText); // Use new function for documents
+            updateFn(props.item.id, pageIndex, ocrText);
           } else {
-            // For artifacts, update the entire pagesText (assuming single page for now)
             updateFn(props.item.id, { pagesText: [ocrText] });
           }
         }
@@ -281,11 +291,30 @@ export default {
     const jumpToPage = () => {
       const pageNum = parseInt(jumpToPageInput.value, 10);
       if (isNaN(pageNum) || pageNum < 1 || pageNum > props.item.data.pages?.length) {
-        jumpToPageInput.value = (currentPage.value + 1).toString(); // Reset to current page
+        jumpToPageInput.value = (currentPage.value + 1).toString();
         return;
       }
       lazyScrollViewer.value.scrollToPage(pageNum - 1);
-      jumpToPageInput.value = (currentPage.value + 1).toString(); // Reflect current page after jump
+      jumpToPageInput.value = (currentPage.value + 1).toString();
+    };
+
+    const openOcrPromptEditor = () => {
+      showOcrPromptEditor.value = true;
+    };
+
+    const updateOcrPrompt = (newPrompt) => {
+      ocrPrompt.value = newPrompt;
+      showOcrPromptEditor.value = false;
+    };
+
+    const resetOcrPromptHandler = () => {
+      console.log(" resetOcrPromptHandler in ViewerEditor")
+      resetOcrPrompt();
+      // No need to close the modal; let the user save or cancel
+    };
+
+    const closeOcrPromptEditor = () => {
+      showOcrPromptEditor.value = false;
     };
 
     return {
@@ -296,6 +325,7 @@ export default {
       jumpToPageInput,
       currentPage,
       isOcrLoading,
+      showOcrPromptEditor,
       dropdownOptions,
       renderedContent,
       startEditing,
@@ -305,6 +335,11 @@ export default {
       handlePageVisible,
       ocrPage,
       jumpToPage,
+      openOcrPromptEditor,
+      updateOcrPrompt,
+      resetOcrPromptHandler,
+      closeOcrPromptEditor,
+      ocrPrompt,
     };
   },
   template: `
@@ -335,10 +370,26 @@ export default {
             <span class="text-[#e2e8f0] text-sm">of {{ item.data.pages?.length || 0 }}</span>
           </div>
           <button @click="jumpToPage" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">Go</button>
-          <button @click="ocrPage" :disabled="isOcrLoading" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm disabled:bg-[#4b5563] disabled:cursor-not-allowed flex items-center">
-            <span>OCR</span>
-            <i v-if="isOcrLoading" class="pi pi-spin pi-spinner ml-2"></i>
-          </button>
+          <div class="flex items-center">
+                      
+            <div class="flex items-center">
+              <button
+                @click="ocrPage"
+                :disabled="isOcrLoading"
+                class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg rounded-r-none text-sm disabled:bg-[#4b5563]  hover:bg-[#2563eb]  disabled:cursor-not-allowed flex items-center"
+              >
+                <span>OCR</span>
+                <i v-if="isOcrLoading" class="pi pi-spin pi-spinner ml-2"></i>
+              </button>
+              <button
+                @click="openOcrPromptEditor"
+                class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg rounded-l-none text-sm hover:bg-[#2563eb] flex items-center"
+              >&nbsp;
+                <i class="pi pi-pencil"></i>
+              </button>
+            </div>          
+
+          </div>
         </template>
         <h2 class="p-1 text-sm font-bold text-gray-500">{{item.data.name}}</h2>
       </div>
@@ -361,7 +412,7 @@ export default {
               v-html="content"
             ></div>
           </div>
-          <div v-else class="  p-2 rounded-lg h-full overflow-y-none">
+          <div v-else class="p-2 rounded-lg h-full overflow-y-none">
             <textarea
               v-for="(content, index) in editedContent"
               :key="index"
@@ -372,9 +423,15 @@ export default {
           </div>
         </div>
         <div v-else class="p-4 text-[#e2e8f0] whitespace-pre-wrap" v-html="renderedContent.join('<hr>')"></div>
-        <!-- Spacer div to ensure scrollable space at the bottom -->
         <div class="h-[200px]"></div>
       </div>
+      <ocr-prompt-editor
+        v-if="showOcrPromptEditor"
+        :initial-prompt="ocrPrompt"
+        @update-prompt="updateOcrPrompt"
+        @reset-prompt="resetOcrPromptHandler"
+        @close="closeOcrPromptEditor"
+      />
     </div>
   `,
 };

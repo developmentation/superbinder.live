@@ -161,6 +161,7 @@ filesController.retrieveFiles = async (req, res) => {
  */
 filesController.ocrFile = async (req, res) => {
   try {
+
     ocrUpload.array('files', 3000)(req, res, async (err) => {
       if (err) {
         console.error('Multer error:', err);
@@ -178,11 +179,20 @@ filesController.ocrFile = async (req, res) => {
         return res.status(400).json({ message: `Too many files uploaded (${req.files.length}). Maximum allowed is ${maxFileCount}.` });
       }
 
+      // Get the custom prompt from the request
+      const customPrompt = req.body.prompt;
+      if (!customPrompt) {
+        return res.status(400).json({ message: 'OCR prompt is required' });
+      }
+
       // Process files with provided MIME types and page numbers
       const fileData = req.files.map(file => {
         const uuid = file.originalname; // Assuming filename is UUID
         const mimeType = req.body[`mimeType_${uuid}`];
         const page = parseInt(req.body[`page_${uuid}`], 10) || 0;
+
+        console.log("Variables", {file, uuid, mimeType, page, customPrompt})
+
         if (!supportedMimeTypes.includes(mimeType)) {
           console.warn(`Unsupported MIME type for file ${uuid}: ${mimeType}`);
           return null;
@@ -202,23 +212,6 @@ filesController.ocrFile = async (req, res) => {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-      const customPrompt = `
-        Interpret the following image(s) and extract out and describe their key features in a JSON schema, as follows:
-        {
-          "text": "string",
-          "interpretation": "string",
-          "otherContent": "string",
-          "otherData": "array",
-          "features": [
-            {
-              "type": "string",
-              "description": "string"
-            }
-          ]
-        }
-        Please process each image and return an array of results in this exact JSON format, one entry per image.
-      `;
-
       // Retry function with exponential backoff
       const retryWithBackoff = async (fn, retries = 3, delay = 1000) => {
         for (let attempt = 0; attempt <= retries; attempt++) {
@@ -226,12 +219,12 @@ filesController.ocrFile = async (req, res) => {
             return await fn();
           } catch (error) {
             if (error.status === 429 && attempt < retries) {
-              const waitTime = delay * Math.pow(2, attempt); // Exponential backoff
+              const waitTime = delay * Math.pow(2, attempt);
               console.warn(`429 Too Many Requests detected for attempt ${attempt + 1}/${retries + 1}. Retrying in ${waitTime}ms...`);
               await new Promise(resolve => setTimeout(resolve, waitTime));
               continue;
             }
-            throw error; // Rethrow other errors or after max retries
+            throw error;
           }
         }
       };
@@ -248,7 +241,7 @@ filesController.ocrFile = async (req, res) => {
                     mimeType: mimeType === 'application/pdf' ? 'image/png' : mimeType,
                   },
                 },
-                { text: customPrompt },
+                { text: customPrompt }, // Use the dynamic prompt
               ],
             },
           ],
@@ -296,9 +289,9 @@ filesController.ocrFile = async (req, res) => {
           uuid: result.uuid,
           error: result.error,
         }));
-        res.status(207); // Multi-Status: Some succeeded, some failed
+        res.status(207);
       } else {
-        res.status(200); // OK: All succeeded
+        res.status(200);
       }
 
       res.json(responseBody);
