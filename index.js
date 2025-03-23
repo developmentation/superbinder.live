@@ -32,15 +32,10 @@ app.use((req, res, next) => {
 
 // API routes (ensure these are defined first)
 // We are only assuming endpoints stating with /api/ 
-app.use("/api/healthcheck", require("./routes/healthcheck")); // Healthcheck route
 app.use("/api/configs", require("./routes/configs")); // Configuration values
-app.use("/api/models", require("./routes/models")); // Server side defined models
-app.use("/api/deepgram", require("./routes/deepgram")); // Perform transcripts via deepgram
-app.use("/api/webContent", require("./routes/webContent")); // Load web content (web processing)
-app.use("/api/gitHubContent", require("./routes/gitHubContent")); // Load GitHub repo file structures content
-app.use("/api/apiActions", require("./routes/apiActions")); // Load GitHub repo file structures content
-app.use("/api/textToSpeech", require("./routes/textToSpeech")); // Load GitHub repo file structures content
 app.use("/api/files", require("./routes/files")); // Add and retrieve files to process.env.DATA
+app.use("/api/healthcheck", require("./routes/healthcheck")); // Healthcheck route
+app.use("/api/models", require("./routes/models")); // Server side defined models
 
 // SPA Fallback: Serve `index.html` for any non-API routes
 app.get("*", (req, res) => {

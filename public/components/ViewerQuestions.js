@@ -1,7 +1,6 @@
 // components/ViewerQuestions.js
 import { useQuestions } from '../composables/useQuestions.js';
 import { useDocuments } from '../composables/useDocuments.js';
-import { useClips } from '../composables/useClips.js';
 import { useLLM } from '../composables/useLLM.js';
 import { useScrollNavigation } from '../composables/useScrollNavigation.js';
 import { useArtifacts } from '../composables/useArtifacts.js'; // New import
@@ -195,7 +194,6 @@ export default {
   setup() {
     const { questionsWithAnswers, rawQuestions, rawAnswers, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addAnswer, updateAnswer, deleteAnswer, voteAnswer, addLinkProgrammatically } = useQuestions();
     const { selectedDocument, documents, setSelectedDocument } = useDocuments();
-    const { clips } = useClips();
     const { llmRequests, triggerLLM } = useLLM();
     const { jumpToPageNumber } = useScrollNavigation();
     const { artifacts , selectedArtifact } = useArtifacts(); // New

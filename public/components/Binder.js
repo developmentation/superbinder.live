@@ -2,19 +2,16 @@
 import { useRealTime } from "../composables/useRealTime.js";
 import { useHistory } from "../composables/useHistory.js";
 import SessionSetup from "./SessionSetup.js";
-import ViewerUploads from "./ViewerUploads.js";
 import Viewer from "./Viewer.js";
 import ChatPanel from "./ChatPanel.js";
 import ViewerDashboard from "./ViewerDashboard.js";
 import SessionRemoved from "./SessionRemoved.js"; // Import the new component
 import { useAgents } from "../composables/useAgents.js";
 import { useChat } from "../composables/useChat.js";
-import { useClips } from "../composables/useClips.js";
 import { useDocuments } from "../composables/useDocuments.js";
 import { useGoals } from "../composables/useGoals.js";
 import { useQuestions } from "../composables/useQuestions.js";
 import { useArtifacts } from "../composables/useArtifacts.js";
-import { useTranscripts } from "../composables/useTranscripts.js";
 import { useSections } from "../composables/useSections.js";
 import { useCollaboration } from "../composables/useCollaboration.js";
 import { useConfigs } from "../composables/useConfigs.js";
@@ -23,7 +20,6 @@ export default {
   name: "Binder",
   components: {
     SessionSetup,
-    ViewerUploads,
     Viewer,
     ChatPanel,
     ViewerDashboard,
@@ -154,12 +150,10 @@ export default {
     const { gatherLocalHistory } = useHistory();
     const { agents, cleanup: cleanupAgents } = useAgents();
     const { messages, cleanup: cleanupChat } = useChat();
-    const { clips, cleanup: cleanupClips } = useClips();
     const { documents, cleanup: cleanupDocuments } = useDocuments();
     const { goals, cleanup: cleanupGoals } = useGoals();
     const { questions, answers, cleanup: cleanupQuestions } = useQuestions();
     const { artifacts, cleanup: cleanupArtifacts } = useArtifacts();
-    const { transcripts, cleanup: cleanupTranscripts } = useTranscripts();
     const { sections, cleanup: cleanupSections } = useSections();
     const { breakouts, cleanup: cleanupCollaboration } = useCollaboration();
 
@@ -185,9 +179,7 @@ export default {
     const goalCount = Vue.computed(() => (history.value.goals || []).length);
     const agentCount = Vue.computed(() => (history.value.agents || []).length);
     const documentCount = Vue.computed(() => (history.value.documents || []).length);
-    const clipCount = Vue.computed(() => (history.value.clips || []).length);
-    const bookmarkCount = Vue.computed(() => (history.value.bookmarks || []).length);
-    const transcriptCount = Vue.computed(() => (history.value.transcripts || []).length);
+   
     const questionCount = Vue.computed(() => (history.value.questions || []).length);
     const answerCount = Vue.computed(() => (history.value.answers || []).length);
     const chatCount = Vue.computed(() => (history.value.chat || []).length);
@@ -231,13 +223,11 @@ export default {
       // Reset all composable states
       agents.value = [];
       messages.value = [];
-      clips.value = [];
       documents.value = [];
       goals.value = [];
       questions.value = [];
       answers.value = [];
       artifacts.value = [];
-      transcripts.value = [];
       sections.value = [];
       breakouts.value = [];
     }
@@ -392,12 +382,10 @@ export default {
       off("session-removed");
       cleanupAgents();
       cleanupChat();
-      cleanupClips();
       cleanupDocuments();
       cleanupGoals();
       cleanupQuestions();
       cleanupArtifacts();
-      cleanupTranscripts();
       cleanupSections();
       cleanupCollaboration();
     });
@@ -434,9 +422,6 @@ export default {
       goalCount,
       agentCount,
       documentCount,
-      clipCount,
-      bookmarkCount,
-      transcriptCount,
       questionCount,
       answerCount,
       chatCount,

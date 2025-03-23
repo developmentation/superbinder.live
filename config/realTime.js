@@ -34,8 +34,6 @@ const entityModels = {};
 Object.keys({
   agents: 'agentSet',
   chat: 'chatSet',
-  clips: 'clipSet',
-  bookmarks: 'bookmarkSet',
   documents: 'documentSet',
   goals: 'goalSet',
   questions: 'questionSet',
@@ -85,8 +83,6 @@ initializeDatabase().catch(err => {
 const entityConfigs = {
   agents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-agent', update: 'update-agent', remove: 'remove-agent', reorder: null } },
   chat: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-chat', update: 'update-chat', remove: 'delete-chat', draft: 'draft-chat' } },
-  clips: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-clip', update: null, remove: 'remove-clip', reorder: null } },
-  bookmarks: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-bookmark', update: 'update-bookmark', remove: 'remove-bookmark', reorder: null } },
   documents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-document', update: 'update-document', remove: 'remove-document', reorder: null } },
   goals: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-goal', update: 'update-goal', remove: 'remove-goal', reorder: 'reorder-goals' } },
   questions: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-question', update: 'update-question', remove: 'remove-question', reorder: 'reorder-questions' } },
@@ -690,11 +686,6 @@ async function handleMessage(dataObj, socket) {
       case 'add-agent':
       case 'update-agent':
       case 'remove-agent':
-      case 'add-clip':
-      case 'remove-clip':
-      case 'add-bookmark':
-      case 'update-bookmark':
-      case 'remove-bookmark':
       case 'add-document':
       case 'remove-document':
         case 'update-document':

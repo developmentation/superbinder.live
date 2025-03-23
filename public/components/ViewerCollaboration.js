@@ -30,7 +30,7 @@ export default {
       >
         <!-- Breakout Rooms -->
         <div class="flex flex-col flex-1">
-          <div class="p-1 border-b border-gray-700 flex justify-between items-center">
+          <div class="pl-4 border-b border-gray-700 flex justify-between items-center">
             <h3 class="text-lg font-semibold text-purple-400">Breakout Rooms</h3>
             <button @click="addBreakoutLocal" class="text-white hover:text-green-400 transition-colors">
               <i class="pi pi-plus"></i>
@@ -71,7 +71,7 @@ export default {
 
         <!-- Agents List -->
         <div class="flex flex-col flex-1">
-          <div class="p-4 border-t border-gray-700 flex justify-between items-center">
+          <div class="pl-4 border-t border-gray-700 flex justify-between items-center">
             <h3 class="text-lg font-semibold text-purple-400">Agents</h3>
           </div>
           <div class="flex-1 overflow-y-auto custom-scrollbar max-h-[300px]">
@@ -96,10 +96,10 @@ export default {
       <!-- Chat Area -->
       <div class="flex-1 flex flex-col bg-gray-900">
         <!-- Header -->
-        <div class="p-1 border-b border-gray-700 flex justify-between items-center flex-shrink-0 bg-gray-800">
+        <div class="pl-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0 bg-gray-800">
           <h3 class="text-xl font-semibold text-purple-400">{{ currentBreakout?.data.name || 'Select a Breakout Room' }}</h3>
           <div class="flex items-center gap-2">
-            <span class="text-gray-400 text-sm">Active Users: {{ activeUsers.length }}</span>
+            <span class="text-gray-400 text-sm pr-4">Active Users: {{ activeUsers.length }}</span>
           </div>
         </div>
 

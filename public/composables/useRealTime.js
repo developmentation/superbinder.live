@@ -253,8 +253,6 @@ export function useRealTime() {
     off('update-agent');
     off('remove-agent');
     off('chat-message');
-    off('add-clip');
-    off('remove-clip');
     off('add-document');
     off('remove-document');
     off('update-document');

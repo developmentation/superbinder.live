@@ -1,35 +1,23 @@
 // ./components/Viewer.js
 import LLMInteraction from './LLMInteraction.js';
+import ViewerDashboard from './ViewerDashboard.js';
+import ViewerSections from './ViewerSections.js';
 import ViewerGoals from './ViewerGoals.js';
 import ViewerAgents from './ViewerAgents.js';
-// import ViewerDocuments from './ViewerDocuments.js';
-// import ViewerClips from './ViewerClips.js';
-// import ViewerBookmarks from './ViewerBookmarks.js';
-import ViewerTranscribe from './ViewerTranscribe.js';
 import ViewerQuestions from './ViewerQuestions.js';
-import ViewerArtifacts from './ViewerArtifacts.js';
-// import ViewerUploads from './ViewerUploads.js';
-import ViewerDashboard from './ViewerDashboard.js';
 import ViewerCollaboration from './ViewerCollaboration.js';
-import ViewerSections from './ViewerSections.js';
 import { useRealTime } from '../composables/useRealTime.js';
 
 export default {
   name: 'Viewer',
   components: {
     LLMInteraction,
+    ViewerDashboard,
+    ViewerSections,
     ViewerGoals,
     ViewerAgents,
-    // ViewerDocuments,
-    // ViewerBookmarks,
-    // ViewerClips,
-    ViewerTranscribe,
     ViewerQuestions,
-    ViewerArtifacts,
-    // ViewerUploads,
-    ViewerDashboard,
     ViewerCollaboration,
-    ViewerSections,
   },
   props: {
     activeTab: {
@@ -85,38 +73,6 @@ export default {
         class="h-full"
       />
 
-      <!-- Documents Sub-Tabs -->
-
-      <!--
-      <viewer-documents
-        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Viewer'"
-        :documents="documents"
-        :bookmarks="bookmarks"
-        class="h-full"
-      />
-      <viewer-clips
-        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Clips'"
-        :update-tab="updateTab"
-        class="h-full"
-      />
-      <viewer-bookmarks
-        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Bookmarks'"
-        :update-tab="updateTab"
-        class="h-full"
-      />
-      <viewer-uploads
-        v-show="activeTab === 'Documents' && activeDocumentSubTab === 'Uploads'"
-        :update-tab="updateTab"
-        class="h-full"
-      />
-      -->
-
-      <!-- Transcriptions -->
-      <viewer-transcribe
-        v-show="activeTab === 'Transcriptions'"
-        class="h-full"
-      />
-
       <!-- Q&A -->
       <viewer-questions
         v-show="activeTab === 'Q&A'"
@@ -130,11 +86,6 @@ export default {
         class="h-full"
       />
 
-      <!-- Artifacts -->
-      <viewer-artifacts
-        v-show="activeTab === 'Artifacts'"
-        class="h-full"
-      />
 
       <!-- Sections -->
       <viewer-sections

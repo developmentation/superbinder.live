@@ -36,7 +36,7 @@ function initializeSocket(channelName, userUuid, displayName, onMessage, onStatu
   });
 
   socket.on('connect', () => {
-    console.log(`Connected to server with UUID: ${userUuid}, Socket ID: ${socket.id}`);
+    // console.log(`Connected to server with UUID: ${userUuid}, Socket ID: ${socket.id}`);
     onStatusChange('connected', null);
     if (channelName && displayName) {
       socket.emit('join-channel', { userUuid, displayName, channelName });

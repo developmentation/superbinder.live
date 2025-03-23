@@ -1,12 +1,10 @@
 // composables/useHistory.js
 import { useAgents } from './useAgents.js';
 import { useChat } from './useChat.js';
-import { useClips } from './useClips.js';
 import { useDocuments } from './useDocuments.js';
 import { useGoals } from './useGoals.js';
 import { useQuestions } from './useQuestions.js';
 import { useArtifacts } from './useArtifacts.js';
-import { useTranscripts } from './useTranscripts.js';
 import { useCollaboration } from './useCollaboration.js';
 import { useSections } from './useSections.js';
 import eventBus from './eventBus.js';
@@ -16,14 +14,11 @@ export function useHistory() {
     const history = {
       agents: [...useAgents().agents.value],
       chat: [...useChat().messages.value],
-      clips: [...useClips().clips.value],
-      bookmarks: [...useClips().bookmarks.value],
       documents: [...useDocuments().documents.value],
       goals: [...useGoals().goals.value],
       questions: [...useQuestions().questions.value],
       answers: [...useQuestions().answers.value],
       artifacts: [...(useArtifacts().artifacts.value || [])],
-      transcripts: [...(useTranscripts().transcripts.value || [])],
       breakout: [...(useCollaboration().breakouts.value || [])],
       collab: [...(useCollaboration().collabs.value || [])],
       sections: [...(useSections().sections.value || [])],
@@ -75,14 +70,11 @@ export function useHistory() {
 
       useAgents().agents.value = mergeArrays(useAgents().agents.value, historyData.agents);
       useChat().messages.value = mergeArrays(useChat().messages.value, historyData.chat);
-      useClips().clips.value = mergeArrays(useClips().clips.value, historyData.clips);
-      useClips().bookmarks.value = mergeArrays(useClips().bookmarks.value, historyData.bookmarks);
       useDocuments().documents.value = mergeArrays(useDocuments().documents.value, historyData.documents, true); // Preserve data.pages
       useGoals().goals.value = mergeArrays(useGoals().goals.value, historyData.goals);
       useQuestions().questions.value = mergeArrays(useQuestions().questions.value, historyData.questions);
       useQuestions().answers.value = mergeArrays(useQuestions().answers.value, historyData.answers);
       useArtifacts().artifacts.value = mergeArrays(useArtifacts().artifacts.value || [], historyData.artifacts);
-      useTranscripts().transcripts.value = mergeArrays(useTranscripts().transcripts.value || [], historyData.transcripts);
       useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakout);
       useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
       useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
