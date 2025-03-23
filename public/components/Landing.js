@@ -22,7 +22,7 @@ export default {
             <div class="sm:text-center md:mx-auto lg:col-span-8 lg:text-left">
               <h1 class="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white animate-fade-in">
                 SuperBinder
-                <span class="block text-purple-400 mt-3">Where Humans & AI Unite Live</span>
+                <span class="block text-purple-400 mt-3">Where Humans & AI Unite in Real-Time</span>
               </h1>
               <p class="mt-6 text-xl text-gray-200 leading-relaxed max-w-3xl animate-slide-up">
                 Experience real-time collaboration with humans and AI agents, managing vast document sets, dynamic sections, live chats, and more—all in one powerful, open-source platform.
