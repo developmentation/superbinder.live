@@ -39,7 +39,7 @@ export default {
 
       <!-- Main Content -->
       <div class="flex-1 overflow-y-auto custom-scrollbar px-4">
-        <div class="grid grid-cols-1 lg:grid-cols-[minmax(300px,1fr)_minmax(0,3fr)] gap-4 h-full">
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(300px,1fr)_minmax(0,3fr)] gap-4 h-[calc(100%-100px)]">
           <!-- Users in Room -->
           <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg col-span-1 h-full">
             <div class="flex items-center gap-3 mb-3">

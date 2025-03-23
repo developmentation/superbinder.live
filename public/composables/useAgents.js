@@ -4,7 +4,7 @@ import { useRealTime } from './useRealTime.js';
 const agents = Vue.ref([]);
 const { userUuid, displayName, emit, on, off } = useRealTime();
 const eventHandlers = new WeakMap();
-const processedEvents = new Set(); // Add deduplication like useGoals
+const processedEvents = new Set();
 
 export function useAgents() {
   function handleAddAgent(eventObj) {
@@ -49,18 +49,19 @@ export function useAgents() {
     remove: removeAgentHandler,
   });
 
-  function addAgent(name, description, imageUrl, systemPrompts = [], userPrompts = []) {
+  function addAgent(name, description, imageUrl, systemPrompts = [], userPrompts = [], model = null) {
     if (!/^[a-zA-Z0-9_]+$/.test(name)) {
       throw new Error('Agent name must contain only letters, numbers, or underscores, with no spaces.');
     }
     const id = uuidv4();
-    const placeholderImage = imageUrl ? undefined : (Math.floor(Math.random() * 11) + 1); // Random 1-11 if no imageUrl
+    const placeholderImage = imageUrl ? undefined : (Math.floor(Math.random() * 11) + 1);
     const data = {
       name,
       createdBy: displayName.value,
       description,
       imageUrl,
-      placeholderImage, // Persist the random number
+      placeholderImage,
+      model, // Add model to data
       systemPrompts: systemPrompts.map(prompt => ({
         id: prompt.id || uuidv4(),
         type: prompt.type || 'text',
@@ -83,18 +84,19 @@ export function useAgents() {
     emit('add-agent', payload);
   }
 
-  function updateAgent(id, name, description, imageUrl, systemPrompts, userPrompts) {
+  function updateAgent(id, name, description, imageUrl, systemPrompts, userPrompts, model = null) {
     if (!/^[a-zA-Z0-9_]+$/.test(name)) {
       throw new Error('Agent name must contain only letters, numbers, or underscores, with no spaces.');
     }
     const existingAgent = agents.value.find(a => a.id === id);
-    const placeholderImage = imageUrl ? undefined : (existingAgent?.data?.placeholderImage || 1); // Retain existing or default to 1
+    const placeholderImage = imageUrl ? undefined : (existingAgent?.data?.placeholderImage || 1);
     const data = {
       name,
       createdBy: displayName.value,
       description,
       imageUrl,
       placeholderImage,
+      model, // Add model to data
       systemPrompts: systemPrompts.map(prompt => ({
         id: prompt.id || uuidv4(),
         type: prompt.type || 'text',

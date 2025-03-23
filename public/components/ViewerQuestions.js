@@ -146,7 +146,10 @@ export default {
           <div v-if="!question.data.answers?.length && !question.data.collapsed" class="text-gray-400">No answers yet.</div>
         </div>
         <div v-if="filteredQuestions.length === 0" class="text-gray-400">No questions match your filter.</div>
-      </div>
+    
+         <div class="h-[200px]"></div>
+    
+        </div>
 
       <!-- Add Link Modal -->
       <div v-if="showAddLinkModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

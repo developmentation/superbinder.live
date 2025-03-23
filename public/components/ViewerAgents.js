@@ -4,6 +4,7 @@ import { useRealTime } from '../composables/useRealTime.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useGoals } from '../composables/useGoals.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
+import { useModels } from '../composables/useModels.js'; // Add this import
 import SectionPickerModal from './SectionPickerModal.js';
 
 export default {
@@ -50,6 +51,7 @@ export default {
           </div>
         </div>
         <div v-if="filteredAgents.length === 0" class="text-gray-400">No agents found.</div>
+         <div class="h-[200px]"></div>
       </div>
 
       <!-- Main Edit Modal -->
@@ -78,7 +80,20 @@ export default {
               placeholder="Image URL for avatar... (optional)"
             />
             <div>
+              <h3 class="text-gray-300 mb-2">Model</h3>
+              <select
+                v-model="agentModel"
+                class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
+              >
+                <option :value="null">Default (Gemini 2.0 Flash)</option>
+                <option v-for="model in allModels" :key="model.name.en" :value="{ provider: model.provider, model: model.model, name: model.name.en }">
+                  {{ model.name.en }} ({{ model.provider }})
+                </option>
+              </select>
+            </div>
+            <div>
               <h3 class="text-gray-300 mb-2">System Prompts</h3>
+              <!-- System Prompts Table (unchanged) -->
               <table class="w-full text-left dark-table">
                 <thead>
                   <tr class="bg-gray-900">
@@ -139,6 +154,7 @@ export default {
             </div>
             <div>
               <h3 class="text-gray-300 mb-2">User Prompts</h3>
+              <!-- User Prompts Table (unchanged) -->
               <table class="w-full text-left dark-table">
                 <thead>
                   <tr class="bg-gray-900">
@@ -203,9 +219,10 @@ export default {
             <button @click="saveAgent" class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">Save</button>
           </div>
         </div>
+        
       </div>
 
-      <!-- Prompt Editing Modal -->
+      <!-- Prompt Editing Modal (unchanged) -->
       <div v-if="isPromptModalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-gray-800 p-6 rounded-lg w-full max-w-lg max-h-[80vh] overflow-y-auto">
           <h2 class="text-lg font-semibold text-purple-400 mb-4">Edit Prompt</h2>
@@ -221,7 +238,7 @@ export default {
         </div>
       </div>
 
-      <!-- Section Picker Modal -->
+      <!-- Section Picker Modal (unchanged) -->
       <section-picker-modal
         :visible="isSectionModalOpen"
         :uuids="sectionModalContent"
@@ -236,6 +253,7 @@ export default {
     const { documents } = useDocuments();
     const { goals } = useGoals();
     const { artifacts } = useArtifacts();
+    const { allModels } = useModels(); // Add this
     const filterQuery = Vue.ref('');
     const isModalOpen = Vue.ref(false);
     const isPromptModalOpen = Vue.ref(false);
@@ -245,6 +263,7 @@ export default {
     const agentName = Vue.ref('');
     const agentDescription = Vue.ref('');
     const agentImageUrl = Vue.ref('');
+    const agentModel = Vue.ref(null); // New ref for selected model
     const systemPrompts = Vue.ref([]);
     const userPrompts = Vue.ref([]);
     const nameError = Vue.ref('');
@@ -284,6 +303,7 @@ export default {
         agentName.value = agent.data.name;
         agentDescription.value = agent.data.description;
         agentImageUrl.value = agent.data.imageUrl;
+        agentModel.value = agent.data.model || null; // Load existing model or null
         systemPrompts.value = [...agent.data.systemPrompts];
         userPrompts.value = [...agent.data.userPrompts];
       } else {
@@ -292,6 +312,7 @@ export default {
         agentName.value = '';
         agentDescription.value = '';
         agentImageUrl.value = '';
+        agentModel.value = null; // Default to null (Gemini default in useCollaboration)
         systemPrompts.value = [];
         userPrompts.value = [];
       }
@@ -371,9 +392,9 @@ export default {
     function saveAgent() {
       if (nameError.value) return;
       if (editingAgent.value) {
-        updateAgent(agentId.value, agentName.value, agentDescription.value, agentImageUrl.value, systemPrompts.value, userPrompts.value);
+        updateAgent(agentId.value, agentName.value, agentDescription.value, agentImageUrl.value, systemPrompts.value, userPrompts.value, agentModel.value);
       } else {
-        addAgent(agentName.value, agentDescription.value, agentImageUrl.value, systemPrompts.value, userPrompts.value);
+        addAgent(agentName.value, agentDescription.value, agentImageUrl.value, systemPrompts.value, userPrompts.value, agentModel.value);
       }
       closeModal();
     }
@@ -393,6 +414,7 @@ export default {
       documents,
       goals,
       artifacts,
+      allModels, // Expose allModels for the dropdown
       filterQuery,
       filteredAgents,
       isModalOpen,
@@ -403,6 +425,7 @@ export default {
       agentName,
       agentDescription,
       agentImageUrl,
+      agentModel, // Add agentModel to return
       systemPrompts,
       userPrompts,
       nameError,

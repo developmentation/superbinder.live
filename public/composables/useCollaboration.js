@@ -6,10 +6,10 @@ import { useDocuments } from './useDocuments.js';
 import { useGoals } from './useGoals.js';
 import { useArtifacts } from './useArtifacts.js';
 
-const breakouts = Vue.ref([]); // List of breakout rooms { id, data: { name } }
-const collabs = Vue.ref([]); // Array of messages [{ id, userUuid, data: { text, breakoutId, color }, timestamp, isDraft }]
-const draftMessages = Vue.ref({}); // { breakoutId: { userUuid: draft } }
-const draftInitialTimestamps = Vue.ref({}); // { breakoutId: { userUuid: timestamp } }
+const breakouts = Vue.ref([]);
+const collabs = Vue.ref([]);
+const draftMessages = Vue.ref({});
+const draftInitialTimestamps = Vue.ref({});
 const currentBreakoutId = Vue.ref(null);
 
 const { emit, on, off, activeUsers, userUuid, userColor } = useRealTime();
@@ -23,9 +23,9 @@ const eventHandlers = new WeakMap();
 const processedEvents = new Set();
 
 export function useCollaboration() {
+  // Event handlers (unchanged)
   if (!eventHandlers.has(useCollaboration)) {
     const handlers = {};
-
     handlers.handleInitState = function ({ data }) {
       console.log('Received init-state for collaboration:', data);
       if (data.breakout) {
@@ -49,7 +49,6 @@ export function useCollaboration() {
         console.log('Set initial currentBreakoutId:', currentBreakoutId.value);
       }
     };
-
     handlers.handleAddCollab = function ({ id, userUuid: senderUuid, data, timestamp }) {
       console.log('Received add-collab:', { id, senderUuid, data, timestamp });
       const eventKey = `add-collab-${id}-${timestamp}`;
@@ -74,7 +73,6 @@ export function useCollaboration() {
         setTimeout(() => processedEvents.delete(eventKey), 1000);
       }
     };
-
     handlers.handleDraftCollab = function ({ id, userUuid: senderUuid, data, timestamp }) {
       console.log('Received draft-collab:', { id, senderUuid, data, timestamp });
       const eventKey = `draft-collab-${id}-${timestamp}`;
@@ -108,7 +106,6 @@ export function useCollaboration() {
         setTimeout(() => processedEvents.delete(eventKey), 1000);
       }
     };
-
     handlers.handleDraftLLM = function ({ id, data, timestamp }) {
       console.log('Received draft-llm:', { id, data, timestamp });
       const eventKey = `draft-llm-${id}-${timestamp}`;
@@ -141,7 +138,6 @@ export function useCollaboration() {
         setTimeout(() => processedEvents.delete(eventKey), 1000);
       }
     };
-
     handlers.handleUpdateCollab = function ({ id, userUuid: senderUuid, data, timestamp }) {
       console.log('Received update-collab:', { id, senderUuid, data, timestamp });
       const eventKey = `update-collab-${id}-${timestamp}`;
@@ -157,13 +153,11 @@ export function useCollaboration() {
         setTimeout(() => processedEvents.delete(eventKey), 1000);
       }
     };
-
     handlers.handleDeleteCollab = function ({ id, data }) {
       const breakoutId = data.breakoutId;
       collabs.value = collabs.value.filter(m => m.id !== id);
       collabs.value = [...collabs.value];
     };
-
     handlers.handleAddBreakout = function ({ id, data, timestamp }) {
       console.log('Received add-breakout:', { id, data, timestamp });
       const eventKey = `add-breakout-${id}-${timestamp}`;
@@ -181,7 +175,6 @@ export function useCollaboration() {
         setTimeout(() => processedEvents.delete(eventKey), 1000);
       }
     };
-
     handlers.handleUpdateBreakout = function ({ id, data, timestamp }) {
       console.log('Received update-breakout:', { id, data, timestamp });
       const breakout = breakouts.value.find(r => r.id === id);
@@ -191,7 +184,6 @@ export function useCollaboration() {
         console.log('Updated breakout name from server:', { id, name: data.name });
       }
     };
-
     handlers.handleDeleteBreakout = function ({ id, timestamp }) {
       console.log('Received delete-breakout:', { id, timestamp });
       const eventKey = `delete-breakout-${id}-${timestamp}`;
@@ -436,22 +428,27 @@ export function useCollaboration() {
     }));
     messageHistory.push(...chatHistory);
 
-
-      // Concatenate all system prompts into a single system prompt
+    // Concatenate all system prompts into a single system prompt
     const systemContent = messageHistory.filter(m => m.role === 'system').map(m => m.content).join('\n');
-    const cleanedMessageHistory = [
+    let cleanedMessageHistory = [
       { role: 'system', content: systemContent },
       ...messageHistory.filter(m => m.role !== 'system')
     ];
-    
+
+
+    //Remove empty string prompts, not supported by some LLMs like Grok
+    cleanedMessageHistory = cleanedMessageHistory.filter(m => m.content !== '')
+
+
     console.log('Chat History:', chatHistory);
     console.log('LLM Payload:', { cleanedMessageHistory });
 
+    // Use agent's model if available, otherwise default to Gemini
+    const model = agent.data.model || { provider: 'gemini', model: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' };
+
     triggerLLM(
       messageId,
-      { provider: 'gemini', model: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' },
-      // { provider: 'anthropic', model: 'claude-3-7-sonnet-20250219', name: 'claude-3-7-sonnet-20250219' },
-      // { provider: 'openai', model: 'gpt-4o', name: 'gpt-4o' },
+      model, // Use the selected model or default
       0.5,
       '',
       triggerText,
