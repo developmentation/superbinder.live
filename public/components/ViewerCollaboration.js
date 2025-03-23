@@ -147,14 +147,7 @@ export default {
                   >
                     <i class="pi pi-refresh text-sm"></i>
                   </button>
-                  <button
-                    v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid"
-                    @click.stop="deleteMessage(msg.id)"
-                    class="text-red-400 hover:text-red-300 rounded-full bg-gray-700 p-1"
-                    title="Delete message"
-                  >
-                    <i class="pi pi-times text-sm"></i>
-                  </button>
+
                   <button
                     v-if="!msg.isDraft"
                     @click.stop="openArtifactModal(msg.data.text)"
@@ -163,6 +156,15 @@ export default {
                   >
                     <i class="pi pi-bookmark text-sm"></i>
                   </button>
+                  <button
+                    v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid"
+                    @click.stop="deleteMessage(msg.id)"
+                    class="text-red-400 hover:text-red-300 rounded-full bg-gray-700 p-1"
+                    title="Delete message"
+                  >
+                    <i class="pi pi-times text-sm"></i>
+                  </button>
+
                 </div>
               </div>
               <div

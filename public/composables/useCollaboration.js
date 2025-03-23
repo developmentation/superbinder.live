@@ -435,8 +435,17 @@ export function useCollaboration() {
       content: m.data.text,
     }));
     messageHistory.push(...chatHistory);
+
+
+      // Concatenate all system prompts into a single system prompt
+    const systemContent = messageHistory.filter(m => m.role === 'system').map(m => m.content).join('\n');
+    const cleanedMessageHistory = [
+      { role: 'system', content: systemContent },
+      ...messageHistory.filter(m => m.role !== 'system')
+    ];
+    
     console.log('Chat History:', chatHistory);
-    console.log('LLM Payload:', { messageHistory });
+    console.log('LLM Payload:', { cleanedMessageHistory });
 
     triggerLLM(
       messageId,
@@ -446,7 +455,7 @@ export function useCollaboration() {
       0.5,
       '',
       triggerText,
-      messageHistory,
+      cleanedMessageHistory,
       false
     );
   }
