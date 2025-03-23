@@ -5,11 +5,11 @@ import { useClips } from '../composables/useClips.js';
 import { useLLM } from '../composables/useLLM.js';
 import { useScrollNavigation } from '../composables/useScrollNavigation.js';
 import { useArtifacts } from '../composables/useArtifacts.js'; // New import
-import ViewerDocuments from './ViewerDocuments.js';
+import ViewerEditor from './ViewerEditor.js';
 
 export default {
   name: 'ViewerQuestions',
-  components: { ViewerDocuments },
+  components: { ViewerEditor },
   template: `
     <div class="h-full flex flex-col overflow-hidden p-4">
       <!-- Question Input and Add Button -->
@@ -170,18 +170,22 @@ export default {
 
       <!-- Document Modal with Teleport -->
       <teleport to="#modal-portal">
-        <div v-if="showDocumentModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div class="relative w-full h-full">
-            <button @click="closeDocumentModal" class="absolute top-4 right-4 text-white text-3xl">X</button>
-            <viewer-documents
-              :documents="modalDocuments"
-              :bookmarks="[]"
-              :selected-document="modalSelectedDocument"
-              :jump-to-page-number.sync="modalJumpToPageNumber"
-              :key="modalKey"
-            />
-          </div>
-        </div>
+       <div v-if="showDocumentModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+  <div class="relative w-full h-full z-50">
+    <viewer-editor
+      v-if="selectedDocument || selectedArtifact"
+      :item="selectedDocument || selectedArtifact"
+      class="h-full z-50 pt-12"
+    />
+    <button 
+      @click="closeDocumentModal" 
+      class="absolute top-4 right-4 text-white text-3xl z-60"
+    >
+      X
+    </button>
+  </div>
+</div>
+
       </teleport>
     </div>
   `,
@@ -191,7 +195,7 @@ export default {
     const { clips } = useClips();
     const { llmRequests, triggerLLM } = useLLM();
     const { jumpToPageNumber } = useScrollNavigation();
-    const { artifacts } = useArtifacts(); // New
+    const { artifacts , selectedArtifact } = useArtifacts(); // New
     const newQuestion = Vue.ref('');
     const answerInput = Vue.ref([]);
     const answerLLMMap = Vue.ref({});
@@ -310,13 +314,33 @@ export default {
 
     function getDocumentName(docId) {
       const doc = documents.value.find(d => d.id === docId);
-      return doc ? doc.data.name : 'Unknown Document';
+      const arti = artifacts.value.find(d => d.id === docId);
+      return arti?.data?.name || doc?.data?.name || "Unknown Document/Artifact"
+      // return doc ? doc.data.name : 'Unknown Document';
     }
 
     function openDocumentModal(docId, page) {
-      selectedDocument.value = JSON.parse(JSON.stringify(documents.value.find(d => d.id === docId) || null));
-      jumpToPageNumber.value = page;
-      modalKey.value += 1;
+
+      const doc = documents.value.find(d => d.id === docId);
+      const arti = artifacts.value.find(d => d.id === docId);
+
+      if(doc?.id)
+      {
+        selectedArtifact.value = null;
+        selectedDocument.value = JSON.parse(JSON.stringify(documents.value.find(d => d.id === docId) || null));
+        jumpToPageNumber.value = page;
+        modalKey.value += 1;
+
+      }
+
+      if(arti?.id)
+        {
+          selectedDocument.value = null;
+          selectedArtifact.value = JSON.parse(JSON.stringify(artifacts.value.find(d => d.id === docId) || null));
+          jumpToPageNumber.value = 0;
+          modalKey.value += 1;
+        }
+  
       showDocumentModal.value = true;
     }
 
@@ -492,6 +516,8 @@ export default {
       topAnswerIds,
       deleteLink,
       handlePaste,
+      selectedArtifact,
+      selectedDocument,
     };
   },
 };
