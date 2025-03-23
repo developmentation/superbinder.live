@@ -1,6 +1,6 @@
 {
   "name": "superbinder-ai",
-  "version": "0.0.83",
+  "version": "0.0.84",
   "description": "Multi-person multi-agent AI interactions",
   "main": "index.js",
   "scripts": {
