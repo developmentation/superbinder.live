@@ -203,7 +203,7 @@ export default {
           </svg>
         </div>
 
-        <div class="flex-1 flex items-center justify-between min-w-0 relative">
+        <div class="flex-1 flex items-center justify-between min-w-0 relative hover:bg-[#3e4859] ">
           <div class="flex items-center gap-2 min-w-0 flex-1">
             <span :class="isLeaf(node) ? getFileIcon(node.data.name) : 'pi pi-folder'" class="text-[#94a3b8] text-sm"></span>
             <span

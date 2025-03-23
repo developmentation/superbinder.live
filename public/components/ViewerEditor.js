@@ -89,7 +89,7 @@ export default {
           return `
             <table class="w-full border-collapse">
               <thead><tr>${Object.keys(rows[0]).map(h => `<th class="border p-2 bg-[#2d3748] text-[#e2e8f0]">${h}</th>`).join('')}</tr></thead>
-              <tbody>${rows.map(row => `<tr>${Object.values(row).map(v => `<td class="border p-2 text-[#e2e8f0]">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+              <tbody>${rows.map(row => `<tr>${Object.values(row).map(v => `<td class="border p-2 text-[#e2e8f0]">${JSON.stringify(v)}</td>`).join('')}</tr>`).join('')}</tbody>
             </table>
           `;
         }) : [];
