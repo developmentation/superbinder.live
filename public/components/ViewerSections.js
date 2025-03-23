@@ -11,9 +11,16 @@ export default {
   name: 'ViewerSections',
   components: { SectionTreeViewer, ViewerEditor },
   setup() {
-    const { documents, selectedDocument, setSelectedDocument, addDocument, retrieveAndRenderFiles } = useDocuments();
+    const { 
+      documents, 
+      selectedDocument, 
+      setSelectedDocument, 
+      addDocument, 
+      retrieveAndRenderFiles, 
+      updateDocumentOcr 
+    } = useDocuments();
     const { artifacts, selectedArtifact, setSelectedArtifact } = useArtifacts();
-    const { uploadFiles, files, retrieveFiles } = useFiles();
+    const { uploadFiles, files, retrieveFiles, ocrFiles } = useFiles();
     const { sections, addSection } = useSections();
     const selectedKeys = Vue.ref({});
     const expandedKeys = Vue.ref({});
@@ -60,24 +67,56 @@ export default {
     };
 
     const handleFileUpload = async (event, sectionId = null) => {
-      const files = event.target.files;
-      if (!files || files.length === 0) return;
+      const fileList = event.target.files;
+      if (!fileList || fileList.length === 0) return;
 
+      const uploadedFiles = Array.from(fileList);
       const uuids = [];
-      for (const file of files) {
+      const fileMap = new Map(); // Map UUIDs to original File objects
+
+      // Step 1: Add documents and collect UUIDs
+      for (const file of uploadedFiles) {
         const result = await addDocument(file, sectionId);
         uuids.push(result.id);
+        fileMap.set(result.id, file);
       }
 
       try {
         isLoadingFiles.value = true;
-        const { results } = await uploadFiles(Array.from(files), uuids);
+
+        // Step 2: Upload files to the server
+        const { results } = await uploadFiles(uploadedFiles, uuids);
         const failures = results.filter(result => !result.saved || (result.uuid && !result.renamedCorrectly));
         if (failures.length > 0) {
           console.error('Upload failures:', failures);
           alert(`Some files failed to upload: ${failures.map(f => f.originalName).join(', ')}`);
           return;
         }
+
+        // Step 3: Filter image files and perform OCR
+        const imageTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/webp'];
+        const imageFiles = uploadedFiles.filter(file => imageTypes.includes(file.type));
+        if (imageFiles.length > 0) {
+          const imageUuids = imageFiles.map(file => uuids[uploadedFiles.indexOf(file)]);
+          const documentData = imageFiles; // Raw File objects (Blobs)
+          const pages = imageFiles.map(() => 0); // All images are page 0
+
+          try {
+            const ocrResults = await ocrFiles(imageUuids, documentData, pages);
+            ocrResults.uuids.forEach((uuid, index) => {
+              const text = ocrResults.text[index];
+              const page = ocrResults.pages[index];
+              if (text && page === 0) {
+                updateDocumentOcr(uuid, 0, text);
+              }
+            });
+          } catch (ocrError) {
+            console.error('OCR processing failed:', ocrError);
+            alert('OCR processing failed for some images.');
+          }
+        }
+
+        // Step 4: Retrieve and render files (for PDFs, etc.)
         await retrieveAndRenderFiles();
       } catch (error) {
         console.error('Error during upload process:', error);
@@ -97,10 +136,9 @@ export default {
 
       try {
         isLoadingFiles.value = true;
-        // Collect all UUIDs for PDFs and images that need rendering
         const idsToFetch = renderableDocs.map(doc => doc.id);
         if (idsToFetch.length > 0) {
-          await retrieveFiles(idsToFetch); // Fetch all files explicitly
+          await retrieveFiles(idsToFetch);
         }
 
         for (const doc of renderableDocs) {
@@ -131,7 +169,6 @@ export default {
       }
     };
 
-    // Optional: Update retrieveAndRenderFiles to fetch all renderable files
     const customRetrieveAndRenderFiles = async () => {
       const imageTypes = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
       const renderableDocs = documents.value.filter(doc => 
@@ -143,7 +180,7 @@ export default {
         isLoadingFiles.value = true;
         const idsToFetch = renderableDocs.map(doc => doc.id);
         if (idsToFetch.length > 0) {
-          await retrieveFiles(idsToFetch); // Fetch all files explicitly
+          await retrieveFiles(idsToFetch);
         }
       } catch (error) {
         console.error('Error loading files:', error);
@@ -182,14 +219,11 @@ export default {
       handleAddRootSection,
       expandAll,
       collapseAll,
-      retrieveAndRenderFiles: customRetrieveAndRenderFiles, // Use custom function
+      retrieveAndRenderFiles: customRetrieveAndRenderFiles,
     };
   },
   template: `
     <div class="h-full flex flex-col overflow-hidden">
-    <!--  <div v-if="isLoadingFiles" class="bg-blue-500 text-white text-sm p-2 text-center">
-        {{ isLoadingFiles ? 'Loading/Rendering Files...' : '' }}
-      </div> -->
       <div class="flex flex-col md:flex-row h-full">
         <!-- SectionTreeViewer (Left Column) -->
         <div class="w-full md:w-1/2 border-r border-[#2d3748] overflow-hidden">
@@ -242,7 +276,6 @@ export default {
               @node-select="handleNodeSelect"
               @upload-files="handleFileUpload"
             />
-            <!-- Spacer div to ensure scrollable space at the bottom -->
             <div class="h-[200px]"></div>
           </div>
         </div>

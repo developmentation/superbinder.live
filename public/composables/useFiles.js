@@ -58,39 +58,52 @@ export function useFiles() {
 
   async function ocrFiles(uuids, documentData, pages) {
     const supportedMimeTypes = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
-    const maxFileSize = 7 * 1024 * 1024; // 7MB in bytes per file
-
+    const maxFileSize = 7 * 1024 * 1024; // 7MB
+  
     try {
-      // Validate inputs
       if (uuids.length !== documentData.length || uuids.length !== pages.length) {
         throw new Error('Mismatch between uuids, documentData, and pages arrays');
       }
-
-      // Fetch files if not already in memory
-      await retrieveFiles(uuids);
-
-      // Filter and prepare files based on MIME types, size, and page data
+  
+      const isRawFiles = documentData.every(item => item instanceof File);
+      if (!isRawFiles) {
+        // Fetch files if using metadata objects
+        await retrieveFiles(uuids);
+      }
+  
       const validFiles = uuids
         .map((uuid, index) => {
-          const doc = documentData.find(d => d.id === uuid);
-          const file = files.value[uuid];
+          let doc, file, mimeType, size;
+  
+          if (isRawFiles) {
+            // Handle raw File objects
+            doc = documentData[index];
+            file = doc; // Use the File object directly
+            mimeType = doc.type;
+            size = doc.size;
+          } else {
+            // Handle metadata objects
+            doc = documentData.find(d => d.id === uuid);
+            file = files.value[uuid];
+            mimeType = doc.data.mimeType;
+            size = doc.data.size;
+          }
+  
           const page = pages[index];
-          if (!file || !doc || !supportedMimeTypes.includes(doc.data.mimeType) || doc.data.size > maxFileSize) {
+          if (!file || !supportedMimeTypes.includes(mimeType) || size > maxFileSize) {
             return null;
           }
-
-          let blobData;
-          let mimeType = doc.data.mimeType;
-
-          if (mimeType === 'application/pdf' && doc.data.pages?.[page]) {
+  
+          let blobData = file; // Default to raw file data for images
+  
+          if (mimeType === 'application/pdf' && !isRawFiles && doc.data.pages?.[page]) {
             const pageContent = doc.data.pages[page];
             if (typeof pageContent === 'string' && pageContent.includes('<img')) {
-              // Parse HTML to extract the image src
               const parser = new DOMParser();
               const docHtml = parser.parseFromString(pageContent, 'text/html');
               const img = docHtml.querySelector('img');
               if (img && img.src.startsWith('data:image/')) {
-                const base64Data = img.src.split(',')[1]; // Extract base64 part after "data:image/png;base64,"
+                const base64Data = img.src.split(',')[1];
                 const binaryString = atob(base64Data);
                 const len = binaryString.length;
                 const bytes = new Uint8Array(len);
@@ -98,13 +111,12 @@ export function useFiles() {
                   bytes[i] = binaryString.charCodeAt(i);
                 }
                 blobData = bytes;
-                mimeType = img.src.split(';')[0].split(':')[1]; // e.g., "image/png"
+                mimeType = img.src.split(';')[0].split(':')[1];
               } else {
                 console.warn(`No valid image found in page content for UUID ${uuid}, page ${page}`);
                 return null;
               }
             } else if (typeof pageContent === 'string' && pageContent.startsWith('data:image/')) {
-              // Direct base64 data URL
               const base64Data = pageContent.split(',')[1];
               const binaryString = atob(base64Data);
               const len = binaryString.length;
@@ -115,29 +127,19 @@ export function useFiles() {
               blobData = bytes;
               mimeType = pageContent.split(';')[0].split(':')[1];
             } else {
-              // Assume it's a URL to fetch
               blobData = fetch(pageContent).then(res => res.blob()).then(blob => blob.arrayBuffer());
-              mimeType = 'image/png'; // Assume PNG for rasterized pages
+              mimeType = 'image/png';
             }
-          } else {
-            // For non-PDFs (images), use the file data directly
-            blobData = file.data;
           }
-
-          return {
-            uuid,
-            file: blobData,
-            mimeType,
-            size: doc.data.size,
-            page,
-          };
+  
+          return { uuid, file: blobData, mimeType, size, page };
         })
         .filter(item => item !== null);
-
+  
       if (validFiles.length === 0) {
         throw new Error('No valid files found for OCR. Supported types: image/png, image/jpeg, image/webp, application/pdf; Max size: 7MB per file');
       }
-
+  
       const formData = new FormData();
       await Promise.all(validFiles.map(async item => {
         const data = await (item.file instanceof Promise ? item.file : Promise.resolve(item.file));
@@ -146,17 +148,16 @@ export function useFiles() {
         formData.append(`mimeType_${item.uuid}`, item.mimeType);
         formData.append(`page_${item.uuid}`, item.page);
       }));
-
+  
       const response = await axios.post('/api/files/ocr', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-
+  
       const { uuids: responseUuids, text, pages: responsePages } = response.data;
       if (!Array.isArray(responseUuids) || !Array.isArray(text) || !Array.isArray(responsePages)) {
         throw new Error('Invalid OCR response format');
       }
-
-      // Ensure response matches request order
+  
       const results = uuids.map(uuid => {
         const index = responseUuids.indexOf(uuid);
         return {
@@ -165,7 +166,7 @@ export function useFiles() {
           page: index !== -1 ? responsePages[index] : null,
         };
       });
-
+  
       return {
         uuids: results.map(r => r.uuid),
         text: results.map(r => r.text),
@@ -176,7 +177,6 @@ export function useFiles() {
       throw error;
     }
   }
-
   function getFile(uuid) {
     return files.value[uuid] || null;
   }

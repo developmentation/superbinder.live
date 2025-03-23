@@ -9,21 +9,15 @@ import TreeNode from './TreeNode.js';
 export default {
   name: "SectionTreeViewer",
   props: {
-    selectedKeys: {
-      type: Object,
-      default: () => ({}),
-    },
-    expandedKeys: {
-      type: Object,
-      default: () => ({}),
-    },
+    selectedKeys: { type: Object, default: () => ({}) },
+    expandedKeys: { type: Object, default: () => ({}) },
   },
   emits: ['update:selectedKeys', 'update:expandedKeys', 'node-select', 'node-unselect', 'upload-files'],
   setup(props, { emit }) {
     const { sections, addSection, updateSection, removeSection, reorderSections } = useSections();
-    const { documents, addDocument, updateDocument } = useDocuments();
+    const { documents, updateDocument } = useDocuments();
     const { artifacts, updateArtifact, setSelectedArtifact } = useArtifacts();
-    const { uploadFiles, retrieveFiles, files } = useFiles();
+    const { files } = useFiles(); // Remove uploadFiles, retrieveFiles as they're not used here anymore
     const fileInput = Vue.ref(null);
     const draggedNode = Vue.ref(null);
     const dropTarget = Vue.ref(null);
@@ -31,8 +25,6 @@ export default {
 
     const treeNodes = Vue.computed(() => {
       const nodeMap = new Map();
-
-      // Add sections to the map
       sections.value.forEach((section) => {
         nodeMap.set(section.id, {
           ...section,
@@ -47,7 +39,6 @@ export default {
         });
       });
 
-      // Add documents to the map
       documents.value.forEach((doc) => {
         const sectionId = doc.data.sectionId || null;
         const docNode = {
@@ -55,7 +46,7 @@ export default {
           type: 'document',
           data: {
             ...doc.data,
-            name: doc.data.name || `Document ${doc.id.slice(0, 8)}`, // Fallback name
+            name: doc.data.name || `Document ${doc.id.slice(0, 8)}`,
             _children: [],
             _checkStatus: props.selectedKeys[doc.id] ? 'checked' : 'unchecked',
             _expanded: false,
@@ -68,7 +59,6 @@ export default {
         }
       });
 
-      // Add artifacts to the map
       artifacts.value.forEach((artifact) => {
         const sectionId = artifact.data.sectionId || null;
         const artifactNode = {
@@ -89,7 +79,6 @@ export default {
         }
       });
 
-      // Build the tree structure
       const nodes = [];
       nodeMap.forEach((node) => {
         if (node.data.sectionId && nodeMap.has(node.data.sectionId)) {
@@ -100,7 +89,6 @@ export default {
         }
       });
 
-      // Sort root-level nodes: sections by order, documents/artifacts alphabetically
       nodes.sort((a, b) => {
         if (a.type === 'section' && b.type === 'section') {
           return (a.data.order || 0) - (b.data.order || 0);
@@ -108,10 +96,9 @@ export default {
         if (a.type !== 'section' && b.type !== 'section') {
           return a.data.name.localeCompare(b.data.name);
         }
-        return a.type === 'section' ? -1 : 1; // Sections come before documents/artifacts
+        return a.type === 'section' ? -1 : 1;
       });
 
-      // Sort children within each section alphabetically for documents and artifacts
       nodes.forEach((node) => {
         if (node.data._children.length) {
           node.data._children.sort((a, b) => a.data.name.localeCompare(b.data.name));
@@ -123,9 +110,7 @@ export default {
     });
 
     function getFileIcon(fileName) {
-      if (!fileName || typeof fileName !== 'string') {
-        return 'pi pi-file';
-      }
+      if (!fileName || typeof fileName !== 'string') return 'pi pi-file';
       const extension = fileName.split('.').pop()?.toLowerCase() || '';
       const iconMap = {
         pdf: 'pi pi-file-pdf',
@@ -141,22 +126,12 @@ export default {
     }
 
     function updateCheckStatus(node) {
-      if (isLeaf(node)) {
-        return node.data._checkStatus === 'checked';
-      }
-      if (!node.data._children.length) {
-        return node.data._checkStatus === 'checked';
-      }
+      if (isLeaf(node)) return node.data._checkStatus === 'checked';
+      if (!node.data._children.length) return node.data._checkStatus === 'checked';
       const childStates = node.data._children.map(updateCheckStatus);
-      const allChildrenChecked = childStates.every(state => state);
-      const someChildrenChecked = childStates.some(state => state);
-      if (allChildrenChecked) {
-        node.data._checkStatus = 'checked';
-      } else if (someChildrenChecked) {
-        node.data._checkStatus = 'halfChecked';
-      } else {
-        node.data._checkStatus = 'unchecked';
-      }
+      const allChecked = childStates.every(state => state);
+      const someChecked = childStates.some(state => state);
+      node.data._checkStatus = allChecked ? 'checked' : someChecked ? 'halfChecked' : 'unchecked';
       return node.data._checkStatus === 'checked';
     }
 
@@ -171,20 +146,16 @@ export default {
 
       collectKeys(node);
 
-      const isCurrentlyChecked = node.data._checkStatus === 'checked';
-      if (isCurrentlyChecked) {
-        affectedKeys.forEach((id) => delete newSelectedKeys[id]);
+      const isChecked = node.data._checkStatus === 'checked';
+      if (isChecked) {
+        affectedKeys.forEach(id => delete newSelectedKeys[id]);
         node.data._checkStatus = 'unchecked';
-        if (!isLeaf(node)) {
-          node.data._children.forEach((child) => child.data._checkStatus = 'unchecked');
-        }
+        if (!isLeaf(node)) node.data._children.forEach(child => child.data._checkStatus = 'unchecked');
         emit('node-unselect', { node, id: node.id, affectedKeys, propagateDown: true });
       } else {
-        affectedKeys.forEach((id) => (newSelectedKeys[id] = true));
+        affectedKeys.forEach(id => (newSelectedKeys[id] = true));
         node.data._checkStatus = 'checked';
-        if (!isLeaf(node)) {
-          node.data._children.forEach((child) => child.data._checkStatus = 'checked');
-        }
+        if (!isLeaf(node)) node.data._children.forEach(child => child.data._checkStatus = 'checked');
         emit('node-select', { node, id: node.id, affectedKeys, propagateDown: true });
       }
 
@@ -206,9 +177,7 @@ export default {
     }
 
     const handleNodeSelect = (node) => {
-      if (isLeaf(node)) {
-        emit('node-select', node);
-      }
+      if (isLeaf(node)) emit('node-select', node);
     };
 
     const onDragStart = (event, node) => {
@@ -252,20 +221,13 @@ export default {
       fileInput.value.click();
     };
 
-    const handleFileUpload = async (event) => {
-      const files = event.target.files;
+    const handleFileUpload = (event) => {
       const sectionId = fileInput.value.dataset.sectionId || null;
-      const uuids = [];
-      for (const file of files) {
-        const result = await addDocument(file, sectionId);
-        uuids.push(result.id);
-      }
-      await uploadFiles(Array.from(files), uuids);
-      fileInput.value.value = '';
+      emit('upload-files', event, sectionId); // Emit event to ViewerSections
+      fileInput.value.value = ''; // Reset input
       if (sectionId) {
         emit('update:expandedKeys', { ...props.expandedKeys, [sectionId]: true });
       }
-      emit('upload-files', event, sectionId);
     };
 
     const startEditing = (node) => {
@@ -382,11 +344,7 @@ export default {
   },
   template: `
     <div class="section-tree-viewer text-sm">
-      <div
-        class="tree-container"
-        @dragover="onDragOver($event, null)"
-        @drop="onDrop($event, null)"
-      >
+      <div class="tree-container" @dragover="onDragOver($event, null)" @drop="onDrop($event, null)">
         <TreeNode
           v-for="node in treeNodes"
           :key="node.id"
@@ -421,7 +379,5 @@ export default {
       />
     </div>
   `,
-  components: {
-    TreeNode,
-  },
+  components: { TreeNode },
 };

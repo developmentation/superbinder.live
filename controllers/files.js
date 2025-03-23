@@ -156,7 +156,7 @@ filesController.retrieveFiles = async (req, res) => {
   }
 };
 
-/**
+ /**
  * POST /api/files/ocr
  */
 filesController.ocrFile = async (req, res) => {
@@ -182,7 +182,7 @@ filesController.ocrFile = async (req, res) => {
       const fileData = req.files.map(file => {
         const uuid = file.originalname; // Assuming filename is UUID
         const mimeType = req.body[`mimeType_${uuid}`];
-        const page = parseInt(req.body[`page_${uuid}`], 10) || 0; // Default to 0 if not provided
+        const page = parseInt(req.body[`page_${uuid}`], 10) || 0;
         if (!supportedMimeTypes.includes(mimeType)) {
           console.warn(`Unsupported MIME type for file ${uuid}: ${mimeType}`);
           return null;
@@ -200,28 +200,41 @@ filesController.ocrFile = async (req, res) => {
         return res.status(500).json({ message: 'GEMINI_API_KEY environment variable is not set' });
       }
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
       const customPrompt = `
-
-  Interpret the following image(s) and extract out and describe their key features in a JSON schema, as follows:
+        Interpret the following image(s) and extract out and describe their key features in a JSON schema, as follows:
         {
-          "text": "string", // The extracted text from the image
-          "interpretation": "string", // provide the best analysis of what you are seeing
-            "otherContent": "string" // The content of the feature (e.g., text, table data), not repeating what is already above
-            "otherData": "array" // any data driven elements, like bar graphs, pie charts, tables, or other elements from which the data can be interpreted into JSON format
+          "text": "string",
+          "interpretation": "string",
+          "otherContent": "string",
+          "otherData": "array",
           "features": [
             {
-              "type": "string", // e.g., "text", "table", "image", "heading"
-              "description": "string", // Brief description of the feature
-            
-              }
-
+              "type": "string",
+              "description": "string"
+            }
           ]
         }
         Please process each image and return an array of results in this exact JSON format, one entry per image.
-
       `;
+
+      // Retry function with exponential backoff
+      const retryWithBackoff = async (fn, retries = 3, delay = 1000) => {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            return await fn();
+          } catch (error) {
+            if (error.status === 429 && attempt < retries) {
+              const waitTime = delay * Math.pow(2, attempt); // Exponential backoff
+              console.warn(`429 Too Many Requests detected for attempt ${attempt + 1}/${retries + 1}. Retrying in ${waitTime}ms...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              continue;
+            }
+            throw error; // Rethrow other errors or after max retries
+          }
+        }
+      };
 
       const ocrResults = await Promise.all(fileData.map(async ({ uuid, base64Image, mimeType, page }) => {
         const request = {
@@ -232,36 +245,66 @@ filesController.ocrFile = async (req, res) => {
                 {
                   inlineData: {
                     data: base64Image,
-                    mimeType: mimeType === 'application/pdf' ? 'image/png' : mimeType, // Treat PDF as pre-rasterized image
+                    mimeType: mimeType === 'application/pdf' ? 'image/png' : mimeType,
                   },
                 },
-                {
-                  text: customPrompt,
-                },
+                { text: customPrompt },
               ],
             },
           ],
         };
 
-        const response = await model.generateContent(request);
-        const text = response.response.candidates[0].content.parts[0].text;
-
-        return { uuid, text, page };
+        try {
+          const response = await retryWithBackoff(async () => {
+            const result = await model.generateContent(request);
+            if (!result.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+              throw new Error('Invalid response format from Google Generative AI');
+            }
+            return result;
+          });
+          const text = response.response.candidates[0].content.parts[0].text;
+          return { uuid, text, page };
+        } catch (error) {
+          console.error(`OCR failed for UUID ${uuid}:`, error.message, {
+            status: error.status,
+            statusText: error.statusText,
+            details: error.errorDetails,
+          });
+          return {
+            uuid,
+            text: null,
+            page,
+            error: error.status === 429 ? 'Too Many Requests - Retry limit exceeded' : error.message,
+          };
+        }
       }));
 
-      const uuids = ocrResults.map(result => result.uuid);
-      const text = ocrResults.map(result => result.text);
-      const pages = ocrResults.map(result => result.page);
+      const successfulResults = ocrResults.filter(result => !result.error);
+      const failedResults = ocrResults.filter(result => result.error);
 
-      res.status(200).json({
-        message: 'OCR completed successfully',
-        uuids,
-        text,
-        pages,
-      });
+      const responseBody = {
+        message: failedResults.length > 0 
+          ? 'OCR completed with some failures' 
+          : 'OCR completed successfully',
+        uuids: ocrResults.map(result => result.uuid),
+        text: ocrResults.map(result => result.text),
+        pages: ocrResults.map(result => result.page),
+      };
+
+      if (failedResults.length > 0) {
+        responseBody.errors = failedResults.map(result => ({
+          uuid: result.uuid,
+          error: result.error,
+        }));
+        res.status(207); // Multi-Status: Some succeeded, some failed
+      } else {
+        res.status(200); // OK: All succeeded
+      }
+
+      res.json(responseBody);
     });
   } catch (error) {
-    console.error('Error performing OCR:', error);
+    console.error('Unexpected error in OCR processing:', error);
     res.status(500).json({ message: 'Failed to perform OCR', error: error.message });
   }
 };

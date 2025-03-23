@@ -20,7 +20,7 @@ exports.getModels = async function (req, res, next) {
 
         {
           name: { en: "Gemini 2 Flash", fr: "Gemini 2 Flash" },
-          model: "gemini-2.0-flash-exp",
+          model: "gemini-2.0-flash",
           provider: "gemini",
         },
         {

@@ -382,7 +382,7 @@ export default {
   
       triggerLLM(
         llmId,
-        { provider: 'gemini', model: 'gemini-2.0-flash-exp', name: "gemini-2.0-flash-exp" },
+        { provider: 'gemini', model: 'gemini-2.0-flash', name: "gemini-2.0-flash" },
         0.5,
         `
         Answer the question clearly and provide adequate details.  

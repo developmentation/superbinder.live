@@ -444,7 +444,7 @@ export function useCollaboration() {
     console.log('LLM Payload:', { cleanedMessageHistory });
 
     // Use agent's model if available, otherwise default to Gemini
-    const model = agent.data.model || { provider: 'gemini', model: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' };
+    const model = agent.data.model || { provider: 'gemini', model: 'gemini-2.0-flash', name: 'gemini-2.0-flash' };
 
     triggerLLM(
       messageId,
