@@ -52,7 +52,7 @@ export default {
             :class="{ 'bg-[#3b82f6] text-white': isChatOpen }"
           >
             <i class="pi pi-comments text-lg"></i>
-            <span>Chat</span>
+            <span>Chat ({{chatCount || 0}})</span>
           </button>
         </div>
 
