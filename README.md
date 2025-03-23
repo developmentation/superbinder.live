@@ -1,68 +1,65 @@
- 
 
 # SuperBinder.live
 
-SuperBinder.live is a real-time collaboration platform that brings together multiple humans and AI agents to interact, evaluate, and generate documents seamlessly. It enables users to manage shared documents, search and clip content, transcribe audio in real time, synthesize insights with AI, and communicate via group chat—all synchronized instantly across all participants.
+SuperBinder.live is a cutting-edge, open-source platform that redefines real-time collaboration. It seamlessly unites humans and AI agents to manage expansive document sets, organize content with dynamic sections, chat live, deploy custom AI agents, and process a wide range of file types—all synchronized instantly across all participants. Whether you're brainstorming with a team, analyzing documents with AI, or structuring complex projects, SuperBinder.live delivers a powerful, intuitive experience.
 
-_This is only the template! You have to build your own app and create your own feature branch or fork!_
+_This is a template to kickstart your journey! Fork it, build your app, and make it your own with a feature branch or a full fork._
 
-## Business Requirements
+## Major Features
 
-### General Features
-- **Real-Time Collaboration**: Supports simultaneous interaction among multiple humans and AI agents, with all actions (e.g., document updates, chat messages, transcriptions) syncing instantly across users and devices.
-- **Session Management**: Users join or create sessions using a display name and channel name, with no login or authentication required—access is open via channel name. Session data persists locally for reconnection.
-- **Responsive Design**: Adapts to desktop (multi-column layout) and mobile (stacked full-width layout) interfaces, ensuring usability across devices.
+### Real-Time Collaboration & Session Management
+- **Instant Sync**: Powered by Socket.IO WebSockets, every action—document uploads, chat messages, section updates, AI responses—syncs in real time across all users, ensuring a cohesive experience.
+- **Session Flexibility**: Join or create sessions effortlessly with a channel name and display name—no login required. Sessions persist locally via `sessionStorage`, auto-reconnecting on refresh, with a removal modal for cleanup.
+- **User Presence**: See who’s active with unique UUIDs, display names, and color-coded avatars, updated live as users join or leave.
 
-### Document Management
-- **Add Documents**: Users can upload a variety of file types, including text files (.txt, .js, .json, .css, .md, .html), Word documents (.docx), PDF files (.pdf), Excel sheets (.xlsx), and PowerPoint presentations (.pptx). Files are processed client-side, shared instantly across all session participants, and retain their original formatting and structure.
-- **View Documents**: Documents are accessible to all users, preserving their original layout, formatting, and styling (e.g., tables, borders, shading, embedded images, charts, and graphics in Word and PDF files). Users can navigate to specific pages within documents for precise viewing.
-- **Rename Documents**: Users can rename documents, with changes synced in real time across all participants, maintaining the original upload order.
-- **Remove Documents**: Users can remove documents, with deletions synchronized instantly across the session.
+### Advanced Document Management
+- **Upload Anything**: Supports a vast array of file types—PDFs (`.pdf`), Word docs (`.docx`), Excel sheets (`.xlsx`), text files (`.txt`, `.md`, `.html`, `.js`, `.json`, `.css`), images (`.png`, `.jpg`, `.jpeg`, `.webp`, `.svg`), and more. Files process client-side and sync instantly.
+- **Rich Viewing**: View documents with preserved formatting—tables, images, charts, and styles intact. Navigate multi-page files with lazy-loaded precision via `LazyScrollViewer`.
+- **Edit & Organize**: Rename or remove documents with real-time updates. Associate files with sections for structured project management.
+- **Search Power**: Search document content with keyword matching, returning ranked results with snippets, metadata, and timestamps.
 
-### Document Interaction
-- **Advanced Search**: 
-  - Search across all session documents with keyword matching that’s order-agnostic and proximity-aware (e.g., “weather forecast Maine” matches “forecast today in Maine” or “Maine’s gusty forecast”).
-  - Returns contextual snippets around matches, expandable to full paragraphs, with keywords highlighted in bright yellow (light mode) or dark yellow (dark mode).
-  - Links snippets to their source documents, scrolling to the exact location (including specific pages) when viewed, with navigation between multiple matches using up/down arrows (e.g., “3 of 15 matches”).
-- **Clipping**: 
-  - Users can clip search results or manually selected text ranges, preserving original formatting (e.g., tables, styles, HTML structure).
-  - Clips display as cards with snippets, supporting upvoting/downvoting (synced in real-time) and deletion.
-  - Clicking a clip navigates to its precise location in the source document, maintaining page alignment.
-  - If no text is selected, clips automatically include 50 characters on either side of a match; if text is selected, clips the exact range, retaining HTML styling.
+### Dynamic Section & Artifact Organization
+- **Tree-Based Structure**: Build and navigate a real-time section tree with drag-and-drop reordering, expandable nodes, and multi-select modals for bulk actions.
+- **Artifacts**: Create, edit, and sync artifacts (e.g., notes, AI outputs) collaboratively within sections, with live updates broadcast to all users.
 
-### Real-Time Transcription
-- **Audio Input**: Users can record audio from devices, with transcriptions generated in real time and separated by participant (e.g., 1-2 columns or cards for multiple users).
-- **Sentence Handling**: 
-  - Transcriptions render as sentences, synced across users.
-  - Users can flag sentences to trigger document searches for matching content.
-  - Matching clips link to flagged sentences, filterable for review.
-  - A synthesis option generates AI-driven narratives from flagged sentences and clips, configurable for tone and context.
+### Live Chat & Collaboration
+- **Group Chat**: Engage in real-time messaging with drafts, colored user messages, and auto-scrolling. Toggle between desktop sidebar and mobile fullscreen views.
+- **Breakout Rooms**: Create and manage breakout rooms for focused collaboration, with synced updates and room selection UI.
+- **Interactive Features**: Vote on messages, mention users or AI agents with `@displayName`, and see typing indicators—all live.
 
-### AI Synthesis
-- **Narrative Generation**: AI creates cohesive summaries or narratives from flagged transcriptions, clips, and document content, with customizable prompts for tone, context, and length.
-- **Output Management**: Synthesis results display as cards, deletable by users, with deletions synced across the session. Results can be further refined or expanded via AI prompts.
+### AI Agents & LLM Integration
+- **Custom Agents**: Deploy AI agents with tailored prompts to analyze documents, answer queries, or generate content, synced across the session.
+- **LLM Streaming**: Trigger real-time responses from models like OpenAI, Anthropic, or xAI, with streaming outputs displayed live in the chat or viewer.
+- **Agent Management**: Add, edit, or remove agents via a grid UI, with filtering by name or description.
 
-### Group Chat
-- **Real-Time Messaging**: 
-  - Users see others typing drafts (visually distinct) and posted messages (colored uniquely per user), scrolling like a group chat.
-  - Multiple users can type concurrently, with all activity (drafts, messages) synced instantly.
-  - Supports automatic scrolling to new messages by default, pausing if users scroll up, resuming when scrolled back to the bottom.
-- **AI Participation**: AI agents read and contribute to the chat based on their roles (e.g., reporting clip additions, responding to queries).
-- **Mentions**: Users can `@displayName` others, with display names editable in real time.
+### File Processing & OCR
+- **Robust Processing**: 
+  - PDFs: Extract text and rasterize pages with `pdfjsLib`.
+  - DOCX: Convert to HTML with `mammoth.js`, preserving styles and splitting pages.
+  - Excel/CSV: Parse with `ExcelJS` into JSON, handling headers and data rows.
+  - Text/Markdown: Decode and render with formatting intact.
+  - Images: Generate URLs with OCR placeholders for future text extraction.
+- **OCR Integrated**: Currently uses the powerful Gemini 2.0 for rapid image OCR.
 
-### Synchronization
-- **Websocket-Based**: All actions (document additions/removals/renames, clips, votes, transcriptions, synthesis, chat messages, drafts) broadcast to all session users via Socket.io, ensuring real-time consistency.
-- **Data Persistence**: Actions are timestamped and sequenced (documents, clips, transcriptions, synthesis, chat history) for consistent state across users, preserving upload and interaction order.
+### GitHub & Web Integration
+- **GitHub Content**: Load repository trees or specific files via API, integrating external codebases into your session.
+- **Web Scraping**: Fetch and process web content from URLs, enhancing document sets with real-time data.
+
+### Responsive & Accessible Design
+- **Cross-Device**: Adapts seamlessly—multi-column layouts on desktop, stacked full-width on mobile—with Tailwind CSS.
+- **Accessibility**: Keyboard-navigable UI with ARIA attributes and high-contrast visuals for inclusivity.
 
 ---
 
 ## Installation
 
 ### Prerequisites
-- **Node.js** (v20 or later)
-- **npm** or **yarn**
+- **Node.js**: v20 or later recommended
+- **npm**: v9+ (or **yarn** if preferred)
+- **Git**: For cloning the repository
+- Optional: **nodemon** for development server auto-restart
 
-### Steps
+### Setup Steps
 1. **Clone the Repository**
    ```bash
    git clone https://github.com/developmentation/superbinder.live.git
@@ -75,48 +72,64 @@ _This is only the template! You have to build your own app and create your own f
    npm install
    ```
 
-3. **Create an .env file**
-   Create a `.env` file and modify it to include the appropriate API keys:
-   ```bash
-   cp .env.example .env
-   ```
+3. **Configure Environment**
+   - Copy the example `.env` file and add your API keys (e.g., LLM providers):
+     ```bash
+     cp .env.example .env
+     ```
+   - Edit `.env` with your keys, e.g.:
+     ```
+     OPENAI_API_KEY=your_openai_key
+     PORT=3000
+     ```
 
 4. **Start the Development Server**
-   Using npm:
-   - If you don’t have `nodemon` installed, install it globally:
+   - Install `nodemon` globally (if not already installed):
      ```bash
      npm install -g nodemon
      ```
-     Or as a dev dependency in the project:
+     Or as a dev dependency:
      ```bash
      npm install --save-dev nodemon
      ```
-   - Then run the Node.js server:
+   - Launch the server:
      ```bash
      nodemon index.js
      ```
 
 5. **Access the Application**
-   Open your browser and navigate to `http://localhost:3000`
+   - Open your browser to `http://localhost:3000` (or the port specified in `.env`).
 
 ---
 
 ## Usage
-Forthcoming
+- **Start a Session**: Enter a channel name and display name on the landing page to join or create a session.
+- **Upload Documents**: Drag-and-drop or select files to share instantly with your team.
+- **Collaborate**: Chat, create sections, deploy AI agents, and explore content—all in real time.
+- **Explore Features**: Use the tabbed interface (Dashboard, Sections, Agents, etc.) to manage your workspace.
+
+Detailed usage guides are forthcoming—stay tuned!
+
+---
 
 ## Technologies Used
-- **Vue.js**: Frontend framework for building interactive user interfaces.
-- **Composition API**: Provides a flexible and scalable way to manage logic.
-- **WebSockets**: Manages real-time communication via Socket.io.
-- **Tailwind CSS**: Utility-first CSS for styling.
-- **DeepGram API**: Real-time speech-to-text transcription (to be integrated).
-- **AI LLM**: Language model outputs for synthesis and chat (via websockets).
+- **Vue.js 3.5**: Reactive frontend with Composition API for scalable logic.
+- **Socket.IO**: WebSocket-driven real-time communication.
+- **Tailwind CSS**: Utility-first styling for a modern, responsive UI.
+- **pdfjsLib**: PDF text extraction and rasterization.
+- **mammoth.js**: DOCX-to-HTML conversion.
+- **ExcelJS**: Excel and CSV parsing.
+- **MongoDB**: Backend data storage (optional, depending on fork).
+- **LLM Providers**: OpenAI, Anthropic, xAI, etc., for AI outputs.
+- **Node.js**: Server-side runtime.
+
+---
 
 ## Contributing
-We welcome contributions to enhance SuperBinder.live! Whether it’s reporting bugs, suggesting features, or submitting pull requests, your participation helps improve the project.
+Join the revolution! SuperBinder.live thrives on community input—report bugs, suggest features, or submit code to make it even better.
 
 1. **Fork the Repository**
-   Click the "Fork" button on the repository page to create your own copy.
+   - Click "Fork" on GitHub to create your copy.
 
 2. **Create a Feature Branch**
    ```bash
@@ -125,19 +138,26 @@ We welcome contributions to enhance SuperBinder.live! Whether it’s reporting b
 
 3. **Commit Your Changes**
    ```bash
-   git commit -m "Add your message here"
+   git commit -m "Add your feature description"
    ```
 
-4. **Push to the Branch**
+4. **Push to Your Branch**
    ```bash
    git push origin feature/YourFeatureName
    ```
 
 5. **Open a Pull Request**
-   Navigate to your forked repository and click "New Pull Request" to propose your changes.
+   - Go to your forked repo on GitHub and click "New Pull Request" to submit your changes.
 
-Please ensure your code adheres to the project’s coding standards and passes all tests before submitting a pull request.
+Ensure your code follows the project’s style guide (e.g., ESLint, Prettier) and passes tests before submitting.
+
+---
 
 ## License
-This project is licensed under the [MIT License](https://en.wikipedia.org/wiki/MIT_License).
+Licensed under the [MIT License](https://en.wikipedia.org/wiki/MIT_License)—free to use, modify, and share.
+
+---
+
+## Get Involved
+SuperBinder.live is free always. Fork it, tweak it, and build the future of human-AI collaboration with us. Visit us on [GitHub](https://github.com/developmentation/superbinder.live) or follow updates on [X](https://x.com/youralberta?lang=en).
  
