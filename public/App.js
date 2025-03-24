@@ -1,6 +1,7 @@
 // App.js
 import { useRealTime } from "./composables/useRealTime.js";
 import { useModels } from "./composables/useModels.js";
+import { useConfigs } from "./composables/useConfigs.js";
 import router from "../router/index.js";
 import Binder from "./components/Binder.js";
 
@@ -94,6 +95,7 @@ export default {
     Binder,
   },
   setup() {
+    const { getConfigs } = useConfigs();
     const { fetchServerModels } = useModels();
     const { isConnected, connectionStatus, disconnect, userUuid, displayName, channelName } = useRealTime();
 
@@ -112,6 +114,7 @@ export default {
     }
 
     Vue.onMounted(async () => {
+      await getConfigs();
       await fetchServerModels();
     });
 
