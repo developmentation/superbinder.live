@@ -28,6 +28,9 @@ export default {
     const isOcrLoading = Vue.ref(false);
     const showOcrPromptEditor = Vue.ref(false);
     const md = markdownit({ html: true, linkify: true, typographer: true, breaks: true });
+    const ocrProgress = Vue.ref(0);
+    const isOcrAllRunning = Vue.ref(false);
+    let ocrAllAbortController = null;
 
     const imageTypes = ['png', 'jpg', 'jpeg', 'webp'];
 
@@ -288,6 +291,56 @@ export default {
       }
     };
 
+    const ocrAllPages = async () => {
+      try {
+        isOcrLoading.value = true;
+        isOcrAllRunning.value = true;
+        ocrProgress.value = 0;
+        const totalPages = props.item.data.pages?.length || 0;
+        const newPagesText = [...(props.item.data.pagesText || Array(totalPages).fill(''))];
+        
+        for (let page = 0; page < totalPages; page++) {
+          if (!isOcrAllRunning.value) break; // Check for stop condition
+          
+          try {
+            const ocrResults = await ocrFiles([props.item.id], [props.item], [page]);
+            const { uuids, text, pages } = ocrResults;
+            
+            if (uuids[0] === props.item.id && text[0]) {
+              const pageIndex = pages[0];
+              newPagesText[pageIndex] = text[0];
+              
+              // Update document incrementally
+              const updateFn = props.item.type === 'document' ? updateDocument : updateArtifact;
+              if (props.item.type === 'document') {
+                updateFn(props.item.id, { pagesText: newPagesText });
+              } else {
+                updateFn(props.item.id, { pagesText: newPagesText });
+              }
+              
+              if (isEditing.value) {
+                editedContent.value[pageIndex] = text[0];
+              }
+            }
+            ocrProgress.value = page + 1;
+          } catch (error) {
+            console.error(`OCR failed for page ${page}:`, error);
+            // Continue with next page even if one fails
+          }
+        }
+      } catch (error) {
+        console.error('OCR all pages process failed:', error);
+      } finally {
+        isOcrLoading.value = false;
+        isOcrAllRunning.value = false;
+        ocrProgress.value = 0;
+      }
+    };
+
+    const stopOcrAll = () => {
+      isOcrAllRunning.value = false;
+    };
+
     const jumpToPage = () => {
       const pageNum = parseInt(jumpToPageInput.value, 10);
       if (isNaN(pageNum) || pageNum < 1 || pageNum > props.item.data.pages?.length) {
@@ -310,7 +363,6 @@ export default {
     const resetOcrPromptHandler = () => {
       console.log(" resetOcrPromptHandler in ViewerEditor")
       resetOcrPrompt();
-      // No need to close the modal; let the user save or cancel
     };
 
     const closeOcrPromptEditor = () => {
@@ -334,6 +386,10 @@ export default {
       handleTextInput,
       handlePageVisible,
       ocrPage,
+      ocrAllPages,
+      stopOcrAll,
+      ocrProgress,
+      isOcrAllRunning,
       jumpToPage,
       openOcrPromptEditor,
       updateOcrPrompt,
@@ -371,24 +427,39 @@ export default {
           </div>
           <button @click="jumpToPage" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">Go</button>
           <div class="flex items-center">
-                      
             <div class="flex items-center">
               <button
                 @click="ocrPage"
                 :disabled="isOcrLoading"
-                class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg rounded-r-none text-sm disabled:bg-[#4b5563]  hover:bg-[#2563eb]  disabled:cursor-not-allowed flex items-center"
+                class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg rounded-r-none text-sm disabled:bg-[#4b5563] hover:bg-[#2563eb] disabled:cursor-not-allowed flex items-center"
               >
                 <span>OCR</span>
-                <i v-if="isOcrLoading" class="pi pi-spin pi-spinner ml-2"></i>
+                <i v-if="isOcrLoading && !isOcrAllRunning" class="pi pi-spin pi-spinner ml-2"></i>
               </button>
               <button
                 @click="openOcrPromptEditor"
                 class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg rounded-l-none text-sm hover:bg-[#2563eb] flex items-center"
-              >&nbsp;
+              > &nbsp;
                 <i class="pi pi-pencil"></i>
               </button>
-            </div>          
-
+            </div>
+            <button
+              v-if="item.data.type === 'pdf' && displayMode === 'PDF' && !isOcrAllRunning"
+              @click="ocrAllPages"
+              :disabled="isOcrLoading"
+              class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg ml-2 text-sm disabled:bg-[#4b5563] hover:bg-[#2563eb] disabled:cursor-not-allowed flex items-center"
+            >
+              <span>OCR All</span>
+            </button>
+            <div v-if="isOcrAllRunning" class="flex items-center ml-2">
+              <button
+                class="py-1 px-2 bg-[#ef4444] text-white rounded-lg text-sm disabled:bg-[#4b5563] hover:bg-[#dc2626] flex items-center"
+                @click="stopOcrAll"
+              >
+                <span>Stop</span>
+              </button>
+              <span class="text-[#e2e8f0] ml-2 text-sm">{{ ocrProgress }} of {{ item.data.pages?.length || 0 }}</span>
+            </div>
           </div>
         </template>
         <h2 class="p-1 text-sm font-bold text-gray-500">{{item.data.name}}</h2>
