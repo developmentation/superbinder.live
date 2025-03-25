@@ -50,7 +50,7 @@ const configurePdfWorker = () => {
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
     const pages = [];
-    const scale = 1.25;
+    const scale = 2.5;
   
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);

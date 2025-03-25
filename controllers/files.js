@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const { upload } = require('../tools/uploads.js');
 const { ocrUpload } = require('../tools/ocrUploads.js');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require('@google/genai');
 
 const filesController = {};
 
@@ -159,9 +160,8 @@ filesController.retrieveFiles = async (req, res) => {
  /**
  * POST /api/files/ocr
  */
-filesController.ocrFile = async (req, res) => {
+ filesController.ocrFile = async (req, res) => {
   try {
-
     ocrUpload.array('files', 3000)(req, res, async (err) => {
       if (err) {
         console.error('Multer error:', err);
@@ -179,19 +179,15 @@ filesController.ocrFile = async (req, res) => {
         return res.status(400).json({ message: `Too many files uploaded (${req.files.length}). Maximum allowed is ${maxFileCount}.` });
       }
 
-      // Get the custom prompt from the request
       const customPrompt = req.body.prompt;
       if (!customPrompt) {
         return res.status(400).json({ message: 'OCR prompt is required' });
       }
 
-      // Process files with provided MIME types and page numbers
       const fileData = req.files.map(file => {
-        const uuid = file.originalname; // Assuming filename is UUID
-        const mimeType = req.body[`mimeType_${uuid}`];
+        const uuid = file.originalname;
+        const mimeType = file.mimetype; // Use multer's detected mime type
         const page = parseInt(req.body[`page_${uuid}`], 10) || 0;
-
-        console.log("Variables", {file, uuid, mimeType, page, customPrompt})
 
         if (!supportedMimeTypes.includes(mimeType)) {
           console.warn(`Unsupported MIME type for file ${uuid}: ${mimeType}`);
@@ -209,8 +205,9 @@ filesController.ocrFile = async (req, res) => {
       if (!apiKey) {
         return res.status(500).json({ message: 'GEMINI_API_KEY environment variable is not set' });
       }
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+      // Initialize GoogleGenAI with API key
+      const ai = new GoogleGenAI({ apiKey });
 
       // Retry function with exponential backoff
       const retryWithBackoff = async (fn, retries = 3, delay = 1000) => {
@@ -231,6 +228,7 @@ filesController.ocrFile = async (req, res) => {
 
       const ocrResults = await Promise.all(fileData.map(async ({ uuid, base64Image, mimeType, page }) => {
         const request = {
+          model: 'gemini-2.0-flash', // Use a supported model; adjust if gemini-2.0-flash is available
           contents: [
             {
               role: 'user',
@@ -241,7 +239,7 @@ filesController.ocrFile = async (req, res) => {
                     mimeType: mimeType === 'application/pdf' ? 'image/png' : mimeType,
                   },
                 },
-                { text: customPrompt }, // Use the dynamic prompt
+                { text: customPrompt },
               ],
             },
           ],
@@ -249,25 +247,21 @@ filesController.ocrFile = async (req, res) => {
 
         try {
           const response = await retryWithBackoff(async () => {
-            const result = await model.generateContent(request);
-            if (!result.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-              throw new Error('Invalid response format from Google Generative AI');
+            const result = await ai.models.generateContent(request);
+            if (!result?.text) {
+              throw new Error('Invalid response format from GoogleGenAI');
             }
             return result;
           });
-          const text = response.response.candidates[0].content.parts[0].text;
+          const text = response.text;
           return { uuid, text, page };
         } catch (error) {
-          console.error(`OCR failed for UUID ${uuid}:`, error.message, {
-            status: error.status,
-            statusText: error.statusText,
-            details: error.errorDetails,
-          });
+          console.error(`OCR failed for UUID ${uuid}:`, error.message);
           return {
             uuid,
             text: null,
             page,
-            error: error.status === 429 ? 'Too Many Requests - Retry limit exceeded' : error.message,
+            error: error.message,
           };
         }
       }));
@@ -276,8 +270,8 @@ filesController.ocrFile = async (req, res) => {
       const failedResults = ocrResults.filter(result => result.error);
 
       const responseBody = {
-        message: failedResults.length > 0 
-          ? 'OCR completed with some failures' 
+        message: failedResults.length > 0
+          ? 'OCR completed with some failures'
           : 'OCR completed successfully',
         uuids: ocrResults.map(result => result.uuid),
         text: ocrResults.map(result => result.text),
