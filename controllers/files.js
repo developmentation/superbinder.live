@@ -228,7 +228,7 @@ filesController.retrieveFiles = async (req, res) => {
 
       const ocrResults = await Promise.all(fileData.map(async ({ uuid, base64Image, mimeType, page }) => {
         const request = {
-          model: 'gemini-2.0-flash', // Use a supported model; adjust if gemini-2.0-flash is available
+          model: 'gemini-1.5-flash', // Use a supported model; adjust if gemini-2.0-flash is available
           contents: [
             {
               role: 'user',
