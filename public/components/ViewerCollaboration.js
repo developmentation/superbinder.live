@@ -5,6 +5,10 @@ import { useAgents } from '../composables/useAgents.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
 import SectionSelectorModal from './SectionSelectorModal.js';
 
+import { markdownToDocx } from '../utils/export/markdownToDocx.js';
+import { markdownToPdf } from '../utils/export/markdownToPdf.js';
+import { downloadFile } from '../utils/export/fileDownloader.js';
+
 export default {
   name: 'ViewerCollaboration',
   components: { SectionSelectorModal },
@@ -156,6 +160,25 @@ export default {
                   >
                     <i class="pi pi-bookmark text-sm"></i>
                   </button>
+
+                  <button
+                    v-if="!msg.isDraft"
+                    @click.stop="downloadAsDocument(msg.data.text,'DOCX')"
+                    class="text-green-400 hover:text-green-300 rounded-full bg-gray-700 p-1"
+                    title="Download DOCX"
+                  >
+                    <i class="pi pi-file-word text-sm"></i>
+                  </button>
+
+                  <button
+                    v-if="!msg.isDraft"
+                    @click.stop="downloadAsDocument(msg.data.text, 'PDF')"
+                    class="text-green-400 hover:text-green-300 rounded-full bg-gray-700 p-1"
+                    title="Download PDF"
+                  >
+                    <i class="pi pi-file-pdf text-sm"></i>
+                  </button>
+
                   <button
                     v-if="!msg.isDraft && msg.id && msg.userUuid === currentUserUuid"
                     @click.stop="deleteMessage(msg.id)"
@@ -466,6 +489,23 @@ export default {
       selectedMessageText.value = '';
     }
 
+    async function downloadAsDocument(text, format) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `ChatExport-${timestamp}.${format.toLowerCase()}`;
+      const mimeType = format === 'DOCX' ? 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 
+        'application/pdf';
+    
+      try {
+        const content = format === 'DOCX' ? 
+          await markdownToDocx(text) : 
+          await markdownToPdf(text);
+        await downloadFile(content, filename, mimeType);
+      } catch (error) {
+        console.error(`Error downloading as ${format}:`, error);
+      }
+    }
+
     return {
       breakouts,
       allMessages,
@@ -503,6 +543,7 @@ export default {
       openArtifactModal,
       saveArtifactFromModal,
       closeArtifactModal,
+      downloadAsDocument
     };
   },
 };
