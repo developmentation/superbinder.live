@@ -2,7 +2,7 @@
 import { useRealTime } from './useRealTime.js';
 import eventBus from './eventBus.js';
 
-const llmRequests = Vue.ref({}); // { id: { llmResponse, isStreaming, llmError, status } }
+const llmRequests = Vue.ref({}); // { id: { llmResponse, image, isStreaming, llmError, status } }
 const processedEvents = new Set();
 const eventHandlers = new WeakMap();
 let messageCounter = 0;
@@ -14,6 +14,7 @@ export function useLLM() {
     if (!llmRequests.value[id]) {
       llmRequests.value[id] = {
         llmResponse: '',
+        image: null, // New field for image data
         isStreaming: isSelfInitiated ? true : false,
         llmError: null,
         status: isSelfInitiated ? 'pending' : 'streaming',
@@ -26,7 +27,7 @@ export function useLLM() {
     const { id, data, timestamp } = eventObj;
     messageCounter++;
     const eventKey = `draft-llm-${id}-${timestamp}-${messageCounter}`;
-    console.log("Received draft-llm chunk (raw):", { id, data, timestamp, eventKey });
+    // console.log("Received draft-llm chunk (raw):", { id, data, timestamp, eventKey });
 
     if (!processedEvents.has(eventKey)) {
       processedEvents.add(eventKey);
@@ -39,19 +40,18 @@ export function useLLM() {
 
       // Skip if the chunk is a duplicate of the last appended content
       if (content.length > 0 && content !== lastContent) {
-        console.log('Appending chunk (trimmed):', JSON.stringify(content));
+        // console.log('Appending chunk (trimmed):', JSON.stringify(content));
         request.llmResponse += content;
         request.isStreaming = true;
         request.status = 'streaming';
       } else {
-        console.warn('Skipping duplicate or empty chunk for ID:', id, content);
+        // console.warn('Skipping duplicate or empty chunk for ID:', id, content);
       }
 
       if (data.end) {
-        // request.llmResponse = request.llmResponse; // Final trim
         request.isStreaming = false;
         request.status = 'completed';
-        console.log(`Stream completed for ID ${id} with full response:`, JSON.stringify(request.llmResponse));
+        // console.log(`Stream completed for ID ${id} with full response:`, JSON.stringify(request.llmResponse));
       }
 
       llmRequests.value = { ...llmRequests.value };
@@ -59,6 +59,43 @@ export function useLLM() {
       setTimeout(() => processedEvents.delete(eventKey), 1000);
     } else {
       console.warn(`Duplicate event skipped for key: ${eventKey}`);
+    }
+  }
+
+  function handleImage(eventObj) {
+    const { id, data, timestamp } = eventObj;
+    messageCounter++;
+    const eventKey = `image-${id}-${timestamp}-${messageCounter}`;
+
+    if (!processedEvents.has(eventKey)) {
+      processedEvents.add(eventKey);
+
+      initializeLLMRequest(id);
+
+      const request = llmRequests.value[id];
+      request.image = data; // Store base64 image data
+      request.isStreaming = false;
+      request.status = 'completed';
+
+      llmRequests.value = { ...llmRequests.value };
+      console.log(`Image received for ID ${id}:`, data);
+
+      // Emit an update-collab to set the image in the collab
+      emit('update-collab', {
+        id,
+        userUuid: userUuid.value,
+        data: {
+          text: request.llmResponse || 'Generated Image',
+          breakoutId: collabs.value.find(m => m.id === id)?.data.breakoutId,
+          color: collabs.value.find(m => m.id === id)?.data.color || '#808080',
+          isStreaming: false,
+          agentId: collabs.value.find(m => m.id === id)?.data.agentId,
+          image: data,
+        },
+        timestamp: timestamp || Date.now(),
+      });
+
+      setTimeout(() => processedEvents.delete(eventKey), 1000);
     }
   }
 
@@ -85,14 +122,16 @@ export function useLLM() {
   }
 
   const draftLLMHandler = on('draft-llm', handleDraftLLM);
+  const imageHandler = on('image', handleImage);
   const errorHandler = on('error', handleError);
 
   eventHandlers.set(useLLM, {
     draft: draftLLMHandler,
+    image: imageHandler,
     error: errorHandler,
   });
 
-  function triggerLLM(id, model, temperature, systemPrompt, userPrompt, messageHistory, useJson) {
+  function triggerLLM(id, model, temperature, systemPrompt, userPrompt, messageHistory, useJson, generateImage = false) {
     initializeLLMRequest(id, true);
 
     const payload = {
@@ -105,6 +144,7 @@ export function useLLM() {
         userPrompt,
         messageHistory,
         useJson,
+        generateImage,
       },
       timestamp: Date.now(),
     };
@@ -115,6 +155,7 @@ export function useLLM() {
     const handlers = eventHandlers.get(useLLM);
     if (handlers) {
       off('draft-llm', handlers.draft);
+      off('image', handlers.image);
       off('error', handlers.error);
       eventHandlers.delete(useLLM);
     }

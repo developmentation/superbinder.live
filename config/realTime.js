@@ -2,6 +2,7 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const connectDB = require('./db.js');
 const { handlePrompt } = require("./handleAiInteractions");
+const { handleImageGeneration } = require("./handleAiImages");
 
 const channels = new Map();
 
@@ -126,10 +127,19 @@ function isValidChannelName(channelName) {
 }
 
 function validateLLMData(data) {
-  return data && typeof data.model === 'object' && data.model.provider && data.model.name && data.model.model &&
-         typeof data.temperature === 'number' && data.temperature >= 0 && data.temperature <= 1 &&
-         typeof data.systemPrompt === 'string' && typeof data.userPrompt === 'string' &&
-         Array.isArray(data.messageHistory) && typeof data.useJson === 'boolean';
+  return data && 
+         typeof data.model === 'object' && 
+         data.model.provider && 
+         data.model.name && 
+         data.model.model &&
+         typeof data.temperature === 'number' && 
+         data.temperature >= 0 && 
+         data.temperature <= 1 &&
+         typeof data.systemPrompt === 'string' && 
+         typeof data.userPrompt === 'string' &&
+         Array.isArray(data.messageHistory) && 
+         typeof data.useJson === 'boolean' &&
+         (typeof data.generateImage === 'undefined' || typeof data.generateImage === 'boolean');
 }
 
 async function loadStateFromServer(channelName, entityType) {
@@ -402,13 +412,17 @@ async function removeChannel(channelName, userUuid) {
   }
 }
 
-async function sendLLMStream(uuid, channelName, session, type, message, isEnd = false) {
+async function sendLLMStream(uuid, channelName, session, type, message, isEnd = false, isImage = false) {
   try {
     const payload = {
       type,
       id: uuid,
       userUuid: uuid,
-      data: { content: message, ...(isEnd ? { end: true } : {}) },
+      data: { 
+        content: message, 
+        isImage, // Add isImage flag to differentiate image responses
+        ...(isEnd ? { end: true } : {}) 
+      },
       timestamp: Date.now(),
       serverTimestamp: Date.now(),
     };
@@ -469,21 +483,40 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
         userPrompt: payload.data.userPrompt,
         messageHistory: payload.data.messageHistory,
         useJson: payload.data.useJson,
+        generateImage: payload.data.generateImage || false,
       };
 
-      await handlePrompt(promptConfig, async (uuid, session, type, message) => {
-        try {
-          if (type === 'message') {
-            await sendLLMStream(uuid, channelName, session, 'draft-llm', message);
-          } else if (type === 'EOM') {
-            await sendLLMStream(uuid, channelName, session, 'draft-llm', message, true);
-          } else if (type === 'ERROR') {
-            socket.emit('message', { type: 'error', message, timestamp: Date.now() });
+      if (promptConfig.generateImage) {
+        await handleImageGeneration(promptConfig, async (uuid, session, type, message) => {
+          try {
+            if (type === 'message') {
+              await sendLLMStream(uuid, channelName, session, 'draft-llm', message, false, false);
+            } else if (type === 'image') {
+              await sendLLMStream(uuid, channelName, session, 'draft-llm', message, false, true); // Set isImage to true
+            } else if (type === 'EOM') {
+              await sendLLMStream(uuid, channelName, session, 'draft-llm', message, true, false);
+            } else if (type === 'ERROR') {
+              socket.emit('message', { type: 'error', message, timestamp: Date.now() });
+            }
+          } catch (err) {
+            await logError('error', `Error in handleImageGeneration for ${channelName}`, err.stack, userUuid, channelName, socket.id);
           }
-        } catch (err) {
-          await logError('error', `Error in handlePrompt for ${channelName}`, err.stack, userUuid, channelName, socket.id);
-        }
-      });
+        });
+      } else {
+        await handlePrompt(promptConfig, async (uuid, session, type, message) => {
+          try {
+            if (type === 'message') {
+              await sendLLMStream(uuid, channelName, session, 'draft-llm', message, false, false);
+            } else if (type === 'EOM') {
+              await sendLLMStream(uuid, channelName, session, 'draft-llm', message, true, false);
+            } else if (type === 'ERROR') {
+              socket.emit('message', { type: 'error', message, timestamp: Date.now() });
+            }
+          } catch (err) {
+            await logError('error', `Error in handlePrompt for ${channelName}`, err.stack, userUuid, channelName, socket.id);
+          }
+        });
+      }
       return;
     }
 
@@ -688,7 +721,7 @@ async function handleMessage(dataObj, socket) {
       case 'remove-agent':
       case 'add-document':
       case 'remove-document':
-        case 'update-document':
+      case 'update-document':
       case 'add-question':
       case 'update-question':
       case 'remove-question':

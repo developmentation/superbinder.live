@@ -1,6 +1,6 @@
 {
   "name": "superbinder-ai",
-  "version": "0.0.91",
+  "version": "0.0.92",
   "description": "Multi-person multi-agent AI interactions",
   "main": "index.js",
   "scripts": {
@@ -38,6 +38,7 @@
     "openai": "^4.76.0",
     "pdfjs-dist": "^4.10.38",
     "playht": "^0.16.0",
+    "sharp": "^0.33.5",
     "short-unique-id": "^5.2.0",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.3",

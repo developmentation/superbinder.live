@@ -57,15 +57,15 @@ export function useArtifacts() {
     updateArtifact: updateArtifactHandler,
   });
 
-  function addArtifact(name, pagesText, sectionId = null) {
+  function addArtifact(name, pagesText, sectionId = null, pages=[]) {
     const uuid = uuidv4();
     const serverPayload = {
       id: uuid,
       userUuid: userUuid.value,
-      data: { name, pagesText, sectionId, type: 'md' }, // Added type: 'md'
+      data: { name, pagesText, pages, sectionId, type: pages.length? 'image': 'md' }, // Added type: 'md'
       timestamp: Date.now(),
     };
-    artifacts.value.push({ id: uuid, userUuid: userUuid.value, data: { name, pagesText, sectionId, type: 'md' } });
+    artifacts.value.push({ id: uuid, userUuid: userUuid.value, data: { name, pagesText, pages, sectionId, type: pages.length? 'image': 'md' } });
     artifacts.value = [...artifacts.value];
     emit('add-artifact', serverPayload);
     return { id: uuid };

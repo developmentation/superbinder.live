@@ -86,7 +86,14 @@ export function useFiles() {
   
       const isRawFiles = documentData.every(item => item instanceof File);
       if (!isRawFiles) {
-        await retrieveFiles(uuids);
+        // Only retrieve files for non-artifact items
+        const nonArtifactUuids = uuids.filter((uuid, index) => {
+          const doc = documentData[index];
+          return !(doc.type === 'artifact' && doc.data.type === 'image');
+        });
+        if (nonArtifactUuids.length > 0) {
+          await retrieveFiles(nonArtifactUuids);
+        }
       }
   
       const validFiles = uuids
@@ -101,23 +108,42 @@ export function useFiles() {
           } else {
             doc = documentData.find(d => d.id === uuid);
             file = files.value[uuid];
-            if (!file || !file.data) {
+            mimeType = doc.data.mimeType;
+
+            if (!file && doc.type === 'artifact' && doc.data.type === 'image' && doc.data.pages?.[0]) {
+              // Handle artifact image directly from pages[0]
+              const pageContent = doc.data.pages[0];
+              if (typeof pageContent === 'string') {
+                let base64Data = pageContent;
+                if (pageContent.startsWith('data:image/')) {
+                  base64Data = pageContent.split(',')[1];
+                }
+                try {
+                  const binaryString = atob(base64Data);
+                  const len = binaryString.length;
+                  const bytes = new Uint8Array(len);
+                  for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                  }
+                  file = bytes;
+                  mimeType = 'image/jpeg'; // Always assume image/jpeg for artifact images
+                  size = bytes.length;
+                } catch (e) {
+                  console.warn(`Invalid base64 data for artifact UUID ${uuid}:`, e, 'pageContent:', pageContent);
+                  return null;
+                }
+              } else {
+                console.warn(`No valid base64 image data for artifact UUID ${uuid}, pageContent:`, pageContent);
+                return null;
+              }
+            } else if (!file && doc.data.type !== 'pdf') {
               console.warn(`No valid file data for UUID ${uuid}`);
               return null;
             }
-            mimeType = doc.data.mimeType;
-            size = doc.data.size;
           }
   
           const page = pages[index];
-          if (!file || !supportedMimeTypes.includes(mimeType) || size > maxFileSize) {
-            console.warn(`Skipping UUID ${uuid}: file=${!!file}, mimeType=${mimeType}, size=${size}`);
-            return null;
-          }
-  
-          let blobData = isRawFiles ? file : file.data;
-  
-          if (mimeType === 'application/pdf' && !isRawFiles && doc.data.pages?.[page]) {
+          if (!file && doc.data.type === 'pdf' && doc.data.pages?.[page]) {
             const pageContent = doc.data.pages[page];
             if (typeof pageContent === 'string' && pageContent.includes('<img')) {
               const parser = new DOMParser();
@@ -131,8 +157,9 @@ export function useFiles() {
                 for (let i = 0; i < len; i++) {
                   bytes[i] = binaryString.charCodeAt(i);
                 }
-                blobData = bytes;
+                file = bytes;
                 mimeType = img.src.split(';')[0].split(':')[1];
+                size = bytes.length;
               } else {
                 console.warn(`No valid image found in page content for UUID ${uuid}, page ${page}`);
                 return null;
@@ -145,15 +172,21 @@ export function useFiles() {
               for (let i = 0; i < len; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
               }
-              blobData = bytes;
+              file = bytes;
               mimeType = pageContent.split(';')[0].split(':')[1];
+              size = bytes.length;
             } else {
               console.warn(`Unsupported page content for UUID ${uuid}, page ${page}: ${pageContent}`);
               return null;
             }
           }
   
-          return { uuid, file: blobData, mimeType, size, page };
+          if (!file || !supportedMimeTypes.includes(mimeType) || size > maxFileSize) {
+            console.warn(`Skipping UUID ${uuid}: file=${!!file}, mimeType=${mimeType}, size=${size}`);
+            return null;
+          }
+  
+          return { uuid, file, mimeType, size, page };
         })
         .filter(item => item !== null);
   
@@ -166,7 +199,7 @@ export function useFiles() {
       await Promise.all(validFiles.map(async item => {
         const data = await (item.file instanceof Promise ? item.file : Promise.resolve(item.file));
         const blob = new Blob([data], { type: item.mimeType });
-        formData.append('files', blob, item.uuid);
+        formData.append('files', blob, item.uuid); // Use .jpg extension for artifacts
         formData.append(`mimeType_${item.uuid}`, item.mimeType);
         formData.append(`page_${item.uuid}`, item.page);
       }));
@@ -184,7 +217,7 @@ export function useFiles() {
         const index = responseUuids.indexOf(uuid);
         return {
           uuid,
-          text: index !== -1 ? text[index] : null,
+          text: index !== -1 ? (text[index] || '') : '',
           page: index !== -1 ? responsePages[index] : null,
         };
       });
@@ -201,7 +234,7 @@ export function useFiles() {
   }
 
   function resetOcrPrompt() {
-    console.log("resetOcrPrompt in useFiles")
+    console.log("resetOcrPrompt in useFiles");
     ocrPrompt.value = defaultOcrPrompt;
   }
 
@@ -219,7 +252,7 @@ export function useFiles() {
     retrieveFiles,
     ocrFiles,
     ocrPrompt,
-    resetOcrPrompt, // Expose the reset method
+    resetOcrPrompt,
     getFile,
     cleanup,
   };

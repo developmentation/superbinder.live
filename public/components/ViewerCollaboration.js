@@ -137,7 +137,7 @@ export default {
                 <div class="flex gap-1 ml-2">
                   <button
                     v-if="!msg.isDraft"
-                    @click.stop="copyMessage(msg.data.text)"
+                    @click.stop="copyMessage(msg.data.text || msg.data.imagePrompt)"
                     class="text-gray-400 hover:text-gray-200 rounded-full bg-gray-700 p-1"
                     title="Copy message"
                   >
@@ -145,7 +145,7 @@ export default {
                   </button>
                   <button
                     v-if="!msg.isDraft"
-                    @click.stop="redoMessage(msg.data.text)"
+                    @click.stop="redoMessage(msg.data.text || msg.data.imagePrompt)"
                     class="text-gray-400 hover:text-gray-200 rounded-full bg-gray-700 p-1"
                     title="Redo message"
                   >
@@ -154,7 +154,7 @@ export default {
 
                   <button
                     v-if="!msg.isDraft"
-                    @click.stop="openArtifactModal(msg.data.text)"
+                    @click.stop="openArtifactModal(msg)"
                     class="text-blue-400 hover:text-blue-300 rounded-full bg-gray-700 p-1"
                     title="Save as Artifact"
                   >
@@ -163,7 +163,7 @@ export default {
 
                   <button
                     v-if="!msg.isDraft"
-                    @click.stop="downloadAsDocument(msg.data.text,'DOCX')"
+                    @click.stop="downloadAsDocument(msg.data.text || msg.data.imagePrompt, 'DOCX')"
                     class="text-green-400 hover:text-green-300 rounded-full bg-gray-700 p-1"
                     title="Download DOCX"
                   >
@@ -172,7 +172,7 @@ export default {
 
                   <button
                     v-if="!msg.isDraft"
-                    @click.stop="downloadAsDocument(msg.data.text, 'PDF')"
+                    @click.stop="downloadAsDocument(msg.data.text || msg.data.imagePrompt, 'PDF')"
                     class="text-green-400 hover:text-green-300 rounded-full bg-gray-700 p-1"
                     title="Download PDF"
                   >
@@ -198,10 +198,11 @@ export default {
                   'bg-gray-600 opacity-75': msg.isDraft,
                 }"
               >
-                <div
-                  class="text-white message-content break-words"
-                  v-html="renderMarkdown(msg.data.isStreaming && !msg.data.text ? 'AI is responding...' : msg.data.text)"
-                ></div>
+                <div v-if="msg.data.image" class="message-image">
+                  <img :src="'data:image/jpeg;base64,' + msg.data.image" alt="Generated Image" class="max-w-full rounded-lg" />
+                  <div  class="text-white mt-2 break-words" v-html="renderMarkdown(msg.data.text)"></div>
+                </div>
+                <div v-else class="text-white message-content break-words" v-html="renderMarkdown(msg.data.text || msg.data.imagePrompt || '')"></div>
               </div>
             </div>
           </div>
@@ -220,13 +221,23 @@ export default {
             placeholder="Type a message... (@agentName to trigger)"
             :disabled="!currentBreakoutId"
           ></textarea>
-          <button
-            @click="sendFinalMessage"
-            class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-            :disabled="!draft.trim() || !currentBreakoutId"
-          >
-            Send
-          </button>
+          <div class="flex items-center">
+            <button
+              @click="sendFinalMessage"
+              class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-l-lg border-r border-gray-700 transition-colors"
+              :disabled="!draft.trim() || !currentBreakoutId"
+            >
+              Send
+            </button>
+            <button
+              @click="generateImage"
+              class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-r-lg transition-colors"
+              :disabled="!draft.trim() || !currentBreakoutId"
+              title="Generate Image"
+            >
+              <i class="pi pi-image"></i>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -246,6 +257,7 @@ export default {
       draftInitialTimestamps,
       currentBreakoutId,
       sendMessage,
+      generateImage: generateImageFromCollaboration,
       updateDraft,
       deleteMessage,
       addBreakout,
@@ -264,6 +276,7 @@ export default {
     const sidebarVisible = Vue.ref(false);
     const showArtifactModal = Vue.ref(false);
     const selectedMessageText = Vue.ref('');
+    const selectedMessage = Vue.ref(null); // Store the full message object for artifact creation
 
     const currentBreakout = Vue.computed(() => breakouts.value.find(r => r.id === currentBreakoutId.value));
     const allMessages = Vue.computed(() => {
@@ -361,6 +374,15 @@ export default {
         draft.value = '';
       } else {
         console.warn('Cannot send message: draft or currentBreakoutId missing', { draft: draft.value, currentBreakoutId: currentBreakoutId.value });
+      }
+    }
+
+    function generateImage() {
+      if (draft.value.trim() && currentBreakoutId.value) {
+        generateImageFromCollaboration(draft.value, currentBreakoutId.value);
+        draft.value = '';
+      } else {
+        console.warn('Cannot generate image: draft or currentBreakoutId missing', { draft: draft.value, currentBreakoutId: currentBreakoutId.value });
       }
     }
 
@@ -466,19 +488,20 @@ export default {
     }
 
     // Artifact modal methods
-    function openArtifactModal(text) {
-      selectedMessageText.value = text;
+    function openArtifactModal(message) {
+      selectedMessage.value = allMessages.value.find((msg)=>{return msg.id == message.id} )
       showArtifactModal.value = true;
     }
 
     function saveArtifactFromModal({ sectionIds, name }) {
-      if (selectedMessageText.value && sectionIds.length > 0) {
+      if (sectionIds.length > 0) {
         const timestamp = Date.now();
         sectionIds.forEach((sectionId, index) => {
           const artifactName = name || `Artifact from Chat ${timestamp}`;
           const finalName = sectionIds.length > 1 && index > 0 ? `${artifactName} (${index + 1})` : artifactName;
-          addArtifact(finalName, [selectedMessageText.value], sectionId);
-          console.log(`Saved artifact: ${finalName} with sectionId: ${sectionId}`);
+          const pages = selectedMessage.value?.data.image ? [selectedMessage.value.data.image] : [];
+          const pagesText = selectedMessage.value?.data.imagePrompt ? [selectedMessage.value.data.imagePrompt] : [selectedMessage.value.data.text];
+          addArtifact(finalName, pagesText, sectionId, pages);
         });
       }
       closeArtifactModal();
@@ -487,6 +510,7 @@ export default {
     function closeArtifactModal() {
       showArtifactModal.value = false;
       selectedMessageText.value = '';
+      selectedMessage.value = null;
     }
 
     async function downloadAsDocument(text, format) {
@@ -513,6 +537,7 @@ export default {
       currentBreakoutId,
       currentBreakout,
       sendFinalMessage,
+      generateImage,
       updateDraft: updateDraftLocally,
       handleEnterKey,
       deleteMessage: deleteMessageLocal,

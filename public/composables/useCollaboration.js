@@ -1,4 +1,3 @@
-// composables/useCollaboration.js
 import { useRealTime } from './useRealTime.js';
 import { useAgents } from './useAgents.js';
 import { useLLM } from './useLLM.js';
@@ -17,13 +16,13 @@ const { agents } = useAgents();
 const { triggerLLM, llmRequests } = useLLM();
 const { documents } = useDocuments();
 const { goals } = useGoals();
-const { artifacts } = useArtifacts();
+const { addArtifact } = useArtifacts();
 
 const eventHandlers = new WeakMap();
 const processedEvents = new Set();
 
 export function useCollaboration() {
-  // Event handlers (unchanged)
+  // Event handlers
   if (!eventHandlers.has(useCollaboration)) {
     const handlers = {};
     handlers.handleInitState = function ({ data }) {
@@ -39,7 +38,15 @@ export function useCollaboration() {
         collabs.value = data.collab.map(msg => ({
           id: msg.id,
           userUuid: msg.userUuid,
-          data: { text: msg.data.text, breakoutId: msg.data.breakoutId, color: msg.data.color, isStreaming: msg.data.isStreaming || false, agentId: msg.data.agentId },
+          data: { 
+            text: msg.data.text, 
+            breakoutId: msg.data.breakoutId, 
+            color: msg.data.color, 
+            isStreaming: msg.data.isStreaming || false, 
+            agentId: msg.data.agentId,
+            image: msg.data.image,
+            imagePrompt: msg.data.imagePrompt // Include imagePrompt field
+          },
           timestamp: msg.timestamp,
         }));
         console.log('Populated collabs:', collabs.value);
@@ -64,7 +71,15 @@ export function useCollaboration() {
           collabs.value.push({
             id,
             userUuid: senderUuid,
-            data: { text: data.text, breakoutId, color: finalColor, isStreaming: data.isStreaming || false, agentId: data.agentId },
+            data: { 
+              text: data.text, 
+              breakoutId, 
+              color: finalColor, 
+              isStreaming: data.isStreaming || false, 
+              agentId: data.agentId,
+              image: data.image,
+              imagePrompt: data.imagePrompt // Include imagePrompt field
+            },
             timestamp: timestamp || Date.now(),
           });
           collabs.value = [...collabs.value];
@@ -114,7 +129,14 @@ export function useCollaboration() {
         const message = collabs.value.find(m => m.id === id);
         if (message) {
           const content = typeof data.content === 'string' ? data.content : '';
-          message.data.text += content;
+          if (data.isImage) {
+            // If this is an image response, set the image field
+            message.data.image = content;
+            message.data.text = message.data.imagePrompt || 'Generated Image'; // Restore the prompt or use a default
+          } else {
+            // For text generation, append the content
+            message.data.text += content;
+          }
           message.data.isStreaming = !data.end;
           collabs.value = [...collabs.value];
           console.log('Updated collab with draft LLM:', message);
@@ -128,6 +150,8 @@ export function useCollaboration() {
                 color: message.data.color,
                 isStreaming: false,
                 agentId: message.data.agentId,
+                image: message.data.image,
+                imagePrompt: message.data.imagePrompt,
               },
               timestamp: message.timestamp,
             });
@@ -147,6 +171,8 @@ export function useCollaboration() {
         if (message) {
           message.data.text = data.text;
           message.data.isStreaming = data.isStreaming || false;
+          message.data.image = data.image;
+          message.data.imagePrompt = data.imagePrompt;
           collabs.value = [...collabs.value];
           console.log('Updated collab message:', message);
         }
@@ -243,6 +269,36 @@ export function useCollaboration() {
     draftInitialTimestamps.value = { ...draftInitialTimestamps.value };
   }
 
+  function generateImage(text, breakoutId) {
+    if (!text.trim() || !breakoutId) return;
+    const id = uuidv4();
+    const data = { 
+      text: '', // Don't overwrite with "AI is generating..."
+      breakoutId, 
+      color: userColor.value || '#808080', 
+      isStreaming: true,
+      imagePrompt: text // Store the original prompt
+    };
+    collabs.value.push({
+      id,
+      userUuid: userUuid.value,
+      data,
+      timestamp: Date.now(),
+    });
+    collabs.value = [...collabs.value];
+    console.log('Optimistically added image placeholder to collabs:', collabs.value);
+    emit('add-collab', { id, userUuid: userUuid.value, data, timestamp: Date.now() });
+    if (userUuid.value && !userUuid.value.startsWith('agent-')) {
+      processAgentTriggers(text, breakoutId, true); // Pass generateImage: true
+    }
+    if (draftMessages.value[breakoutId]?.[userUuid.value]) {
+      delete draftMessages.value[breakoutId][userUuid.value];
+      delete draftInitialTimestamps.value[breakoutId]?.[userUuid.value];
+    }
+    draftMessages.value = { ...draftMessages.value };
+    draftInitialTimestamps.value = { ...draftInitialTimestamps.value };
+  }
+
   function updateDraft(text, breakoutId) {
     if (!breakoutId) return;
     const draftId = draftMessages.value[breakoutId]?.[userUuid.value]?.id || uuidv4();
@@ -305,19 +361,31 @@ export function useCollaboration() {
     return activeUsers.value.find(user => user.userUuid === senderUuid)?.color || '#808080';
   }
 
-  function processAgentTriggers(text, breakoutId) {
+  function processAgentTriggers(text, breakoutId, generateImage = false) {
     const agentMentions = text.match(/@(\w+)/g)?.map(m => m.slice(1)) || [];
-    agentMentions.forEach(agentName => {
-      const agent = agents.value.find(a => a.data.name === agentName);
-      if (agent) triggerAgent(agent, text, breakoutId);
-    });
+    if (agentMentions.length > 0) {
+      agentMentions.forEach(agentName => {
+        const agent = agents.value.find(a => a.data.name === agentName);
+        if (agent) triggerAgent(agent, text, breakoutId, generateImage);
+      });
+    } else if (generateImage) {
+      // If no agent is mentioned but generateImage is true, use a default model
+      triggerAgent(null, text, breakoutId, true);
+    }
   }
 
-  function triggerAgent(agent, triggerText, breakoutId) {
+  function triggerAgent(agent, triggerText, breakoutId, generateImage = false) {
     const messageId = uuidv4();
-    const agentId = agent.id;
+    const agentId = agent ? agent.id : null;
     const initialTimestamp = Date.now();
-    const data = { text: '', breakoutId, color: '#808080', isStreaming: true, agentId };
+    const data = { 
+      text: '', // Don't set a placeholder text
+      breakoutId, 
+      color: '#808080', 
+      isStreaming: true, 
+      agentId,
+      imagePrompt: generateImage ? triggerText : undefined // Store the prompt if generating an image
+    };
     collabs.value.push({
       id: messageId,
       userUuid: userUuid.value,
@@ -336,6 +404,7 @@ export function useCollaboration() {
     const roomMessages = collabs.value.filter(m => m.data.breakoutId === breakoutId);
     const messageHistory = [];
 
+  if (agent) {
     messageHistory.push({ role: 'system', content: `You are participating in a multiperson chat with humans and other AI agents. Your name is @${agent.data.name}, but you don't need to write it unless you are asked your name.` });
 
     // Collect unique document and artifact IDs for system prompts
@@ -421,6 +490,10 @@ export function useCollaboration() {
         messageHistory.push({ role: 'user', content });
       }
     });
+  } else {
+    // Default system prompt for image generation without an agent
+    messageHistory.push({ role: 'system', content: 'You are an AI capable of generating images based on user prompts.' });
+  }
 
     const chatHistory = roomMessages.map(m => ({
       role: m.data.agentId ? 'user' : 'user',
@@ -435,25 +508,26 @@ export function useCollaboration() {
       ...messageHistory.filter(m => m.role !== 'system')
     ];
 
-
-    //Remove empty string prompts, not supported by some LLMs like Grok
-    cleanedMessageHistory = cleanedMessageHistory.filter(m => m.content !== '')
-
+    // Remove empty string prompts, not supported by some LLMs like Grok
+    cleanedMessageHistory = cleanedMessageHistory.filter(m => m.content !== '');
 
     console.log('Chat History:', chatHistory);
     console.log('LLM Payload:', { cleanedMessageHistory });
 
-    // Use agent's model if available, otherwise default to Gemini
-    const model = agent.data.model || { provider: 'gemini', model: 'gemini-2.0-flash', name: 'gemini-2.0-flash' };
+    // Use agent's model if available, otherwise default to Gemini for image generation
+    const model = agent 
+      ? (agent.data.model || { provider: 'gemini', model: 'gemini-2.0-flash-exp-image-generation', name: 'gemini-2.0-flash' })
+      : { provider: 'gemini', model: 'gemini-2.0-flash-exp-image-generation', name: 'gemini-2.0-flash' };
 
     triggerLLM(
       messageId,
-      model, // Use the selected model or default
+      model,
       0.5,
-      '',
+      systemContent,
       triggerText,
       cleanedMessageHistory,
-      false
+      false,
+      generateImage // Pass the generateImage flag
     );
   }
 
@@ -482,6 +556,7 @@ export function useCollaboration() {
     draftInitialTimestamps,
     currentBreakoutId,
     sendMessage,
+    generateImage,
     updateDraft,
     deleteMessage,
     addBreakout,

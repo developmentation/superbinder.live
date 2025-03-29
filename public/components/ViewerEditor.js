@@ -39,7 +39,8 @@ export default {
       if (type === 'pdf') return ['PDF', 'Text'];
       if (type === 'docx') return ['HTML', 'Text'];
       if (type === 'xlsx' || type === 'csv') return ['Table', 'JSON'];
-      if (type === 'md' || props.item.type === 'artifact') return ['Markdown'];
+      if (props.item.type === 'artifact' && type === 'md') return ['Markdown'];
+      if (props.item.type === 'artifact' && type === 'image') return ['Image', 'Markdown'];
       if (type === 'svg') return ['Image', 'Text'];
       if (imageTypes.includes(type)) return ['Image', 'Text'];
       return ['Text'];
@@ -52,7 +53,8 @@ export default {
         displayMode.value = type === 'pdf' ? 'PDF' : 
                            type === 'docx' ? 'HTML' : 
                            (type === 'xlsx' || type === 'csv') ? 'Table' : 
-                           (type === 'md' || newItem.type === 'artifact') ? 'Markdown' : 
+                           (props.item.type === 'artifact' && type === 'md') ? 'Markdown' : 
+                           (props.item.type === 'artifact' && type === 'image') ? 'Image' : 
                            (type === 'svg') ? 'Image' :
                            (imageTypes.includes(type)) ? 'Image' : 'Text';
         console.log('ViewerEditor item updated:', newItem, 'type:', type, 'displayMode:', displayMode.value);
@@ -83,7 +85,7 @@ export default {
       }
       if (type === 'docx' && displayMode.value === 'Text') {
         console.log('DOCX Text mode, rendering pagesText with markdown:', pagesText);
-        return pagesText?.length ? pagesText.map(text => md.render(text)) : [];
+        return pagesText?.length ? pagesText.map(text => md.render(text || '')) : [];
       }
       if ((type === 'xlsx' || type === 'csv') && displayMode.value === 'Table') {
         console.log('XLSX/CSV Table mode, rendering pagesText as table:', pagesText);
@@ -103,9 +105,16 @@ export default {
         console.log('XLSX/CSV JSON mode, returning pagesText:', pagesText);
         return pagesText?.length ? pagesText : [];
       }
-      if (renderAs === 'markdown' || displayMode.value === 'Markdown' || props.item.type === 'artifact') {
+      if (renderAs === 'markdown' || displayMode.value === 'Markdown' || (props.item.type === 'artifact' && type === 'md')) {
         console.log('Markdown mode, rendering pagesText with markdown:', pagesText);
-        return pagesText?.length ? pagesText.map(text => md.render(text)) : [];
+        return pagesText?.length ? pagesText.map(text => md.render(text || '')) : ['<p>No content available.</p>'];
+      }
+      if (props.item.type === 'artifact' && type === 'image' && displayMode.value === 'Image') {
+        console.log('Artifact Image mode, rendering base64 image:', pages);
+        if (pages?.length) {
+          return [`<img src="data:image/jpeg;base64,${pages[0]}" alt="Generated Image" class="max-w-full rounded-lg" />`];
+        }
+        return ['<p>No image data available.</p>'];
       }
       if (imageTypes.includes(type) && displayMode.value === 'Image') {
         console.log('Image mode, rendering image:', pages);
@@ -140,7 +149,7 @@ export default {
         const language = supportedLanguages.includes(fileType) ? (fileType === 'js' ? 'javascript' : fileType) : 'text';
         if (language !== 'text') {
           return pagesText.map(text => {
-            const highlighted = Prism.highlight(text, Prism.languages[language], language);
+            const highlighted = Prism.highlight(text || '', Prism.languages[language], language);
             return `<pre class="language-${language}">${highlighted}</pre>`;
           });
         }
@@ -155,7 +164,7 @@ export default {
       if (props.item.data.type === 'docx' && displayMode.value === 'HTML') {
         editedContent.value = [...props.item.data.pagesHtml];
       } else {
-        editedContent.value = [...props.item.data.pagesText];
+        editedContent.value = [...(props.item.data.pagesText || [])];
       }
       const updateFn = props.item.type === 'document' ? updateDocument : updateArtifact;
       updateFn(props.item.id, { editStatus: true, editor: userUuid.value });
@@ -272,16 +281,20 @@ export default {
         isOcrLoading.value = true;
         const pageToOcr = props.item.data.type === 'pdf' ? currentPage.value : 0;
         const ocrResults = await ocrFiles([props.item.id], [props.item], [pageToOcr]);
+        console.log("ocrResults", ocrResults)
         const { uuids, text, pages } = ocrResults;
         if (uuids[0] === props.item.id) {
           const pageIndex = pages[0];
-          const ocrText = text[0];
+          const ocrText = text[0] || ''; // text[0] is response.data.text[0]
           editedContent.value[pageIndex] = ocrText;
           const updateFn = props.item.type === 'document' ? updateDocumentOcr : updateArtifact;
           if (props.item.type === 'document') {
             updateFn(props.item.id, pageIndex, ocrText);
           } else {
-            updateFn(props.item.id, { pagesText: [ocrText] });
+            const updatedPagesText = props.item.data.pagesText ? [...props.item.data.pagesText] : [''];
+            updatedPagesText[0] = ocrText;
+            console.log('Updating artifact with pagesText:', updatedPagesText); // Log to confirm
+            updateFn(props.item.id, { pagesText: updatedPagesText });
           }
         }
       } catch (error) {
@@ -290,7 +303,6 @@ export default {
         isOcrLoading.value = false;
       }
     };
-
     const ocrAllPages = async () => {
       try {
         isOcrLoading.value = true;
@@ -300,17 +312,16 @@ export default {
         const newPagesText = [...(props.item.data.pagesText || Array(totalPages).fill(''))];
         
         for (let page = 0; page < totalPages; page++) {
-          if (!isOcrAllRunning.value) break; // Check for stop condition
+          if (!isOcrAllRunning.value) break;
           
           try {
             const ocrResults = await ocrFiles([props.item.id], [props.item], [page]);
             const { uuids, text, pages } = ocrResults;
             
-            if (uuids[0] === props.item.id && text[0]) {
+            if (uuids[0] === props.item.id && text[0] !== null) {
               const pageIndex = pages[0];
               newPagesText[pageIndex] = text[0];
               
-              // Update document incrementally
               const updateFn = props.item.type === 'document' ? updateDocument : updateArtifact;
               if (props.item.type === 'document') {
                 updateFn(props.item.id, { pagesText: newPagesText });
@@ -325,7 +336,6 @@ export default {
             ocrProgress.value = page + 1;
           } catch (error) {
             console.error(`OCR failed for page ${page}:`, error);
-            // Continue with next page even if one fails
           }
         }
       } catch (error) {
@@ -361,7 +371,7 @@ export default {
     };
 
     const resetOcrPromptHandler = () => {
-      console.log(" resetOcrPromptHandler in ViewerEditor")
+      console.log("resetOcrPromptHandler in ViewerEditor");
       resetOcrPrompt();
     };
 
@@ -413,8 +423,8 @@ export default {
         <button v-if="isEditing" @click="finishEditing" class="py-1 px-2 bg-[#10b981] text-white rounded-lg text-sm">
           Done
         </button>
-        <template v-if="(item.data.type === 'pdf' && displayMode === 'PDF') || (item.data.type && ['png', 'jpg', 'jpeg', 'webp'].includes(item.data.type) && displayMode === 'Image') && !isEditing">
-          <div class="flex items-center gap-1">
+        <template v-if="((item.data.type === 'pdf' && displayMode === 'PDF') || (item.data.type && (['png', 'jpg', 'jpeg', 'webp'].includes(item.data.type) || (item.type === 'artifact' && item.data.type === 'image')) && displayMode === 'Image')) && !isEditing">
+          <div v-if="item.data.type === 'pdf' || item.type === 'artifact'" class="flex items-center gap-1">
             <input
               type="text"
               inputmode="numeric"
@@ -425,7 +435,7 @@ export default {
             />
             <span class="text-[#e2e8f0] text-sm">of {{ item.data.pages?.length || 0 }}</span>
           </div>
-          <button @click="jumpToPage" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">Go</button>
+          <button v-if="item.data.type === 'pdf' || item.type === 'artifact'" @click="jumpToPage" class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg text-sm">Go</button>
           <div class="flex items-center">
             <div class="flex items-center">
               <button
@@ -439,7 +449,7 @@ export default {
               <button
                 @click="openOcrPromptEditor"
                 class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg rounded-l-none text-sm hover:bg-[#2563eb] flex items-center"
-              > &nbsp;
+              >  
                 <i class="pi pi-pencil"></i>
               </button>
             </div>
