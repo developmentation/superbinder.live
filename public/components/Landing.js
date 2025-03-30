@@ -29,13 +29,13 @@ export default {
               </p>
               <div class="mt-10 flex gap-6 sm:justify-center lg:justify-start animate-slide-up delay-200">
                 <a href="/binder" class="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-semibold transition-all transform hover:scale-105 shadow-lg">
-                  Make a Binder
+                   Binder
                 </a>
                 <a href="/library" class="px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white rounded-lg font-semibold transition-all transform hover:scale-105 shadow-lg">
-                  Explore the Library
+                  Library
                 </a>
                 <a href="#features" class="px-8 py-4 border-2 border-purple-400 hover:border-purple-300 text-purple-300 hover:text-white rounded-lg font-semibold transition-all transform hover:scale-105 shadow-lg">
-                  Explore Features
+                   Features
                 </a>
               </div>
             </div>
