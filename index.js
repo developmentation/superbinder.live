@@ -36,6 +36,7 @@ app.use("/api/configs", require("./routes/configs")); // Configuration values
 app.use("/api/files", require("./routes/files")); // Add and retrieve files to process.env.DATA
 app.use("/api/healthcheck", require("./routes/healthcheck")); // Healthcheck route
 app.use("/api/models", require("./routes/models")); // Server side defined models
+app.use("/api/library", require("./routes/library")); // Interact with library artifacts
 
 // SPA Fallback: Serve `index.html` for any non-API routes
 app.get("*", (req, res) => {

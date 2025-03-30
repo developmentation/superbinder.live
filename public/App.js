@@ -107,6 +107,7 @@ export default {
     const menuItems = [
       { label: "Home", to: "/" },
       { label: "Binder", to: "/binder" },
+      { label: "Library", to: "/library" },
     ];
 
     function triggerFileInput() {

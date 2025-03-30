@@ -1,5 +1,6 @@
 import Landing from "../components/Landing.js";
 import Binder from "../components/Binder.js";
+import Library from "../components/Library.js";
 
 const routes = [
   {
@@ -11,6 +12,11 @@ const routes = [
     path: "/binder",
     component: Binder,
     name: "binder",
+  },
+  {
+    path: "/library",
+    component: Library,
+    name: "library",
   },
   {
     path: "/binder/:channelName",

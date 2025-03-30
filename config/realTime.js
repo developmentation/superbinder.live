@@ -1,8 +1,10 @@
+// realTime.js
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const connectDB = require('./db.js');
 const { handlePrompt } = require("./handleAiInteractions");
 const { handleImageGeneration } = require("./handleAiImages");
+const { entityModels } = require('./models'); // Import entity models from models.js
 
 const channels = new Map();
 
@@ -20,57 +22,10 @@ const logSchema = new mongoose.Schema({
 
 const Log = mongoose.model('Log', logSchema, 'logs');
 
-// EntitySet Schema
-const entitySetSchema = new mongoose.Schema({
-  id: { type: String, required: true, index: true }, // Entity-specific ID (not _id)
-  channel: { type: String, required: true, index: true },
-  userUuid: { type: String, required: true, index: true },
-  data: { type: mongoose.Schema.Types.Mixed, required: true }, // Flexible data field
-  timestamp: { type: Number, required: true },
-  serverTimestamp: { type: Number, required: true, index: true },
-}, { timestamps: true });
-
-// Define models for each entity type
-const entityModels = {};
-Object.keys({
-  agents: 'agentSet',
-  chat: 'chatSet',
-  documents: 'documentSet',
-  goals: 'goalSet',
-  questions: 'questionSet',
-  answers: 'answerSet',
-  artifacts: 'artifactSet',
-  transcripts: 'transcriptSet',
-  llm: 'llmSet',
-  collab: 'collabSet',
-  breakout: 'breakoutSet',
-  sections: 'sectionSet',
-  channels: 'channelsSet',
-  artifacts: 'artifactsSet',
-  prompts: 'promptsSet',
-}).forEach(entityType => {
-  const collectionName = `${entityType}Set`;
-  entityModels[entityType] = mongoose.model(collectionName, entitySetSchema, collectionName);
-});
-
-async function verifyIndexes() {
-  try {
-    for (const [entityType, model] of Object.entries(entityModels)) {
-      const indexes = await model.collection.listIndexes().toArray();
-      const expectedIndexes = ['id', 'channel', 'userUuid', 'serverTimestamp'];
-      const hasAllIndexes = expectedIndexes.every(key =>
-        indexes.some(index => index.key && Object.keys(index.key).includes(key))
-      );
-    }
-  } catch (err) {
-    await logError('error', `Error verifying indexes: ${err.message}`, err.stack);
-  }
-}
-
 async function initializeDatabase() {
   try {
     await connectDB();
-    await verifyIndexes();
+    // No need for verifyIndexes since indexes are defined in models.js schemas
   } catch (err) {
     await logError('error', 'Failed to initialize database', err.stack);
     process.exit(1);
@@ -84,16 +39,16 @@ initializeDatabase().catch(err => {
 
 const entityConfigs = {
   agents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-agent', update: 'update-agent', remove: 'remove-agent', reorder: null } },
-  chat: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-chat', update: 'update-chat', remove: 'delete-chat', draft: 'draft-chat' } },
+  chats: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-chat', update: 'update-chat', remove: 'delete-chat', draft: 'draft-chat' } },
   documents: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-document', update: 'update-document', remove: 'remove-document', reorder: null } },
   goals: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-goal', update: 'update-goal', remove: 'remove-goal', reorder: 'reorder-goals' } },
   questions: { idKey: 'id', requiredFields: ['id'], orderField: 'order', events: { add: 'add-question', update: 'update-question', remove: 'remove-question', reorder: 'reorder-questions' } },
   answers: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-answer', update: 'update-answer', remove: 'delete-answer', vote: 'vote-answer' } },
   artifacts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-artifact', update: 'update-artifact', remove: 'remove-artifact', reorder: null } },
   transcripts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-transcript', update: null, remove: 'remove-transcript', reorder: null } },
-  llm: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-llm', draft: 'draft-llm' } },
-  collab: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-collab', update: 'update-collab', remove: 'delete-collab', draft: 'draft-collab' } },
-  breakout: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-breakout', update: 'update-breakout', remove: 'delete-breakout', reorder: null } },
+  llms: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-llm', draft: 'draft-llm' } },
+  collabs: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-collab', update: 'update-collab', remove: 'delete-collab', draft: 'draft-collab' } },
+  breakouts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-breakout', update: 'update-breakout', remove: 'delete-breakout', reorder: null } },
   sections: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-section', update: 'update-section', remove: 'remove-section', reorder: 'reorder-section' } },
   channels: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-channel', update: 'update-channel', remove: 'remove-channel', reorder: null } },
   prompts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-prompt', update: 'update-prompt', remove: 'remove-prompt', reorder: null } },
@@ -750,11 +705,9 @@ async function handleMessage(dataObj, socket) {
       case 'update-section':
       case 'remove-section':
       case 'reorder-section':
-
       case 'add-prompt':
       case 'update-prompt':
       case 'remove-prompt':
-
       case 'add-channel':
       case 'remove-channel':
         await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data }, socket);

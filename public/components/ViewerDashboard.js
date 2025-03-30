@@ -10,6 +10,7 @@ import { useChat } from '../composables/useChat.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
 import { usePrompts } from '../composables/usePrompts.js';
+import { useLibrary } from '../composables/useLibrary.js';
 
 export default {
   name: 'ViewerDashboard',
@@ -29,6 +30,9 @@ export default {
           </h1>
         </div>
         <div class="flex items-center space-x-3">
+          <button @click="openPublishModal" class="p-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-lg text-sm" title="Publish Binder as Template">
+            Publish to Library
+          </button>
           <button @click="toggleRoomLock" class="p-2 text-[#e2e8f0] hover:text-[#34d399] transition-colors" title="Toggle Room Lock">
             <i :class="isRoomLocked ? 'pi pi-lock' : 'pi pi-unlock'" class="text-xl"></i>
           </button>
@@ -99,7 +103,6 @@ export default {
               <p class="text-[#94a3b8] text-sm mt-1">Total number of goals set.</p>
             </div>
 
-            
             <!-- Prompts Card -->
             <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Goals')">
               <div class="flex items-center gap-3 mb-2">
@@ -109,7 +112,6 @@ export default {
               <p class="text-2xl font-bold text-[#34d399]">{{ prompts.length }}</p>
               <p class="text-[#94a3b8] text-sm mt-1">Total number of prompts created.</p>
             </div>
-
 
             <!-- Agents Card -->
             <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Agents')">
@@ -163,6 +165,33 @@ export default {
           </div>
         </div>
       </div>
+
+      <!-- Publish Modal -->
+      <div v-if="isPublishModalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <h2 class="text-lg font-semibold text-purple-400 mb-4">Publish Binder to Library</h2>
+          <div class="space-y-4">
+            <input
+              v-model="publishName"
+              type="text"
+              class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
+              placeholder="Binder Name"
+            />
+            <textarea
+              v-model="publishDescription"
+              class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none h-24"
+              placeholder="Description..."
+            ></textarea>
+            <p v-if="libraryError" class="text-red-500 text-sm">{{ libraryError }}</p>
+          </div>
+          <div class="mt-4 flex gap-2 justify-end">
+            <button @click="closePublishModal" class="py-2 px-4 bg-gray-600 hover:bg-gray-500 text-white rounded-lg">Cancel</button>
+            <button @click="publish" :disabled="libraryLoading" class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">
+              {{ libraryLoading ? 'Publishing...' : 'Publish' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   setup(props) {
@@ -176,9 +205,14 @@ export default {
     const { documents } = useDocuments();
     const { artifacts } = useArtifacts();
     const { prompts } = usePrompts();
+    const { libraryArtifacts, loading: libraryLoading, error: libraryError, publishBinder } = useLibrary();
 
     const userCount = Vue.computed(() => Object.keys(activeUsers.value).length);
     const participantCount = Vue.computed(() => userCount.value);
+
+    const isPublishModalOpen = Vue.ref(false);
+    const publishName = Vue.ref('');
+    const publishDescription = Vue.ref('');
 
     function navigateToTab(tab, subTab = null) {
       props.updateTab(tab, subTab);
@@ -210,6 +244,29 @@ export default {
       });
     }
 
+    function openPublishModal() {
+      isPublishModalOpen.value = true;
+      publishName.value = '';
+      publishDescription.value = '';
+    }
+
+    function closePublishModal() {
+      isPublishModalOpen.value = false;
+    }
+
+    async function publish() {
+      if (!publishName.value || !publishDescription.value) {
+        libraryError.value = 'Name and description are required';
+        return;
+      }
+      try {
+        await publishBinder(channelName.value, publishName.value, publishDescription.value);
+        closePublishModal();
+      } catch (err) {
+        // Error is handled by useLibrary and stored in libraryError
+      }
+    }
+
     return {
       activeUsers,
       userCount,
@@ -229,6 +286,14 @@ export default {
       breakouts,
       messages,
       navigateToTab,
+      isPublishModalOpen,
+      publishName,
+      publishDescription,
+      libraryLoading,
+      libraryError,
+      openPublishModal,
+      closePublishModal,
+      publish,
     };
   },
 };
