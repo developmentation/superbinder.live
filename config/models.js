@@ -28,16 +28,16 @@ const librarySetSchema = new mongoose.Schema({
 // Register models
 const entityModels = {
   agents: mongoose.model('agentsSet', entitySetSchema, 'agentsSet'),
-  chat: mongoose.model('chatsSet', entitySetSchema, 'chatsSet'),
+  chats: mongoose.model('chatsSet', entitySetSchema, 'chatsSet'),
   documents: mongoose.model('documentsSet', entitySetSchema, 'documentsSet'),
   goals: mongoose.model('goalsSet', entitySetSchema, 'goalsSet'),
   questions: mongoose.model('questionsSet', entitySetSchema, 'questionsSet'),
   answers: mongoose.model('answersSet', entitySetSchema, 'answersSet'),
   artifacts: mongoose.model('artifactsSet', entitySetSchema, 'artifactsSet'),
   transcripts: mongoose.model('transcriptsSet', entitySetSchema, 'transcriptsSet'),
-  llm: mongoose.model('llmsSet', entitySetSchema, 'llmsSet'), // Fixed typo 'llurnal' to 'llm'
-  collab: mongoose.model('collabsSet', entitySetSchema, 'collabsSet'),
-  breakout: mongoose.model('breakoutsSet', entitySetSchema, 'breakoutsSet'),
+  llms: mongoose.model('llmsSet', entitySetSchema, 'llmsSet'), // Fixed typo 'llurnal' to 'llm'
+  collabs: mongoose.model('collabsSet', entitySetSchema, 'collabsSet'),
+  breakouts: mongoose.model('breakoutsSet', entitySetSchema, 'breakoutsSet'),
   sections: mongoose.model('sectionsSet', entitySetSchema, 'sectionsSet'),
   channels: mongoose.model('channelsSet', entitySetSchema, 'channelsSet'),
   prompts: mongoose.model('promptsSet', entitySetSchema, 'promptsSet'),

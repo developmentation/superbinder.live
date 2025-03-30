@@ -425,7 +425,7 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
       return;
     }
 
-    if (entityType === 'llm' && operation === 'add') {
+    if (entityType === 'llms' && operation === 'add') {
       if (!validateLLMData(payload.data)) {
         socket.emit('message', { type: 'error', message: 'Invalid LLM data', timestamp: Date.now() });
         return;
