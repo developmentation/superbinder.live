@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs').promises;
 const { upload } = require('../tools/uploads.js');
 const { ocrUpload } = require('../tools/ocrUploads.js');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { GoogleGenAI } = require('@google/genai');
 
 const filesController = {};
@@ -157,10 +156,10 @@ filesController.retrieveFiles = async (req, res) => {
   }
 };
 
- /**
+/**
  * POST /api/files/ocr
  */
- filesController.ocrFile = async (req, res) => {
+filesController.ocrFile = async (req, res) => {
   try {
     ocrUpload.array('files', 3000)(req, res, async (err) => {
       if (err) {
@@ -184,17 +183,23 @@ filesController.retrieveFiles = async (req, res) => {
         return res.status(400).json({ message: 'OCR prompt is required' });
       }
 
-      const fileData = req.files.map(file => {
-        const uuid = file.originalname;
-        const mimeType = file.mimetype; // Use multer's detected mime type
+      // Match files with their metadata based on order
+      const fileData = req.files.map((file, index) => {
+        const uuidKeys = Object.keys(req.body).filter(key => key.startsWith('mimeType_'));
+        if (index >= uuidKeys.length) {
+          console.warn(`No matching metadata for file at index ${index}`);
+          return null;
+        }
+        const uuid = uuidKeys[index].replace('mimeType_', '');
+        const mimeType = req.body[`mimeType_${uuid}`];
         const page = parseInt(req.body[`page_${uuid}`], 10) || 0;
 
         if (!supportedMimeTypes.includes(mimeType)) {
-          console.warn(`Unsupported MIME type for file ${uuid}: ${mimeType}`);
+          console.warn(`Unsupported MIME type for UUID ${uuid}: ${mimeType}`);
           return null;
         }
-        const base64Image = file.buffer.toString('base64');
-        return { uuid, base64Image, mimeType, page };
+
+        return { uuid, buffer: file.buffer, mimeType, page };
       }).filter(data => data !== null);
 
       if (fileData.length === 0) {
@@ -206,10 +211,8 @@ filesController.retrieveFiles = async (req, res) => {
         return res.status(500).json({ message: 'GEMINI_API_KEY environment variable is not set' });
       }
 
-      // Initialize GoogleGenAI with API key
       const ai = new GoogleGenAI({ apiKey });
 
-      // Retry function with exponential backoff
       const retryWithBackoff = async (fn, retries = 3, delay = 1000) => {
         for (let attempt = 0; attempt <= retries; attempt++) {
           try {
@@ -226,9 +229,12 @@ filesController.retrieveFiles = async (req, res) => {
         }
       };
 
-      const ocrResults = await Promise.all(fileData.map(async ({ uuid, base64Image, mimeType, page }) => {
+      const ocrResults = await Promise.all(fileData.map(async ({ uuid, buffer, mimeType, page }) => {
+        const base64Image = buffer.toString('base64');
+        console.log(`Processing OCR for UUID ${uuid}: mimeType=${mimeType}, page=${page}, data length=${buffer.length}`);
+
         const request = {
-          model: 'gemini-2.0-flash', // Use a supported model; adjust if gemini-2.0-flash is available
+          model: 'gemini-2.0-flash', // Reverted to original model
           contents: [
             {
               role: 'user',
@@ -236,7 +242,7 @@ filesController.retrieveFiles = async (req, res) => {
                 {
                   inlineData: {
                     data: base64Image,
-                    mimeType: mimeType === 'application/pdf' ? 'image/png' : mimeType,
+                    mimeType: mimeType === 'application/pdf' ? 'image/png' : mimeType, // Original behavior
                   },
                 },
                 { text: customPrompt },
@@ -254,15 +260,11 @@ filesController.retrieveFiles = async (req, res) => {
             return result;
           });
           const text = response.text;
+          console.log(`OCR result for UUID ${uuid}:`, text);
           return { uuid, text, page };
         } catch (error) {
           console.error(`OCR failed for UUID ${uuid}:`, error.message);
-          return {
-            uuid,
-            text: null,
-            page,
-            error: error.message,
-          };
+          return { uuid, text: null, page, error: error.message };
         }
       }));
 
