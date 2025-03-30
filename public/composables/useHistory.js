@@ -14,14 +14,14 @@ export function useHistory() {
   function gatherLocalHistory() {
     const history = {
       agents: [...useAgents().agents.value],
-      chat: [...useChat().messages.value],
+      chats: [...useChat().messages.value],
       documents: [...useDocuments().documents.value],
       goals: [...useGoals().goals.value],
       questions: [...useQuestions().questions.value],
       answers: [...useQuestions().answers.value],
       artifacts: [...(useArtifacts().artifacts.value || [])],
-      breakout: [...(useCollaboration().breakouts.value || [])],
-      collab: [...(useCollaboration().collabs.value || [])],
+      breakouts: [...(useCollaboration().breakouts.value || [])],
+      collabs: [...(useCollaboration().collabs.value || [])],
       sections: [...(useSections().sections.value || [])],
       prompts: [...(usePrompts().prompts.value || [])],
     };
@@ -71,14 +71,14 @@ export function useHistory() {
       };
 
       useAgents().agents.value = mergeArrays(useAgents().agents.value, historyData.agents);
-      useChat().messages.value = mergeArrays(useChat().messages.value, historyData.chat);
+      useChat().messages.value = mergeArrays(useChat().messages.value, historyData.chats);
       useDocuments().documents.value = mergeArrays(useDocuments().documents.value, historyData.documents, true); // Preserve data.pages
       useGoals().goals.value = mergeArrays(useGoals().goals.value, historyData.goals);
       useQuestions().questions.value = mergeArrays(useQuestions().questions.value, historyData.questions);
       useQuestions().answers.value = mergeArrays(useQuestions().answers.value, historyData.answers);
       useArtifacts().artifacts.value = mergeArrays(useArtifacts().artifacts.value || [], historyData.artifacts);
-      useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakout);
-      useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
+      useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakouts);
+      useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collabs);
       useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
       usePrompts().prompts.value = mergeArrays(usePrompts().prompts.value || [], historyData.prompts);
     } else {
