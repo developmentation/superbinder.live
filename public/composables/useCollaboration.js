@@ -1,9 +1,11 @@
+// composables/useCollaboration.js
 import { useRealTime } from './useRealTime.js';
 import { useAgents } from './useAgents.js';
 import { useLLM } from './useLLM.js';
 import { useDocuments } from './useDocuments.js';
 import { useGoals } from './useGoals.js';
 import { useArtifacts } from './useArtifacts.js';
+import { usePrompts } from './usePrompts.js'; // Add this import for prompts
 
 const breakouts = Vue.ref([]);
 const collabs = Vue.ref([]);
@@ -17,6 +19,7 @@ const { triggerLLM, llmRequests } = useLLM();
 const { documents } = useDocuments();
 const { goals } = useGoals();
 const { addArtifact } = useArtifacts();
+const { prompts } = usePrompts(); // Add prompts from usePrompts
 
 const eventHandlers = new WeakMap();
 const processedEvents = new Set();
@@ -130,11 +133,9 @@ export function useCollaboration() {
         if (message) {
           const content = typeof data.content === 'string' ? data.content : '';
           if (data.isImage) {
-            // If this is an image response, set the image field
             message.data.image = content;
-            message.data.text = message.data.imagePrompt || 'Generated Image'; // Restore the prompt or use a default
+            message.data.text = message.data.imagePrompt || 'Generated Image';
           } else {
-            // For text generation, append the content
             message.data.text += content;
           }
           message.data.isStreaming = !data.end;
@@ -273,11 +274,11 @@ export function useCollaboration() {
     if (!text.trim() || !breakoutId) return;
     const id = uuidv4();
     const data = { 
-      text: '', // Don't overwrite with "AI is generating..."
+      text: '', 
       breakoutId, 
       color: userColor.value || '#808080', 
       isStreaming: true,
-      imagePrompt: text // Store the original prompt
+      imagePrompt: text 
     };
     collabs.value.push({
       id,
@@ -289,7 +290,7 @@ export function useCollaboration() {
     console.log('Optimistically added image placeholder to collabs:', collabs.value);
     emit('add-collab', { id, userUuid: userUuid.value, data, timestamp: Date.now() });
     if (userUuid.value && !userUuid.value.startsWith('agent-')) {
-      processAgentTriggers(text, breakoutId, true); // Pass generateImage: true
+      processAgentTriggers(text, breakoutId, true);
     }
     if (draftMessages.value[breakoutId]?.[userUuid.value]) {
       delete draftMessages.value[breakoutId][userUuid.value];
@@ -369,7 +370,6 @@ export function useCollaboration() {
         if (agent) triggerAgent(agent, text, breakoutId, generateImage);
       });
     } else if (generateImage) {
-      // If no agent is mentioned but generateImage is true, use a default model
       triggerAgent(null, text, breakoutId, true);
     }
   }
@@ -379,12 +379,12 @@ export function useCollaboration() {
     const agentId = agent ? agent.id : null;
     const initialTimestamp = Date.now();
     const data = { 
-      text: '', // Don't set a placeholder text
+      text: '', 
       breakoutId, 
       color: '#808080', 
       isStreaming: true, 
       agentId,
-      imagePrompt: generateImage ? triggerText : undefined // Store the prompt if generating an image
+      imagePrompt: generateImage ? triggerText : undefined 
     };
     collabs.value.push({
       id: messageId,
@@ -404,96 +404,105 @@ export function useCollaboration() {
     const roomMessages = collabs.value.filter(m => m.data.breakoutId === breakoutId);
     const messageHistory = [];
 
-  if (agent) {
-    messageHistory.push({ role: 'system', content: `You are participating in a multiperson chat with humans and other AI agents. Your name is @${agent.data.name}, but you don't need to write it unless you are asked your name.` });
+    if (agent) {
+      messageHistory.push({ role: 'system', content: `You are participating in a multiperson chat with humans and other AI agents. Your name is @${agent.data.name}, but you don't need to write it unless you are asked your name.` });
 
-    // Collect unique document and artifact IDs for system prompts
-    const systemUniqueIds = new Set();
+      // Collect unique document, artifact, and prompt IDs for system prompts
+      const systemUniqueIds = new Set();
 
-    // Process system prompts
-    agent.data.systemPrompts.forEach(prompt => {
-      if (prompt.type === 'text' && prompt.content) {
-        messageHistory.push({ role: 'system', content: prompt.content });
-      } else if (prompt.type === 'goal' && goals.value.some(g => g.id === prompt.content)) {
-        const goal = goals.value.find(g => g.id === prompt.content);
-        if (goal?.data.text) {
-          messageHistory.push({ role: 'system', content: goal.data.text });
+      // Process system prompts
+      agent.data.systemPrompts.forEach(prompt => {
+        if (prompt.type === 'text' && prompt.content) {
+          messageHistory.push({ role: 'system', content: prompt.content });
+        } else if (prompt.type === 'goal' && goals.value.some(g => g.id === prompt.content)) {
+          const goal = goals.value.find(g => g.id === prompt.content);
+          if (goal?.data.text) {
+            messageHistory.push({ role: 'system', content: goal.data.text });
+          }
+        } else if (prompt.type === 'document' && documents.value.some(d => d.id === prompt.content)) {
+          systemUniqueIds.add(prompt.content);
+        } else if (prompt.type === 'artifact' && artifacts.value.some(a => a.id === prompt.content)) {
+          systemUniqueIds.add(prompt.content);
+        } else if (prompt.type === 'sections' && Array.isArray(prompt.content)) {
+          prompt.content.forEach(sectionId => {
+            documents.value.forEach(doc => {
+              if (doc.data.sectionId === sectionId) systemUniqueIds.add(doc.id);
+            });
+            artifacts.value.forEach(artifact => {
+              if (artifact.data.sectionId === sectionId) systemUniqueIds.add(artifact.id);
+            });
+          });
+        } else if (prompt.type === 'prompt' && prompts.value.some(p => p.id === prompt.content)) { // Add prompt type handling
+          const promptItem = prompts.value.find(p => p.id === prompt.content);
+          if (promptItem?.data.text) {
+            messageHistory.push({ role: 'system', content: promptItem.data.text });
+          }
         }
-      } else if (prompt.type === 'document' && documents.value.some(d => d.id === prompt.content)) {
-        systemUniqueIds.add(prompt.content);
-      } else if (prompt.type === 'artifact' && artifacts.value.some(a => a.id === prompt.content)) {
-        systemUniqueIds.add(prompt.content);
-      } else if (prompt.type === 'sections' && Array.isArray(prompt.content)) {
-        prompt.content.forEach(sectionId => {
-          documents.value.forEach(doc => {
-            if (doc.data.sectionId === sectionId) systemUniqueIds.add(doc.id);
-          });
-          artifacts.value.forEach(artifact => {
-            if (artifact.data.sectionId === sectionId) systemUniqueIds.add(artifact.id);
-          });
-        });
-      }
-    });
+      });
 
-    // Add content for system prompt documents and artifacts
-    systemUniqueIds.forEach(id => {
-      const doc = documents.value.find(d => d.id === id);
-      if (doc && doc.data.pagesText) {
-        const content = Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
-        messageHistory.push({ role: 'system', content });
-      }
-      const artifact = artifacts.value.find(a => a.id === id);
-      if (artifact && artifact.data.pagesText) {
-        const content = Array.isArray(artifact.data.pagesText) ? artifact.data.pagesText.join('\n') : artifact.data.pagesText;
-        messageHistory.push({ role: 'system', content });
-      }
-    });
-
-    // Collect unique document and artifact IDs for user prompts
-    const userUniqueIds = new Set();
-
-    // Process user prompts
-    agent.data.userPrompts.forEach(prompt => {
-      if (prompt.type === 'text' && prompt.content) {
-        messageHistory.push({ role: 'user', content: prompt.content });
-      } else if (prompt.type === 'goal' && goals.value.some(g => g.id === prompt.content)) {
-        const goal = goals.value.find(g => g.id === prompt.content);
-        if (goal?.data.text) {
-          messageHistory.push({ role: 'user', content: goal.data.text });
+      // Add content for system prompt documents and artifacts
+      systemUniqueIds.forEach(id => {
+        const doc = documents.value.find(d => d.id === id);
+        if (doc && doc.data.pagesText) {
+          const content = Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
+          messageHistory.push({ role: 'system', content });
         }
-      } else if (prompt.type === 'document' && documents.value.some(d => d.id === prompt.content)) {
-        userUniqueIds.add(prompt.content);
-      } else if (prompt.type === 'artifact' && artifacts.value.some(a => a.id === prompt.content)) {
-        userUniqueIds.add(prompt.content);
-      } else if (prompt.type === 'sections' && Array.isArray(prompt.content)) {
-        prompt.content.forEach(sectionId => {
-          documents.value.forEach(doc => {
-            if (doc.data.sectionId === sectionId) userUniqueIds.add(doc.id);
-          });
-          artifacts.value.forEach(artifact => {
-            if (artifact.data.sectionId === sectionId) userUniqueIds.add(artifact.id);
-          });
-        });
-      }
-    });
+        const artifact = artifacts.value.find(a => a.id === id);
+        if (artifact && artifact.data.pagesText) {
+          const content = Array.isArray(artifact.data.pagesText) ? artifact.data.pagesText.join('\n') : artifact.data.pagesText;
+          messageHistory.push({ role: 'system', content });
+        }
+      });
 
-    // Add content for user prompt documents and artifacts
-    userUniqueIds.forEach(id => {
-      const doc = documents.value.find(d => d.id === id);
-      if (doc && doc.data.pagesText) {
-        const content = Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
-        messageHistory.push({ role: 'user', content });
-      }
-      const artifact = artifacts.value.find(a => a.id === id);
-      if (artifact && artifact.data.pagesText) {
-        const content = Array.isArray(artifact.data.pagesText) ? artifact.data.pagesText.join('\n') : artifact.data.pagesText;
-        messageHistory.push({ role: 'user', content });
-      }
-    });
-  } else {
-    // Default system prompt for image generation without an agent
-    messageHistory.push({ role: 'system', content: 'You are an AI capable of generating images based on user prompts.' });
-  }
+      // Collect unique document, artifact, and prompt IDs for user prompts
+      const userUniqueIds = new Set();
+
+      // Process user prompts
+      agent.data.userPrompts.forEach(prompt => {
+        if (prompt.type === 'text' && prompt.content) {
+          messageHistory.push({ role: 'user', content: prompt.content });
+        } else if (prompt.type === 'goal' && goals.value.some(g => g.id === prompt.content)) {
+          const goal = goals.value.find(g => g.id === prompt.content);
+          if (goal?.data.text) {
+            messageHistory.push({ role: 'user', content: goal.data.text });
+          }
+        } else if (prompt.type === 'document' && documents.value.some(d => d.id === prompt.content)) {
+          userUniqueIds.add(prompt.content);
+        } else if (prompt.type === 'artifact' && artifacts.value.some(a => a.id === prompt.content)) {
+          userUniqueIds.add(prompt.content);
+        } else if (prompt.type === 'sections' && Array.isArray(prompt.content)) {
+          prompt.content.forEach(sectionId => {
+            documents.value.forEach(doc => {
+              if (doc.data.sectionId === sectionId) userUniqueIds.add(doc.id);
+            });
+            artifacts.value.forEach(artifact => {
+              if (artifact.data.sectionId === sectionId) userUniqueIds.add(artifact.id);
+            });
+          });
+        } else if (prompt.type === 'prompt' && prompts.value.some(p => p.id === prompt.content)) { // Add prompt type handling
+          const promptItem = prompts.value.find(p => p.id === prompt.content);
+          if (promptItem?.data.text) {
+            messageHistory.push({ role: 'user', content: promptItem.data.text });
+          }
+        }
+      });
+
+      // Add content for user prompt documents and artifacts
+      userUniqueIds.forEach(id => {
+        const doc = documents.value.find(d => d.id === id);
+        if (doc && doc.data.pagesText) {
+          const content = Array.isArray(doc.data.pagesText) ? doc.data.pagesText.join('\n') : doc.data.pagesText;
+          messageHistory.push({ role: 'user', content });
+        }
+        const artifact = artifacts.value.find(a => a.id === id);
+        if (artifact && artifact.data.pagesText) {
+          const content = Array.isArray(artifact.data.pagesText) ? artifact.data.pagesText.join('\n') : artifact.data.pagesText;
+          messageHistory.push({ role: 'user', content });
+        }
+      });
+    } else {
+      messageHistory.push({ role: 'system', content: 'You are an AI capable of generating images based on user prompts.' });
+    }
 
     const chatHistory = roomMessages.map(m => ({
       role: m.data.agentId ? 'user' : 'user',
@@ -501,20 +510,17 @@ export function useCollaboration() {
     }));
     messageHistory.push(...chatHistory);
 
-    // Concatenate all system prompts into a single system prompt
     const systemContent = messageHistory.filter(m => m.role === 'system').map(m => m.content).join('\n');
     let cleanedMessageHistory = [
       { role: 'system', content: systemContent },
       ...messageHistory.filter(m => m.role !== 'system')
     ];
 
-    // Remove empty string prompts, not supported by some LLMs like Grok
     cleanedMessageHistory = cleanedMessageHistory.filter(m => m.content !== '');
 
     console.log('Chat History:', chatHistory);
     console.log('LLM Payload:', { cleanedMessageHistory });
 
-    // Use agent's model if available, otherwise default to Gemini for image generation
     const model = agent 
       ? (agent.data.model || { provider: 'gemini', model: 'gemini-2.0-flash-exp-image-generation', name: 'gemini-2.0-flash' })
       : { provider: 'gemini', model: 'gemini-2.0-flash-exp-image-generation', name: 'gemini-2.0-flash' };
@@ -527,7 +533,7 @@ export function useCollaboration() {
       triggerText,
       cleanedMessageHistory,
       false,
-      generateImage // Pass the generateImage flag
+      generateImage
     );
   }
 

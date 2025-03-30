@@ -6,6 +6,7 @@ import ViewerGoals from './ViewerGoals.js';
 import ViewerAgents from './ViewerAgents.js';
 import ViewerQuestions from './ViewerQuestions.js';
 import ViewerCollaboration from './ViewerCollaboration.js';
+import ViewerPrompts from './ViewerPrompts.js';
 import { useRealTime } from '../composables/useRealTime.js';
 
 export default {
@@ -18,6 +19,7 @@ export default {
     ViewerAgents,
     ViewerQuestions,
     ViewerCollaboration,
+    ViewerPrompts,
   },
   props: {
     activeTab: {
@@ -66,6 +68,13 @@ export default {
         v-show="activeTab === 'Goals'"
         class="h-full"
       />
+
+      <!-- Prompts -->
+      <viewer-prompts
+        v-show="activeTab === 'Prompts'"
+        class="h-full"
+      />
+
 
       <!-- Agents -->
       <viewer-agents

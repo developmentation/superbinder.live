@@ -1,8 +1,10 @@
 // composables/useAgents.js
 import { useRealTime } from './useRealTime.js';
+import { usePrompts } from './usePrompts.js'; // Add this import to access prompts
 
 const agents = Vue.ref([]);
 const { userUuid, displayName, emit, on, off } = useRealTime();
+const { prompts } = usePrompts(); // Add prompts from usePrompts
 const eventHandlers = new WeakMap();
 const processedEvents = new Set();
 
@@ -61,7 +63,7 @@ export function useAgents() {
       description,
       imageUrl,
       placeholderImage,
-      model, // Add model to data
+      model,
       systemPrompts: systemPrompts.map(prompt => ({
         id: prompt.id || uuidv4(),
         type: prompt.type || 'text',
@@ -96,7 +98,7 @@ export function useAgents() {
       description,
       imageUrl,
       placeholderImage,
-      model, // Add model to data
+      model,
       systemPrompts: systemPrompts.map(prompt => ({
         id: prompt.id || uuidv4(),
         type: prompt.type || 'text',
@@ -148,5 +150,5 @@ export function useAgents() {
     processedEvents.clear();
   }
 
-  return { agents, addAgent, updateAgent, removeAgent, cleanup };
+  return { agents, addAgent, updateAgent, removeAgent, cleanup, prompts }; // Expose prompts for ViewerAgents
 }

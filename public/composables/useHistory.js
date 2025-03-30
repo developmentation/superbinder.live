@@ -7,6 +7,7 @@ import { useQuestions } from './useQuestions.js';
 import { useArtifacts } from './useArtifacts.js';
 import { useCollaboration } from './useCollaboration.js';
 import { useSections } from './useSections.js';
+import { usePrompts } from './usePrompts.js';
 import eventBus from './eventBus.js';
 
 export function useHistory() {
@@ -22,6 +23,7 @@ export function useHistory() {
       breakout: [...(useCollaboration().breakouts.value || [])],
       collab: [...(useCollaboration().collabs.value || [])],
       sections: [...(useSections().sections.value || [])],
+      prompts: [...(usePrompts().prompts.value || [])],
     };
     return history;
   }
@@ -78,6 +80,7 @@ export function useHistory() {
       useCollaboration().breakouts.value = mergeArrays(useCollaboration().breakouts.value || [], historyData.breakout);
       useCollaboration().collabs.value = mergeArrays(useCollaboration().collabs.value || [], historyData.collab);
       useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
+      usePrompts().prompts.value = mergeArrays(usePrompts().prompts.value || [], historyData.prompts);
     } else {
       console.log('No meaningful data in history, skipping sync:', historyData);
     }

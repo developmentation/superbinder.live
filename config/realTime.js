@@ -47,6 +47,7 @@ Object.keys({
   sections: 'sectionSet',
   channels: 'channelsSet',
   artifacts: 'artifactsSet',
+  prompts: 'promptsSet',
 }).forEach(entityType => {
   const collectionName = `${entityType}Set`;
   entityModels[entityType] = mongoose.model(collectionName, entitySetSchema, collectionName);
@@ -95,6 +96,7 @@ const entityConfigs = {
   breakout: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-breakout', update: 'update-breakout', remove: 'delete-breakout', reorder: null } },
   sections: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-section', update: 'update-section', remove: 'remove-section', reorder: 'reorder-section' } },
   channels: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-channel', update: 'update-channel', remove: 'remove-channel', reorder: null } },
+  prompts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-prompt', update: 'update-prompt', remove: 'remove-prompt', reorder: null } },
 };
 
 /**
@@ -748,6 +750,11 @@ async function handleMessage(dataObj, socket) {
       case 'update-section':
       case 'remove-section':
       case 'reorder-section':
+
+      case 'add-prompt':
+      case 'update-prompt':
+      case 'remove-prompt':
+
       case 'add-channel':
       case 'remove-channel':
         await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data }, socket);

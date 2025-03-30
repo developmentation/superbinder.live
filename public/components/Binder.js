@@ -14,6 +14,7 @@ import { useQuestions } from "../composables/useQuestions.js";
 import { useArtifacts } from "../composables/useArtifacts.js";
 import { useSections } from "../composables/useSections.js";
 import { useCollaboration } from "../composables/useCollaboration.js";
+import { usePrompts } from "../composables/usePrompts.js";
 import { useConfigs } from "../composables/useConfigs.js";
 
 export default {
@@ -156,11 +157,12 @@ export default {
     const { artifacts, cleanup: cleanupArtifacts } = useArtifacts();
     const { sections, cleanup: cleanupSections } = useSections();
     const { breakouts, cleanup: cleanupCollaboration } = useCollaboration();
+    const { prompts, cleanup: cleanupPrompts } = usePrompts();
 
     const sessionReady = Vue.ref(false);
     const activeTab = Vue.ref("Dashboard");
     const activeDocumentSubTab = Vue.ref("Uploads");
-    const tabs = ["Dashboard", "Sections", "Goals", "Agents", "Q&A", "Collaboration"];
+    const tabs = ["Dashboard", "Sections", "Goals", "Prompts", "Agents", "Q&A", "Collaboration"];
     const documentSubTabs = ["Uploads", "Viewer", "Bookmarks"];
     const isRoomLocked = Vue.ref(false);
     const isChatOpen = Vue.ref(false);
@@ -185,6 +187,7 @@ export default {
     const chatCount = Vue.computed(() => (history.value.chat || []).length);
     const artifactCount = Vue.computed(() => (history.value.artifacts || []).length);
     const sectionCount = Vue.computed(() => (history.value.sections || []).length);
+    const promptsCount = Vue.computed(() => (history.value.prompts || []).length);
 
     Vue.watch(
       () => gatherLocalHistory(),
@@ -230,6 +233,7 @@ export default {
       artifacts.value = [];
       sections.value = [];
       breakouts.value = [];
+      prompts.value = [];
     }
 
     function handleResetSession() {
@@ -307,7 +311,9 @@ export default {
           return `Q&A (${questions.value.length} / ${answers.value.length})`;
         case 'Collaboration':
           return `Collaboration (${breakouts.value.length})`;
-        default:
+          case 'Prompts':
+            return `Prompts (${prompts.value.length})`;
+          default:
           return tab;
       }
     }
@@ -388,6 +394,7 @@ export default {
       cleanupArtifacts();
       cleanupSections();
       cleanupCollaboration();
+      cleanupPrompts();
     });
 
     Vue.watch(isConnected, (connected) => {
@@ -427,12 +434,14 @@ export default {
       chatCount,
       artifactCount,
       sectionCount,
+      promptsCount,
       sections,
       goals,
       agents,
       questions,
       answers,
       breakouts,
+      prompts,
       messages,
       isSessionRemoved,
       sessionRemovedBy,

@@ -281,6 +281,10 @@ export function useRealTime() {
     off('update-artifact');
     off('remove-artifact');
 
+    off('add-prompt');
+    off('update-prompt');
+    off('remove-prompt');
+
   }
 
   return {

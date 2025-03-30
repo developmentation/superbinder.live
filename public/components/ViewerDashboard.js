@@ -9,6 +9,7 @@ import { useCollaboration } from '../composables/useCollaboration.js';
 import { useChat } from '../composables/useChat.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
+import { usePrompts } from '../composables/usePrompts.js';
 
 export default {
   name: 'ViewerDashboard',
@@ -98,6 +99,18 @@ export default {
               <p class="text-[#94a3b8] text-sm mt-1">Total number of goals set.</p>
             </div>
 
+            
+            <!-- Prompts Card -->
+            <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Goals')">
+              <div class="flex items-center gap-3 mb-2">
+                <i class="pi pi-target text-[#10b981] text-3xl"></i>
+                <h2 class="text-base font-semibold text-[#e2e8f0]">Prompts</h2>
+              </div>
+              <p class="text-2xl font-bold text-[#34d399]">{{ prompts.length }}</p>
+              <p class="text-[#94a3b8] text-sm mt-1">Total number of prompts created.</p>
+            </div>
+
+
             <!-- Agents Card -->
             <div class="bg-[#1a2233] p-4 rounded-xl glass-effect shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer" @click="navigateToTab('Agents')">
               <div class="flex items-center gap-3 mb-2">
@@ -162,6 +175,7 @@ export default {
     const { messages } = useChat();
     const { documents } = useDocuments();
     const { artifacts } = useArtifacts();
+    const { prompts } = usePrompts();
 
     const userCount = Vue.computed(() => Object.keys(activeUsers.value).length);
     const participantCount = Vue.computed(() => userCount.value);
@@ -207,6 +221,7 @@ export default {
       sections,
       documents,
       artifacts,
+      prompts,
       goals,
       agents,
       questions,

@@ -4,7 +4,8 @@ import { useRealTime } from '../composables/useRealTime.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useGoals } from '../composables/useGoals.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
-import { useModels } from '../composables/useModels.js'; // Add this import
+import { useModels } from '../composables/useModels.js';
+import { usePrompts } from '../composables/usePrompts.js'; // Add this import
 import SectionPickerModal from './SectionPickerModal.js';
 
 export default {
@@ -51,7 +52,7 @@ export default {
           </div>
         </div>
         <div v-if="filteredAgents.length === 0" class="text-gray-400">No agents found.</div>
-         <div class="h-[200px]"></div>
+        <div class="h-[200px]"></div>
       </div>
 
       <!-- Main Edit Modal -->
@@ -93,7 +94,6 @@ export default {
             </div>
             <div>
               <h3 class="text-gray-300 mb-2">System Prompts</h3>
-              <!-- System Prompts Table (unchanged) -->
               <table class="w-full text-left dark-table">
                 <thead>
                   <tr class="bg-gray-900">
@@ -111,6 +111,7 @@ export default {
                         <option value="document">Document</option>
                         <option value="artifact">Artifact</option>
                         <option value="sections">Sections</option>
+                        <option value="prompt">Prompt</option> <!-- Added Prompt type -->
                       </select>
                     </td>
                     <td class="py-2 px-4">
@@ -139,6 +140,11 @@ export default {
                           Select Sections ({{ prompt.content ? prompt.content.length : 0 }})
                         </button>
                       </template>
+                      <template v-else-if="prompt.type === 'prompt'">
+                        <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
+                          <option v-for="promptItem in prompts" :key="promptItem.id" :value="promptItem.id">{{ promptItem.data.name }}</option>
+                        </select>
+                      </template>
                     </td>
                     <td class="py-2 px-4">
                       <button @click="removePrompt('system', index)" class="text-red-400 hover:text-red-300">
@@ -154,7 +160,6 @@ export default {
             </div>
             <div>
               <h3 class="text-gray-300 mb-2">User Prompts</h3>
-              <!-- User Prompts Table (unchanged) -->
               <table class="w-full text-left dark-table">
                 <thead>
                   <tr class="bg-gray-900">
@@ -172,6 +177,7 @@ export default {
                         <option value="document">Document</option>
                         <option value="artifact">Artifact</option>
                         <option value="sections">Sections</option>
+                        <option value="prompt">Prompt</option> <!-- Added Prompt type -->
                       </select>
                     </td>
                     <td class="py-2 px-4">
@@ -200,6 +206,11 @@ export default {
                           Select Sections ({{ prompt.content ? prompt.content.length : 0 }})
                         </button>
                       </template>
+                      <template v-else-if="prompt.type === 'prompt'">
+                        <select v-model="prompt.content" class="bg-gray-700 text-white rounded-lg p-1 w-full">
+                          <option v-for="promptItem in prompts" :key="promptItem.id" :value="promptItem.id">{{ promptItem.data.name }}</option>
+                        </select>
+                      </template>
                     </td>
                     <td class="py-2 px-4">
                       <button @click="removePrompt('user', index)" class="text-red-400 hover:text-red-300">
@@ -219,10 +230,9 @@ export default {
             <button @click="saveAgent" class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">Save</button>
           </div>
         </div>
-        
       </div>
 
-      <!-- Prompt Editing Modal (unchanged) -->
+      <!-- Prompt Editing Modal -->
       <div v-if="isPromptModalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-gray-800 p-6 rounded-lg w-full max-w-lg max-h-[80vh] overflow-y-auto">
           <h2 class="text-lg font-semibold text-purple-400 mb-4">Edit Prompt</h2>
@@ -238,7 +248,7 @@ export default {
         </div>
       </div>
 
-      <!-- Section Picker Modal (unchanged) -->
+      <!-- Section Picker Modal -->
       <section-picker-modal
         :visible="isSectionModalOpen"
         :uuids="sectionModalContent"
@@ -248,12 +258,12 @@ export default {
     </div>
   `,
   setup() {
-    const { agents, addAgent, updateAgent, removeAgent } = useAgents();
+    const { agents, addAgent, updateAgent, removeAgent, prompts } = useAgents(); // Updated to include prompts
     const { displayName } = useRealTime();
     const { documents } = useDocuments();
     const { goals } = useGoals();
     const { artifacts } = useArtifacts();
-    const { allModels } = useModels(); // Add this
+    const { allModels } = useModels();
     const filterQuery = Vue.ref('');
     const isModalOpen = Vue.ref(false);
     const isPromptModalOpen = Vue.ref(false);
@@ -263,7 +273,7 @@ export default {
     const agentName = Vue.ref('');
     const agentDescription = Vue.ref('');
     const agentImageUrl = Vue.ref('');
-    const agentModel = Vue.ref(null); // New ref for selected model
+    const agentModel = Vue.ref(null);
     const systemPrompts = Vue.ref([]);
     const userPrompts = Vue.ref([]);
     const nameError = Vue.ref('');
@@ -303,7 +313,7 @@ export default {
         agentName.value = agent.data.name;
         agentDescription.value = agent.data.description;
         agentImageUrl.value = agent.data.imageUrl;
-        agentModel.value = agent.data.model || null; // Load existing model or null
+        agentModel.value = agent.data.model || null;
         systemPrompts.value = [...agent.data.systemPrompts];
         userPrompts.value = [...agent.data.userPrompts];
       } else {
@@ -312,7 +322,7 @@ export default {
         agentName.value = '';
         agentDescription.value = '';
         agentImageUrl.value = '';
-        agentModel.value = null; // Default to null (Gemini default in useCollaboration)
+        agentModel.value = null;
         systemPrompts.value = [];
         userPrompts.value = [];
       }
@@ -339,9 +349,9 @@ export default {
       const prompts = type === 'system' ? systemPrompts : userPrompts;
       prompts.value[index].type = newType;
       if (newType === 'sections') {
-        prompts.value[index].content = []; // Initialize as array for sections
+        prompts.value[index].content = [];
       } else if (newType !== 'text') {
-        prompts.value[index].content = ''; // Reset for non-text types
+        prompts.value[index].content = '';
       }
     }
 
@@ -414,7 +424,8 @@ export default {
       documents,
       goals,
       artifacts,
-      allModels, // Expose allModels for the dropdown
+      prompts, // Add prompts to return
+      allModels,
       filterQuery,
       filteredAgents,
       isModalOpen,
@@ -425,7 +436,7 @@ export default {
       agentName,
       agentDescription,
       agentImageUrl,
-      agentModel, // Add agentModel to return
+      agentModel,
       systemPrompts,
       userPrompts,
       nameError,
