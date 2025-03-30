@@ -5,6 +5,14 @@ export default {
   name: 'Library',
   template: `
     <div class="h-full flex flex-col overflow-hidden p-4 bg-gray-900">
+      <!-- Hero Banner -->
+      <div class="mb-6 text-center py-12 bg-gradient-to-r from-indigo-900 via-gray-900 to-purple-900 rounded-lg">
+        <h1 class="text-4xl font-bold text-white mb-4">SuperBinder Library</h1>
+        <p class="text-gray-200 text-lg max-w-2xl mx-auto leading-relaxed">
+          Discover and deploy community-crafted binders—packed with prompts, goals, and AI agents—to supercharge your projects instantly.
+        </p>
+      </div>
+
       <!-- Filter Bar -->
       <div class="mb-4 flex gap-2">
         <input
