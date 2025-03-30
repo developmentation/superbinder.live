@@ -1,6 +1,7 @@
 // components/ViewerSections.js
 import SectionTreeViewer from './SectionTreeViewer.js';
 import ViewerEditor from './ViewerEditor.js';
+import OcrPromptEditor from './OcrPromptEditor.js'; // Import OcrPromptEditor for reuse
 import { useDocuments } from '../composables/useDocuments.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
 import { useFiles } from '../composables/useFiles.js';
@@ -9,7 +10,7 @@ import { rasterizePDF } from '../utils/files/processorPDF.js';
 
 export default {
   name: 'ViewerSections',
-  components: { SectionTreeViewer, ViewerEditor },
+  components: { SectionTreeViewer, ViewerEditor, OcrPromptEditor }, // Register OcrPromptEditor
   setup() {
     const { 
       documents, 
@@ -20,11 +21,12 @@ export default {
       updateDocumentOcr 
     } = useDocuments();
     const { artifacts, selectedArtifact, setSelectedArtifact } = useArtifacts();
-    const { uploadFiles, files, retrieveFiles, ocrFiles } = useFiles();
+    const { uploadFiles, files, retrieveFiles, ocrFiles, ocrPrompt, resetOcrPrompt } = useFiles(); // Include ocrPrompt and resetOcrPrompt
     const { sections, addSection } = useSections();
     const selectedKeys = Vue.ref({});
     const expandedKeys = Vue.ref({});
     const isLoadingFiles = Vue.ref(false);
+    const showOcrPromptEditor = Vue.ref(false); // State for OCR prompt editor modal
 
     const treeNodes = Vue.computed(() => {
       const docNodes = documents.value.map(doc => ({
@@ -206,6 +208,24 @@ export default {
       expandedKeys.value = {};
     };
 
+    // OCR Prompt Editor Methods
+    const openOcrPromptEditor = () => {
+      showOcrPromptEditor.value = true;
+    };
+
+    const updateOcrPrompt = (newPrompt) => {
+      ocrPrompt.value = newPrompt;
+      showOcrPromptEditor.value = false;
+    };
+
+    const resetOcrPromptHandler = () => {
+      resetOcrPrompt();
+    };
+
+    const closeOcrPromptEditor = () => {
+      showOcrPromptEditor.value = false;
+    };
+
     return {
       treeNodes,
       selectedDocument,
@@ -213,6 +233,7 @@ export default {
       selectedKeys,
       expandedKeys,
       isLoadingFiles,
+      showOcrPromptEditor,
       handleNodeSelect,
       handleFileUpload,
       renderFiles,
@@ -220,6 +241,11 @@ export default {
       expandAll,
       collapseAll,
       retrieveAndRenderFiles: customRetrieveAndRenderFiles,
+      openOcrPromptEditor,
+      updateOcrPrompt,
+      resetOcrPromptHandler,
+      closeOcrPromptEditor,
+      ocrPrompt,
     };
   },
   template: `
@@ -265,6 +291,13 @@ export default {
               >
                 {{ isLoadingFiles ? 'Rendering Files...' : 'Render Files' }}
               </button>
+              <button
+                @click="openOcrPromptEditor"
+                class="py-1 px-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-lg text-sm flex items-center"
+                title="Edit OCR Prompt"
+              >
+                <i class="pi pi-cog"></i>
+              </button>
             </div>
           </div>
           <div class="h-full overflow-y-auto">
@@ -292,6 +325,13 @@ export default {
           </div>
         </div>
       </div>
+      <ocr-prompt-editor
+        v-if="showOcrPromptEditor"
+        :initial-prompt="ocrPrompt"
+        @update-prompt="updateOcrPrompt"
+        @reset-prompt="resetOcrPromptHandler"
+        @close="closeOcrPromptEditor"
+      />
     </div>
   `,
 };

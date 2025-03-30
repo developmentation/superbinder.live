@@ -450,7 +450,7 @@ export default {
                 @click="openOcrPromptEditor"
                 class="py-1 px-2 bg-[#3b82f6] text-white rounded-lg rounded-l-none text-sm hover:bg-[#2563eb] flex items-center"
               >  
-                <i class="pi pi-pencil"></i>
+                <i class="pi pi-cog"></i>
               </button>
             </div>
             <button
