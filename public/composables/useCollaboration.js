@@ -18,7 +18,7 @@ const { agents } = useAgents();
 const { triggerLLM, llmRequests } = useLLM();
 const { documents } = useDocuments();
 const { goals } = useGoals();
-const { addArtifact } = useArtifacts();
+const { addArtifact, artifacts } = useArtifacts();
 const { prompts } = usePrompts(); // Add prompts from usePrompts
 
 const eventHandlers = new WeakMap();
