@@ -7,6 +7,7 @@ import ViewerAgents from './ViewerAgents.js';
 import ViewerQuestions from './ViewerQuestions.js';
 import ViewerCollaboration from './ViewerCollaboration.js';
 import ViewerPrompts from './ViewerPrompts.js';
+import ViewerTranscription from './ViewerTranscription.js';
 import { useRealTime } from '../composables/useRealTime.js';
 
 export default {
@@ -20,6 +21,7 @@ export default {
     ViewerQuestions,
     ViewerCollaboration,
     ViewerPrompts,
+    ViewerTranscription,
   },
   props: {
     activeTab: {
@@ -86,6 +88,12 @@ export default {
       <viewer-questions
         v-show="activeTab === 'Q&A'"
         :bookmarks="bookmarks"
+        class="h-full"
+      />
+
+      <!-- Collaboration -->
+      <viewer-transcription
+        v-show="activeTab === 'Transcription'"
         class="h-full"
       />
 

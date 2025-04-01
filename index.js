@@ -3,7 +3,7 @@ const path = require("path");
 const { app } = require("./config/app.js");
 
 // Custom error handling
-const apiErrorHandler = require("./error/apiErrorHandler");
+// const apiErrorHandler = require("./error/apiErrorHandler");
 
 // Middleware to parse incoming JSON requests
 app.use(express.json());
@@ -37,6 +37,7 @@ app.use("/api/files", require("./routes/files")); // Add and retrieve files to p
 app.use("/api/healthcheck", require("./routes/healthcheck")); // Healthcheck route
 app.use("/api/models", require("./routes/models")); // Server side defined models
 app.use("/api/library", require("./routes/library")); // Interact with library artifacts
+app.use("/api/transcription", require("./routes/transcription")); // Interact with library artifacts
 
 // SPA Fallback: Serve `index.html` for any non-API routes
 app.get("*", (req, res) => {
@@ -55,4 +56,4 @@ app.use((req, res, next) => {
 });
 
 // API error handler
-app.use(apiErrorHandler);
+// app.use(apiErrorHandler);
