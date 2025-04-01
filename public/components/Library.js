@@ -70,7 +70,7 @@ export default {
               v-model="deployChannelName"
               type="text"
               class="w-full p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
-              placeholder="New Channel Name"
+              placeholder="New Binder Name"
             />
             <p v-if="libraryError" class="text-red-500 text-sm">{{ libraryError }}</p>
           </div>
@@ -86,6 +86,9 @@ export default {
   `,
   setup() {
     const { libraryArtifacts, loading: libraryLoading, error: libraryError, fetchLibrary, voteArtifact, deployArtifact } = useLibrary();
+
+    const router = VueRouter.useRouter();
+
 
     const filterQuery = Vue.ref('');
     const isDeployModalOpen = Vue.ref(false);
@@ -131,7 +134,8 @@ export default {
       }
       try {
         await deployArtifact(selectedArtifact.value.uuid, deployChannelName.value);
-        closeDeployModal();
+        router.push(`/binder/${deployChannelName.value}`);
+        // closeDeployModal();
       } catch (err) {
         // Error handled by useLibrary
       }

@@ -93,7 +93,7 @@ export default {
     function submitSetup() {
       if (displayName.value && channelName.value) {
         if (!isValidChannelName(channelName.value)) {
-          errorMessage.value = 'Invalid channel name. Use alphanumeric characters, spaces, underscores, and dashes only.';
+          errorMessage.value = 'Invalid binder name. Use alphanumeric characters, spaces, underscores, and dashes only.';
           return;
         }
         // Update URL only on form submission
