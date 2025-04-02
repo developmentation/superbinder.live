@@ -8,10 +8,11 @@ import SectionSelectorModal from './SectionSelectorModal.js';
 import { markdownToDocx } from '../utils/export/markdownToDocx.js';
 import { markdownToPdf } from '../utils/export/markdownToPdf.js';
 import { downloadFile } from '../utils/export/fileDownloader.js';
+import TextToSpeech from './TextToSpeech.js';
 
 export default {
   name: 'ViewerCollaboration',
-  components: { SectionSelectorModal },
+  components: { SectionSelectorModal, TextToSpeech },
   template: `
     <div class="flex flex-col md:flex-row overflow-hidden bg-gray-900" style="height: calc(100% - 50px);">
       <!-- Toggle Button for Mobile -->
@@ -203,7 +204,9 @@ export default {
                   <div  class="text-white mt-2 break-words" v-html="renderMarkdown(msg.data.text)"></div>
                 </div>
                 <div v-else class="text-white message-content break-words" v-html="renderMarkdown(msg.data.text || msg.data.imagePrompt || '')"></div>
-              </div>
+                    <text-to-speech v-if = "msg.data.agentId" :text="msg.data.text" />
+
+                </div>
             </div>
           </div>
           <div v-if="!allMessages.length" class="text-gray-400 text-center">No messages yet.</div>

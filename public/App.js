@@ -1,6 +1,7 @@
 // App.js
 import { useRealTime } from "./composables/useRealTime.js";
 import { useModels } from "./composables/useModels.js";
+import { useTextToSpeech } from "./composables/useTextToSpeech.js";
 import { useConfigs } from "./composables/useConfigs.js";
 import router from "../router/index.js";
 import Binder from "./components/Binder.js";
@@ -97,6 +98,7 @@ export default {
   setup() {
     const { getConfigs } = useConfigs();
     const { fetchServerModels } = useModels();
+    const { loadVoices } = useTextToSpeech();
     const { isConnected, connectionStatus, disconnect, userUuid, displayName, channelName } = useRealTime();
 
     const fileInput = Vue.ref(null);
@@ -115,6 +117,7 @@ export default {
     }
 
     Vue.onMounted(async () => {
+      await loadVoices();
       await getConfigs();
       await fetchServerModels();
     });

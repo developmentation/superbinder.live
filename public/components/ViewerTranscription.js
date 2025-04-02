@@ -2,10 +2,13 @@
 import { useTranscripts } from '../composables/useTranscripts.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
 import SectionSelectorModal from './SectionSelectorModal.js';
+// Assuming TextToSpeech is imported by a parent component, but including it here for clarity
+// Remove this import if it's handled elsewhere
+import TextToSpeech from './TextToSpeech.js';
 
 export default {
   name: 'ViewerTranscription',
-  components: { SectionSelectorModal },
+  components: { SectionSelectorModal, TextToSpeech },
   setup() {
     const { transcribeFile, SUPPORTED_EXTENSIONS } = useTranscripts();
     const { addArtifact } = useArtifacts();
@@ -306,13 +309,17 @@ export default {
               >
                 <div class="text-sm whitespace-pre-wrap">{{ segment.text }}</div>
                 <div class="text-xs text-[#94a3b8] mt-2">{{ segment.timestamp }} ({{ segment.speaker }})</div>
-                <button
-                  @click="openArtifactModal(segment)"
-                  class="mt-2 text-blue-400 hover:text-blue-300"
-                  title="Save as Artifact"
-                >
-                  <i class="pi pi-bookmark"></i>
-                </button>
+                <div class="mt-2 flex items-center gap-2">
+                  <button
+                    @click="openArtifactModal(segment)"
+                    class="text-blue-400 hover:text-blue-300"
+                    title="Save as Artifact"
+                  >
+                    <i class="pi pi-bookmark"></i>
+                  </button>
+                  <!-- Add TextToSpeech component beside the bookmark button -->
+                  <text-to-speech :text="segment.text" />
+                </div>
               </div>
             </div>
             <div v-else class="h-full flex items-center justify-center text-[#94a3b8] text-sm">

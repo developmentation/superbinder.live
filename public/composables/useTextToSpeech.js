@@ -17,7 +17,7 @@ export const useTextToSpeech = () => {
     }
   };
 
-  const generateAudio = async (text, path, userId = null, apiKey = null) => {
+  const generateAudio = async (text, path = "s3://voice-cloning-zero-shot/5b81dc4c-bf98-469d-96b4-8f09836fb500/aurorasaad/manifest.json", userId = null, apiKey = null) => {
     try {
       const response = await axios.post('/api/textToSpeech', {
         text,

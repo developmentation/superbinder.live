@@ -38,6 +38,7 @@ app.use("/api/healthcheck", require("./routes/healthcheck")); // Healthcheck rou
 app.use("/api/models", require("./routes/models")); // Server side defined models
 app.use("/api/library", require("./routes/library")); // Interact with library artifacts
 app.use("/api/transcription", require("./routes/transcription")); // Interact with library artifacts
+app.use("/api/textToSpeech", require("./routes/textToSpeech")); // Interact with library artifacts
 
 // SPA Fallback: Serve `index.html` for any non-API routes
 app.get("*", (req, res) => {
