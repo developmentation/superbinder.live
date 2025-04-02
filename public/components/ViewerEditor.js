@@ -5,10 +5,11 @@ import { useFiles } from '../composables/useFiles.js';
 import { useRealTime } from '../composables/useRealTime.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
+import TextToSpeech from './TextToSpeech.js';
 
 export default {
   name: 'ViewerEditor',
-  components: { LazyScrollViewer, OcrPromptEditor },
+  components: { LazyScrollViewer, OcrPromptEditor, TextToSpeech },
   props: {
     item: { type: Object, required: true },
   },
@@ -423,6 +424,8 @@ export default {
         <button v-if="isEditing" @click="finishEditing" class="py-1 px-2 bg-[#10b981] text-white rounded-lg text-sm">
           Done
         </button>
+        <text-to-speech :key = "item.data.id"  v-if = "item?.data?.pagesText?.[0]" :text="item.data.pagesText[0]" />
+
         <template v-if="((item.data.type === 'pdf' && displayMode === 'PDF') || (item.data.type && (['png', 'jpg', 'jpeg', 'webp'].includes(item.data.type) || (item.type === 'artifact' && item.data.type === 'image')) && displayMode === 'Image')) && !isEditing">
           <div v-if="item.data.type === 'pdf' || item.type === 'artifact'" class="flex items-center gap-1">
             <input
@@ -452,6 +455,9 @@ export default {
               >  
                 <i class="pi pi-cog"></i>
               </button>
+
+                <text-to-speech :key = "item.data.id" v-if = "item?.data?.pagesText?.[0]" :text="item.data.pagesText[0]" />
+
             </div>
             <button
               v-if="item.data.type === 'pdf' && displayMode === 'PDF' && !isOcrAllRunning"

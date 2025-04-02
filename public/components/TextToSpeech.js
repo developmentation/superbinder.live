@@ -74,13 +74,13 @@ export default {
   setup(props) {
     // State
     const audio = Vue.ref(null);
+    const audioBlob = Vue.ref(null);
     const isPlaying = Vue.ref(false);
     const isPaused = Vue.ref(false);
     const isLoading = Vue.ref(false);
     const selectedVoice = Vue.ref('');
     const isDropdownOpen = Vue.ref(false);
     const currentTime = Vue.ref(0);
-    const audioBlob = Vue.ref(null); // Store the blob for downloading
 
     // Text-to-Speech composable
     const { ttsVoices, generateAudio } = useTextToSpeech();
@@ -91,12 +91,41 @@ export default {
       return voice ? voice.name : '';
     });
 
+    // Reset state function
+    const resetState = () => {
+      if (audio.value) {
+        audio.value.pause();
+        URL.revokeObjectURL(audio.value.src);
+        audio.value = null;
+      }
+      if (audioBlob.value) {
+        URL.revokeObjectURL(URL.createObjectURL(audioBlob.value));
+        audioBlob.value = null;
+      }
+      isPlaying.value = false;
+      isPaused.value = false;
+      isLoading.value = false;
+      currentTime.value = 0;
+      // Optionally reset selectedVoice if you want to force re-selection
+      // selectedVoice.value = '';
+      isDropdownOpen.value = false;
+    };
+
+    // Watch for changes in the text prop
+    Vue.watch(
+      () => props.text,
+      (newText, oldText) => {
+        if (newText !== oldText) {
+          console.log('Text prop changed, resetting TextToSpeech state');
+          resetState();
+        }
+      },
+      { immediate: true }
+    );
+
     // Methods
     const playAudio = async () => {
-    //   if (!selectedVoice.value) {
-    //     alert('Please select a voice first');
-    //     return;
-    //   }
+  
 
       if (!audio.value) {
         try {
@@ -104,7 +133,7 @@ export default {
           const result = await generateAudio(props.text, selectedVoice.value);
           if (result.success) {
             const blob = new Blob([result.data], { type: 'audio/mp3' });
-            audioBlob.value = blob; // Store the blob for downloading
+            audioBlob.value = blob;
             audio.value = new Audio(URL.createObjectURL(blob));
             audio.value.ontimeupdate = () => {
               currentTime.value = audio.value.currentTime;
@@ -164,7 +193,7 @@ export default {
         audio.value.pause();
         URL.revokeObjectURL(audio.value.src);
         audio.value = null;
-        audioBlob.value = null; // Clear the blob
+        audioBlob.value = null;
         isPlaying.value = false;
         isPaused.value = false;
         currentTime.value = 0;
@@ -177,7 +206,7 @@ export default {
       const url = URL.createObjectURL(audioBlob.value);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'generated-audio.mp3'; // Default filename
+      a.download = 'generated-audio.mp3';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -186,13 +215,7 @@ export default {
 
     // Lifecycle: Cleanup on unmount
     Vue.onUnmounted(() => {
-      if (audio.value) {
-        audio.value.pause();
-        URL.revokeObjectURL(audio.value.src);
-      }
-      if (audioBlob.value) {
-        URL.revokeObjectURL(URL.createObjectURL(audioBlob.value));
-      }
+      resetState();
     });
 
     return {
