@@ -41,8 +41,8 @@ export default {
         ></i>
       </div>
 
-      <!-- Voice Selection Dropdown -->
-      <div class="voice-selector relative">
+      <!-- Voice Selection Dropdown and Download Icon -->
+      <div class="voice-selector relative flex items-center gap-2">
         <div 
           @click="isDropdownOpen = !isDropdownOpen" 
           class="dropdown-btn w-6 h-6 flex items-center justify-center bg-gray-700 border border-gray-600 rounded-md text-gray-200 text-sm cursor-pointer"
@@ -62,6 +62,12 @@ export default {
             {{ voice.name }} ({{ voice.language }})
           </div>
         </div>
+        <i 
+          v-if="audio" 
+          @click="downloadAudio" 
+          class="pi pi-download text-sm text-gray-400 hover:text-gray-200 cursor-pointer"
+          title="Download Audio"
+        ></i>
       </div>
     </div>
   `,
@@ -70,15 +76,16 @@ export default {
     const audio = Vue.ref(null);
     const isPlaying = Vue.ref(false);
     const isPaused = Vue.ref(false);
-    const isLoading = Vue.ref(false); // New loading state
+    const isLoading = Vue.ref(false);
     const selectedVoice = Vue.ref('');
     const isDropdownOpen = Vue.ref(false);
     const currentTime = Vue.ref(0);
+    const audioBlob = Vue.ref(null); // Store the blob for downloading
 
     // Text-to-Speech composable
     const { ttsVoices, generateAudio } = useTextToSpeech();
 
-    // Computed property to display the selected voice name (not used in template anymore)
+    // Computed property to display the selected voice name (not used in template)
     const selectedVoiceName = Vue.computed(() => {
       const voice = ttsVoices.value.find(v => v.path === selectedVoice.value);
       return voice ? voice.name : '';
@@ -93,10 +100,11 @@ export default {
 
       if (!audio.value) {
         try {
-          isLoading.value = true; // Start loading
+          isLoading.value = true;
           const result = await generateAudio(props.text, selectedVoice.value);
           if (result.success) {
             const blob = new Blob([result.data], { type: 'audio/mp3' });
+            audioBlob.value = blob; // Store the blob for downloading
             audio.value = new Audio(URL.createObjectURL(blob));
             audio.value.ontimeupdate = () => {
               currentTime.value = audio.value.currentTime;
@@ -111,10 +119,10 @@ export default {
           }
         } catch (error) {
           console.error('Error generating audio:', error);
-          isLoading.value = false; // Stop loading on error
+          isLoading.value = false;
           return;
         } finally {
-          isLoading.value = false; // Stop loading after generation
+          isLoading.value = false;
         }
       }
 
@@ -156,10 +164,24 @@ export default {
         audio.value.pause();
         URL.revokeObjectURL(audio.value.src);
         audio.value = null;
+        audioBlob.value = null; // Clear the blob
         isPlaying.value = false;
         isPaused.value = false;
         currentTime.value = 0;
       }
+    };
+
+    const downloadAudio = () => {
+      if (!audioBlob.value) return;
+
+      const url = URL.createObjectURL(audioBlob.value);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'generated-audio.mp3'; // Default filename
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     };
 
     // Lifecycle: Cleanup on unmount
@@ -168,11 +190,15 @@ export default {
         audio.value.pause();
         URL.revokeObjectURL(audio.value.src);
       }
+      if (audioBlob.value) {
+        URL.revokeObjectURL(URL.createObjectURL(audioBlob.value));
+      }
     });
 
     return {
       ttsVoices,
       audio,
+      audioBlob,
       isPlaying,
       isPaused,
       isLoading,
@@ -185,6 +211,7 @@ export default {
       resumeAudio,
       stopAudio,
       selectVoice,
+      downloadAudio,
     };
   },
 };
