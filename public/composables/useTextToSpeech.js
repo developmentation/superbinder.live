@@ -1,41 +1,45 @@
-// composables/useSpeechToText.js
-
-
-let ttsVoices = Vue.ref(null)
+// composables/useTextToSpeech.js
+let ttsVoices = Vue.ref(null);
 
 export const useTextToSpeech = () => {
-
-    
-  const loadVoices = async (templateNames = ['Starter Template']) => {
+  const loadVoices = async () => {
     try {
-            ttsVoices.value = await fetch(new URL(`../assets/voices.json`, import.meta.url)).then(res => res.ok ? res.json() : null)
-            console.log("Loaded AI Voices")
-    } 
-    catch (error) {
+      ttsVoices.value = await fetch(new URL(`../assets/voices.json`, import.meta.url))
+        .then(res => res.ok ? res.json() : null);
+      console.log("Loaded AI Voices");
+    } catch (error) {
       console.warn('Error loading voices:', error);
-      canvasTemplates.value = [];
+      ttsVoices.value = [];
     }
   };
 
-  const generateAudio = async (text, path = "s3://voice-cloning-zero-shot/5b81dc4c-bf98-469d-96b4-8f09836fb500/aurorasaad/manifest.json", userId = null, apiKey = null) => {
+  const generateAudioStream = async (text, voiceId = "JBFqnCBsd6RMkjVDRZzb") => {
     try {
-      const response = await axios.post('/api/textToSpeech', {
-        text,
-        path,
-        userId,
-        apiKey
-      }, {
-        responseType: 'arraybuffer'  // Important for receiving binary data
+      console.log('Generating audio stream with text:', text, 'voiceId:', voiceId);
+      const response = await fetch('/api/textToSpeech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          path: voiceId,
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       return {
         success: true,
-        data: response.data
+        stream: response.body,
       };
     } catch (err) {
+      console.error('Error in generateAudioStream:', err);
       return {
         success: false,
-        error: err.response?.data?.error || err.message || 'Audio generation failed'
+        error: err.message || 'Audio generation failed',
       };
     }
   };
@@ -43,6 +47,6 @@ export const useTextToSpeech = () => {
   return {
     ttsVoices,
     loadVoices,
-    generateAudio
+    generateAudioStream,
   };
 };

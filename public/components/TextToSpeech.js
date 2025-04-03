@@ -1,3 +1,4 @@
+// TextToSpeech.vue
 import { useTextToSpeech } from '../composables/useTextToSpeech.js';
 
 export default {
@@ -7,12 +8,13 @@ export default {
   },
   template: `
     <div class="tts-component flex items-center gap-2">
-      <!-- Play/Pause/Stop Controls -->
+      <audio ref="audioElement" @play="onPlay" @pause="onPause" @ended="onEnded" @error="onError" style="display: none;"></audio>
       <div class="controls flex gap-2">
         <i 
           v-if="!isPlaying && !isLoading" 
           @click="playAudio" 
           class="pi pi-play-circle text-sm text-gray-400 hover:text-gray-200 cursor-pointer"
+          :class="{ 'opacity-50 cursor-not-allowed': isLoading }"
         ></i>
         <svg 
           v-if="isLoading" 
@@ -40,8 +42,6 @@ export default {
           class="pi pi-stop-circle text-sm text-gray-400 hover:text-gray-200 cursor-pointer"
         ></i>
       </div>
-
-      <!-- Voice Selection Dropdown and Download Icon -->
       <div class="voice-selector relative flex items-center gap-2">
         <div 
           @click="isDropdownOpen = !isDropdownOpen" 
@@ -63,7 +63,7 @@ export default {
           </div>
         </div>
         <i 
-          v-if="audio" 
+          v-if="canDownload" 
           @click="downloadAudio" 
           class="pi pi-download text-sm text-gray-400 hover:text-gray-200 cursor-pointer"
           title="Download Audio"
@@ -72,138 +72,154 @@ export default {
     </div>
   `,
   setup(props) {
-    // State
-    const audio = Vue.ref(null);
-    const audioBlob = Vue.ref(null);
     const isPlaying = Vue.ref(false);
     const isPaused = Vue.ref(false);
     const isLoading = Vue.ref(false);
     const selectedVoice = Vue.ref('');
     const isDropdownOpen = Vue.ref(false);
-    const currentTime = Vue.ref(0);
+    const audioElement = Vue.ref(null);
+    const mediaSource = Vue.ref(null);
+    const sourceBuffer = Vue.ref(null);
+    const audioChunks = Vue.ref([]);
+    const canDownload = Vue.ref(false);
+    const chunkQueue = Vue.ref([]);
+    let isFetching = false;
+    let isAppending = false;
 
-    // Text-to-Speech composable
-    const { ttsVoices, generateAudio } = useTextToSpeech();
+    const { ttsVoices, generateAudioStream } = useTextToSpeech();
 
-    // Computed property to display the selected voice name (not used in template)
-    const selectedVoiceName = Vue.computed(() => {
-      const voice = ttsVoices.value.find(v => v.path === selectedVoice.value);
-      return voice ? voice.name : '';
-    });
-
-    // Reset state function
     const resetState = () => {
-      if (audio.value) {
-        audio.value.pause();
-        URL.revokeObjectURL(audio.value.src);
-        audio.value = null;
+      if (audioElement.value) {
+        audioElement.value.pause();
+        audioElement.value.currentTime = 0;
       }
-      if (audioBlob.value) {
-        URL.revokeObjectURL(URL.createObjectURL(audioBlob.value));
-        audioBlob.value = null;
+      if (mediaSource.value && mediaSource.value.readyState === 'open') {
+        mediaSource.value.endOfStream();
       }
       isPlaying.value = false;
       isPaused.value = false;
       isLoading.value = false;
-      currentTime.value = 0;
-      // Optionally reset selectedVoice if you want to force re-selection
-      // selectedVoice.value = '';
+      audioChunks.value = [];
+      chunkQueue.value = [];
       isDropdownOpen.value = false;
+      canDownload.value = false;
+      isFetching = false;
+      isAppending = false;
+      mediaSource.value = null;
+      sourceBuffer.value = null;
     };
 
-    // Watch for changes in the text prop
-    Vue.watch(
-      () => props.text,
-      (newText, oldText) => {
-        if (newText !== oldText) {
-          console.log('Text prop changed, resetting TextToSpeech state');
-          resetState();
-        }
-      },
-      { immediate: true }
-    );
-
-    // Methods
-    const playAudio = async () => {
-  
-
-      if (!audio.value) {
-        try {
-          isLoading.value = true;
-          const result = await generateAudio(props.text, selectedVoice.value);
-          if (result.success) {
-            const blob = new Blob([result.data], { type: 'audio/mp3' });
-            audioBlob.value = blob;
-            audio.value = new Audio(URL.createObjectURL(blob));
-            audio.value.ontimeupdate = () => {
-              currentTime.value = audio.value.currentTime;
-            };
-            audio.value.onended = () => {
-              isPlaying.value = false;
-              isPaused.value = false;
-              currentTime.value = 0;
-            };
-          } else {
-            throw new Error(result.error);
-          }
-        } catch (error) {
-          console.error('Error generating audio:', error);
-          isLoading.value = false;
-          return;
-        } finally {
-          isLoading.value = false;
-        }
+    Vue.watch(() => props.text, (newText, oldText) => {
+      if (newText !== oldText) {
+        resetState();
       }
+    }, { immediate: true });
 
-      audio.value.currentTime = currentTime.value;
-      audio.value.play();
-      isPlaying.value = true;
-      isPaused.value = false;
+    const appendNextChunk = () => {
+      if (!sourceBuffer.value || isAppending || !chunkQueue.value.length) return;
+
+      isAppending = true;
+      const chunk = chunkQueue.value.shift();
+      
+      try {
+        sourceBuffer.value.appendBuffer(chunk);
+      } catch (error) {
+        console.error('Error appending buffer:', error);
+        isAppending = false;
+      }
+    };
+
+    const playAudio = async () => {
+      if (isPlaying.value && !isPaused.value) return;
+      if (isFetching) return;
+
+      isLoading.value = true;
+      isFetching = true;
+
+      try {
+        const result = await generateAudioStream(props.text, selectedVoice.value);
+        if (!result.success) throw new Error(result.error);
+
+        mediaSource.value = new MediaSource();
+        audioElement.value.src = URL.createObjectURL(mediaSource.value);
+
+        mediaSource.value.addEventListener('sourceopen', async () => {
+          sourceBuffer.value = mediaSource.value.addSourceBuffer('audio/mpeg');
+          const reader = result.stream.getReader();
+          
+          audioChunks.value = [];
+          chunkQueue.value = [];
+
+          sourceBuffer.value.addEventListener('updateend', () => {
+            isAppending = false;
+            if (!isPlaying.value && audioElement.value.paused && mediaSource.value.readyState === 'open') {
+              audioElement.value.play();
+            }
+            appendNextChunk();
+          });
+
+          sourceBuffer.value.addEventListener('error', (e) => {
+            console.error('SourceBuffer error:', e);
+          });
+
+          const processStream = async () => {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                if (mediaSource.value.readyState === 'open') {
+                  mediaSource.value.endOfStream();
+                }
+                canDownload.value = true;
+                break;
+              }
+
+              audioChunks.value.push(value);
+              chunkQueue.value.push(value);
+
+              if (!isAppending && sourceBuffer.value && !sourceBuffer.value.updating) {
+                appendNextChunk();
+              }
+            }
+          };
+
+          await processStream();
+        });
+
+      } catch (error) {
+        console.error('Error generating audio:', error);
+        resetState();
+      } finally {
+        isLoading.value = false;
+        isFetching = false;
+      }
     };
 
     const pauseAudio = () => {
-      if (audio.value) {
-        audio.value.pause();
-        isPaused.value = true;
+      if (isPlaying.value) {
+        audioElement.value.pause();
       }
     };
 
     const resumeAudio = () => {
-      if (audio.value) {
-        audio.value.play();
-        isPaused.value = false;
+      if (isPaused.value) {
+        audioElement.value.play();
       }
     };
 
     const stopAudio = () => {
-      if (audio.value) {
-        audio.value.pause();
-        audio.value.currentTime = 0;
-        isPlaying.value = false;
-        isPaused.value = false;
-        currentTime.value = 0;
-      }
+      resetState();
     };
 
     const selectVoice = (voice) => {
       selectedVoice.value = voice.path;
       isDropdownOpen.value = false;
-      // Reset audio if voice changes
-      if (audio.value) {
-        audio.value.pause();
-        URL.revokeObjectURL(audio.value.src);
-        audio.value = null;
-        audioBlob.value = null;
-        isPlaying.value = false;
-        isPaused.value = false;
-        currentTime.value = 0;
-      }
+      resetState();
     };
 
     const downloadAudio = () => {
-      if (!audioBlob.value) return;
-
-      const url = URL.createObjectURL(audioBlob.value);
+      if (!canDownload.value || !audioChunks.value.length) return;
+      const blob = new Blob(audioChunks.value, { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = 'generated-audio.mp3';
@@ -213,28 +229,53 @@ export default {
       URL.revokeObjectURL(url);
     };
 
-    // Lifecycle: Cleanup on unmount
+    const onPlay = () => {
+      isPlaying.value = true;
+      isPaused.value = false;
+      isLoading.value = false;
+      console.log('Audio playback started');
+    };
+
+    const onPause = () => {
+      isPaused.value = true;
+      isPlaying.value = false;
+      console.log('Audio paused');
+    };
+
+    const onEnded = () => {
+      isPlaying.value = false;
+      isPaused.value = false;
+      console.log('Audio playback ended');
+    };
+
+    const onError = (error) => {
+      console.error('Error playing audio:', error);
+      resetState();
+    };
+
     Vue.onUnmounted(() => {
       resetState();
     });
 
     return {
       ttsVoices,
-      audio,
-      audioBlob,
       isPlaying,
       isPaused,
       isLoading,
       selectedVoice,
-      selectedVoiceName,
       isDropdownOpen,
-      currentTime,
+      audioElement,
+      canDownload,
       playAudio,
       pauseAudio,
       resumeAudio,
       stopAudio,
       selectVoice,
       downloadAudio,
+      onPlay,
+      onPause,
+      onEnded,
+      onError,
     };
   },
 };

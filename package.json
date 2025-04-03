@@ -1,6 +1,6 @@
 {
   "name": "superbinder-ai",
-  "version": "0.0.108",
+  "version": "0.0.109",
   "description": "Multi-person multi-agent AI interactions",
   "main": "index.js",
   "scripts": {
@@ -29,6 +29,7 @@
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "elevenlabs": "^1.56.0",
     "express": "^4.21.2",
     "groq-sdk": "^0.9.1",
     "helmet": "^8.0.0",
