@@ -10,18 +10,25 @@ export default {
   name: 'ViewerTranscription',
   components: { SectionSelectorModal, TextToSpeech },
   setup() {
-    const { transcribeFile, SUPPORTED_EXTENSIONS } = useTranscripts();
+    const { transcribeFile, SUPPORTED_EXTENSIONS, startLiveTranscription, clearTranscriptBuffer, getLiveTranscript, transcriptBuffer } = useTranscripts();
     const { addArtifact } = useArtifacts();
     const transcripts = Vue.ref([]);
     const selectedTranscript = Vue.ref(null);
-    const selectedSection = Vue.ref(null); // 'entire' or speaker ID
+    const selectedSection = Vue.ref(null);
     const fileInput = Vue.ref(null);
     const uploadProgress = Vue.ref(0);
     const isUploading = Vue.ref(false);
     const showArtifactModal = Vue.ref(false);
-    const artifactTarget = Vue.ref(null); // Holds the transcript section to save as artifact
+    const artifactTarget = Vue.ref(null);
+    const isRecording = Vue.ref(false);
+    let stopLiveTranscription = null;
+    let liveTranscriptEntry = null; // Store the live transcript entry
 
-    // Handle file upload
+    // Example channel data (adjust as per your app's logic)
+    const userUuid = 'user-123'; // Replace with actual user UUID
+    const displayName = 'User Name'; // Replace with actual display name
+    const channelName = 'transcription-channel'; // Replace with actual channel name
+
     const handleFileUpload = async (event) => {
       const file = event.target.files[0];
       if (!file) return;
@@ -41,7 +48,6 @@ export default {
 
       isUploading.value = false;
       if (result.success) {
-        // Add isEditing and editedName to each speaker in the transcript
         const transcript = {
           filename: file.name,
           data: {
@@ -49,7 +55,7 @@ export default {
             speakers: result.data.speakers.map(speaker => ({
               ...speaker,
               isEditing: false,
-              editedName: speaker.displayName, // Temporary field for editing
+              editedName: speaker.displayName,
             })),
           },
         };
@@ -58,22 +64,40 @@ export default {
       } else {
         alert(`Transcription failed: ${result.error}`);
       }
-      fileInput.value.value = ''; // Reset file input
+      fileInput.value.value = '';
     };
 
-    // Validate file locally before upload
     const validateFile = (file) => {
       const errors = [];
-      const maxSize = 1000 * 1024 * 1024; // 1GB
+      const maxSize = 1000 * 1024 * 1024;
       if (file.size > maxSize) errors.push('File size exceeds 1GB limit');
       const ext = '.' + file.name.split('.').pop().toLowerCase();
       if (!SUPPORTED_EXTENSIONS.includes(ext)) errors.push('Unsupported file format');
       return errors;
     };
 
-    // Select a transcript and default to 'entire'
+    const toggleLiveTranscription = async () => {
+      if (isRecording.value) {
+        stopLiveTranscription?.();
+        isRecording.value = false;
+        // Add the live transcript to the transcripts list
+        if (transcriptBuffer.value.length > 0) {
+          const liveTranscript = getLiveTranscript();
+          transcripts.value.push(liveTranscript);
+          liveTranscriptEntry = liveTranscript; // Store the entry for reference
+        }
+      } else {
+        clearTranscriptBuffer(); // Clear previous live transcript data
+        liveTranscriptEntry = null; // Reset the live transcript entry
+        isRecording.value = true;
+        stopLiveTranscription = await startLiveTranscription((concatenatedTranscript) => {
+          // The buffer is already updated in useTranscripts.js via transcriptBuffer
+          // No need to update here since we're using the reactive transcriptBuffer directly
+        });
+      }
+    };
+
     const selectTranscript = (transcript) => {
-      // Only reset editing state if switching to a different transcript
       if (selectedTranscript.value !== transcript) {
         transcripts.value.forEach(t => {
           t.data.speakers.forEach(s => {
@@ -84,26 +108,24 @@ export default {
       }
       selectedTranscript.value = transcript;
       selectedSection.value = 'entire';
+      if (transcript !== liveTranscriptEntry) {
+        clearTranscriptBuffer(); // Clear live transcript buffer when selecting a file transcript
+      }
     };
 
-    // Select a specific section (entire or speaker)
     const selectSection = (section) => {
-      // Do not reset editing state when selecting a section
       selectedSection.value = section;
     };
 
-    // Rename speaker
     const startEditingSpeaker = (transcript, speakerId) => {
       const speaker = transcript.data.speakers.find(s => s.id === speakerId);
       if (speaker) {
-        // Reset editing state for all speakers in all transcripts
         transcripts.value.forEach(t => {
           t.data.speakers.forEach(s => {
             s.isEditing = false;
             s.editedName = s.displayName;
           });
         });
-        // Set editing state for the specific speaker
         speaker.isEditing = true;
         speaker.editedName = speaker.displayName;
       }
@@ -114,20 +136,26 @@ export default {
       if (speaker) {
         speaker.displayName = speaker.editedName || speaker.displayName;
         speaker.isEditing = false;
-        // Trigger reactivity by updating the transcript
         transcript.data = { ...transcript.data };
       }
     };
 
-    // Format timestamp
     const formatTime = (seconds) => {
       const minutes = Math.floor(seconds / 60);
       const secs = Math.floor(seconds % 60);
       return `${minutes}:${secs < 10 ? '0' + secs : secs}`;
     };
 
-    // Rendered transcript content (card-based)
     const renderedTranscript = Vue.computed(() => {
+      if (selectedTranscript.value === liveTranscriptEntry && transcriptBuffer.value.length > 0) {
+        // Display the concatenated live transcript
+        const concatenatedText = transcriptBuffer.value.map(segment => segment.text).join(' ');
+        return [{
+          text: concatenatedText,
+          timestamp: 'Live',
+          speaker: 'You'
+        }];
+      }
       if (!selectedTranscript.value) return [];
       const transcript = selectedTranscript.value.data;
       const segments = transcript.segments || [];
@@ -149,14 +177,12 @@ export default {
       }
     });
 
-    // Computed property for entire transcript text (for artifact)
     const entireTranscriptText = Vue.computed(() => {
       if (!selectedTranscript.value) return '';
       const segments = selectedTranscript.value.data.segments || [];
       return segments.map(s => s.text).join('\n');
     });
 
-    // Method to get speaker transcript text (for artifact)
     const getSpeakerTranscriptText = (speakerId) => {
       if (!selectedTranscript.value) return '';
       const segments = selectedTranscript.value.data.segments || [];
@@ -166,7 +192,6 @@ export default {
         .join('\n');
     };
 
-    // Artifact handling
     const openArtifactModal = (target) => {
       artifactTarget.value = target;
       showArtifactModal.value = true;
@@ -179,7 +204,7 @@ export default {
           const artifactName = name || `Transcript Artifact ${timestamp}`;
           const finalName = sectionIds.length > 1 && index > 0 ? `${artifactName} (${index + 1})` : artifactName;
           const pagesText = [artifactTarget.value.text];
-          console.log('Saving artifact:', { name: finalName, text: pagesText, sectionId }); // Debug log
+          console.log('Saving artifact:', { name: finalName, text: pagesText, sectionId });
           addArtifact(finalName, pagesText, sectionId);
         });
       }
@@ -198,6 +223,10 @@ export default {
       fileInput,
       uploadProgress,
       isUploading,
+      showArtifactModal,
+      artifactTarget,
+      isRecording,
+      transcriptBuffer, // Expose for debugging if needed
       handleFileUpload,
       selectTranscript,
       selectSection,
@@ -206,10 +235,10 @@ export default {
       renderedTranscript,
       entireTranscriptText,
       getSpeakerTranscriptText,
-      showArtifactModal,
       openArtifactModal,
       saveArtifactFromModal,
       closeArtifactModal,
+      toggleLiveTranscription,
     };
   },
   template: `
@@ -227,12 +256,21 @@ export default {
             <button
               @click="$refs.fileInput.click()"
               class="py-1 px-2 bg-[#10b981] hover:bg-[#059669] text-white rounded-lg text-sm flex items-center"
-              :disabled="isUploading"
+              :disabled="isUploading || isRecording"
               title="Upload File"
             >
               <i class="pi pi-upload"></i>
               <span v-if="isUploading" class="ml-1">Uploading ({{ uploadProgress }}%)</span>
               <span v-else class="ml-1">Upload</span>
+            </button>
+            <button
+              @click="toggleLiveTranscription"
+              class="py-1 px-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-lg text-sm flex items-center"
+              :disabled="isUploading"
+              title="Toggle Microphone"
+            >
+              <i class="pi" :class="isRecording ? 'pi-microphone-off' : 'pi-microphone'"></i>
+              <span class="ml-1">{{ isRecording ? 'Stop' : 'Start' }} Live</span>
             </button>
           </div>
           <div class="flex-1 overflow-y-auto">
@@ -295,16 +333,16 @@ export default {
 
         <!-- Right Column: Transcript Viewer (Card-Based) -->
         <div class="w-full md:w-2/3 overflow-hidden flex flex-col">
-          <div v-if="selectedTranscript" class="p-2 bg-[#1a2233] border-b border-[#2d3748] sticky top-0 z-10">
+          <div v-if="selectedTranscript || transcriptBuffer.length > 0" class="p-2 bg-[#1a2233] border-b border-[#2d3748] sticky top-0 z-10">
             <h2 class="text-sm font-bold text-gray-500 truncate">
-              {{ selectedSection === 'entire' ? 'Entire Transcript' : selectedTranscript.data.speakers.find(s => s.id === Number(selectedSection))?.displayName }}
+              {{ transcriptBuffer.length > 0 && selectedTranscript === liveTranscriptEntry ? 'Live Transcription' : (selectedSection === 'entire' ? 'Entire Transcript' : selectedTranscript?.data.speakers.find(s => s.id === Number(selectedSection))?.displayName) }}
             </h2>
           </div>
           <div class="flex-1 overflow-y-auto p-4">
             <div v-if="renderedTranscript.length" class="space-y-4">
               <div
-                v-for="(segment, index) in renderedTranscript"
-                :key="index"
+                v-for="segment in renderedTranscript"
+                :key="segment.id || segment.text"
                 class="p-4 bg-[#2d3748] rounded-lg shadow-md text-[#e2e8f0]"
               >
                 <div class="text-sm whitespace-pre-wrap">{{ segment.text }}</div>
@@ -317,7 +355,6 @@ export default {
                   >
                     <i class="pi pi-bookmark"></i>
                   </button>
-                  <!-- Add TextToSpeech component beside the bookmark button -->
                   <text-to-speech :text="segment.text" />
                 </div>
               </div>

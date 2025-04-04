@@ -1,23 +1,26 @@
-// realTime.js
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const connectDB = require('./db.js');
 const { handlePrompt } = require("./handleAiInteractions");
 const { handleImageGeneration } = require("./handleAiImages");
-const { entityModels } = require('./models'); // Import entity models from models.js
+const { entityModels } = require('./models');
+const { createClient, LiveTranscriptionEvents } = require("@deepgram/sdk");
+
+const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+const deepgram = createClient(deepgramApiKey);
 
 const channels = new Map();
 
 // Define Logs Schema for error tracking
 const logSchema = new mongoose.Schema({
   timestamp: { type: Number, required: true, index: true },
-  level: { type: String, required: true }, // e.g., 'error', 'warn'
+  level: { type: String, required: true },
   message: { type: String, required: true },
   stackTrace: { type: String },
   userUuid: { type: String },
   channelName: { type: String },
   socketId: { type: String },
-  details: { type: mongoose.Schema.Types.Mixed }, // Additional context
+  details: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true });
 
 const Log = mongoose.model('Log', logSchema, 'logs');
@@ -25,7 +28,6 @@ const Log = mongoose.model('Log', logSchema, 'logs');
 async function initializeDatabase() {
   try {
     await connectDB();
-    // No need for verifyIndexes since indexes are defined in models.js schemas
   } catch (err) {
     await logError('error', 'Failed to initialize database', err.stack);
     process.exit(1);
@@ -104,7 +106,7 @@ async function loadStateFromServer(channelName, entityType) {
     const model = entityModels[entityType];
     const state = await model
       .find({ channel: channelName })
-      .sort({ serverTimestamp: 1 }) // Ensure consistent ordering
+      .sort({ serverTimestamp: 1 })
       .lean();
     console.log(`loadStateFromServer: ${channelName} - ${entityType}`, { count: state.length });
     return state.map(doc => ({
@@ -231,7 +233,7 @@ async function upsertChannel(channelName, userUuid, displayName) {
       return { id: channelName, channel: channelName, userUuid, data: { locked: existingChannel.data.locked, users }, timestamp, serverTimestamp: timestamp };
     } else {
       const channelData = {
-        id: channelName,
+        id: CHANNEL_NAME,
         channel: channelName,
         userUuid,
         data: {
@@ -258,6 +260,7 @@ async function updateCreateState(channelName, entityType, payload) {
       id: payload.id,
       channel: channelName,
       userUuid: payload.userUuid,
+      channelName: channelName,
       data: { ...payload.data, color: payload.data.color || channels.get(channelName)?.users[payload.userUuid]?.color || '#808080' },
       timestamp: payload.timestamp,
       serverTimestamp: Date.now(),
@@ -377,7 +380,7 @@ async function sendLLMStream(uuid, channelName, session, type, message, isEnd = 
       userUuid: uuid,
       data: { 
         content: message, 
-        isImage, // Add isImage flag to differentiate image responses
+        isImage,
         ...(isEnd ? { end: true } : {}) 
       },
       timestamp: Date.now(),
@@ -386,6 +389,94 @@ async function sendLLMStream(uuid, channelName, session, type, message, isEnd = 
     broadcastToChannel(channelName, type, payload);
   } catch (err) {
     await logError('error', `Failed to send LLM stream for ${channelName}`, err.stack, uuid, channelName);
+  }
+}
+
+// Function to handle transcription events
+async function handleTranscriptionEvent(type, data, socket) {
+  try {
+    const { channelName, userUuid } = data;
+    if (!channelName || !userUuid) {
+      socket.emit('message', { type: 'error', message: 'Invalid channel name or user UUID', timestamp: Date.now() });
+      return;
+    }
+
+    if (type === 'start-transcription') {
+      console.log('Transcription session started for channel:', channelName, 'by user:', userUuid, 'at:', new Date().toISOString());
+
+      socket.deepgramConnection = deepgram.listen.live({
+        smart_format: true,
+        model: "nova-2",
+        language: "en-US",
+        // Remove encoding parameter; Deepgram will infer from the audio data
+        sample_rate: 48000
+      });
+
+      socket.audioBuffer = []; // Buffer to store WebM chunks
+
+      socket.deepgramConnection.on(LiveTranscriptionEvents.Open, () => {
+        console.log('Deepgram WebSocket connection opened for channel:', channelName);
+        socket.emit('message', { type: 'transcription-ready', timestamp: Date.now() });
+      });
+
+      socket.deepgramConnection.on(LiveTranscriptionEvents.Transcript, (transcriptData) => {
+        console.log('Transcript event received from Deepgram:', JSON.stringify(transcriptData, null, 2));
+        const transcript = transcriptData.channel.alternatives[0].transcript;
+        if (transcript) {
+          const wordCount = transcript.split(' ').length;
+          console.log(`Words detected: "${transcript}" (${wordCount} words) at ${new Date().toISOString()}`);
+          const message = {
+            type: 'live-transcript',
+            id: null,
+            userUuid,
+            data: { transcript },
+            timestamp: Date.now(),
+            serverTimestamp: Date.now(),
+          };
+          socket.emit('message', message);
+          broadcastToChannel(channelName, 'live-transcript', { id: null, userUuid, data: { transcript } }, userUuid);
+        } else {
+          console.log('Empty transcript received at:', new Date().toISOString());
+        }
+      });
+
+      socket.deepgramConnection.on(LiveTranscriptionEvents.Close, () => {
+        console.log('Deepgram WebSocket connection closed for channel:', channelName, 'at:', new Date().toISOString());
+        socket.deepgramConnection = null;
+        socket.audioBuffer = null;
+      });
+
+      socket.deepgramConnection.on(LiveTranscriptionEvents.Error, (error) => {
+        console.error('Deepgram error occurred:', error);
+        socket.emit('message', { type: 'error', message: error.message, timestamp: Date.now() });
+      });
+
+      socket.deepgramConnection.on(LiveTranscriptionEvents.Metadata, (metadata) => {
+        console.log('Deepgram metadata received:', JSON.stringify(metadata, null, 2));
+      });
+    } else if (type === 'stop-transcription') {
+      if (socket.deepgramConnection) {
+        socket.deepgramConnection.finish();
+        socket.deepgramConnection = null;
+        socket.audioBuffer = null;
+        console.log('Transcription session stopped at:', new Date().toISOString());
+      }
+    } else if (type === 'audio-chunk') {
+      if (!socket.deepgramConnection) {
+        socket.emit('message', { type: 'error', message: 'Transcription not started', timestamp: Date.now() });
+        return;
+      }
+      const chunk = data.chunk;
+      if (!chunk || !Buffer.isBuffer(chunk)) {
+        socket.emit('message', { type: 'error', message: 'Invalid audio chunk', timestamp: Date.now() });
+        return;
+      }
+      console.log(`Received audio chunk of size ${chunk.length} bytes at ${new Date().toISOString()}`);
+      socket.deepgramConnection.send(chunk);
+    }
+  } catch (err) {
+    await logError('error', `Transcription event ${type} failed for channel ${data.channelName}`, err.stack, data.userUuid, data.channelName, socket.id);
+    socket.emit('message', { type: 'error', message: 'Server error processing transcription event', timestamp: Date.now() });
   }
 }
 
@@ -449,7 +540,7 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
             if (type === 'message') {
               await sendLLMStream(uuid, channelName, session, 'draft-llm', message, false, false);
             } else if (type === 'image') {
-              await sendLLMStream(uuid, channelName, session, 'draft-llm', message, false, true); // Set isImage to true
+              await sendLLMStream(uuid, channelName, session, 'draft-llm', message, false, true);
             } else if (type === 'EOM') {
               await sendLLMStream(uuid, channelName, session, 'draft-llm', message, true, false);
             } else if (type === 'ERROR') {
@@ -515,7 +606,7 @@ function createRealTimeServers(server, corsOptions) {
     socket.on('error', (error) => {
       logError('error', `Socket error for ${socket.id}: ${error.message}`, error.stack, null, null, socket.id);
       if (error.message === 'Max buffer size exceeded') {
-        socket.emit('error', 'Message too large');
+        socket.emit('message', { type: 'error', message: 'Message too large', timestamp: Date.now() });
       }
     });
 
@@ -530,19 +621,16 @@ function createRealTimeServers(server, corsOptions) {
         socket.join(channelName);
         socket.userUuid = userUuid;
 
-        // Fetch or create channel document from MongoDB
         let channelDoc = await entityModels['channels'].findOne({ id: channelName }).lean();
         if (!channelDoc) {
           channelDoc = await upsertChannel(channelName, userUuid, displayName);
         }
 
-        // Always fetch the latest state from MongoDB for all entity types
         const freshState = {};
         for (const entityType of Object.keys(entityConfigs)) {
           freshState[entityType] = await loadStateFromServer(channelName, entityType);
         }
 
-        // Update or initialize the in-memory channels Map with the fresh state
         if (!channels.has(channelName)) {
           channels.set(channelName, {
             users: {},
@@ -558,7 +646,6 @@ function createRealTimeServers(server, corsOptions) {
 
         const channel = channels.get(channelName);
 
-        // Populate or update users from the database
         channelDoc.data.users.forEach(user => {
           if (!channel.users[user.userUuid]) {
             channel.users[user.userUuid] = {
@@ -569,12 +656,10 @@ function createRealTimeServers(server, corsOptions) {
           }
         });
 
-        // Add or update the joining user
         const userColor = channel.users[userUuid]?.color || generateMutedDarkColor();
         channel.users[userUuid] = { displayName, color: userColor, joinedAt: Date.now() };
         channel.sockets[userUuid] = socket;
 
-        // Ensure the channel document reflects the latest user list
         await upsertChannel(channelName, userUuid, displayName);
 
         if (channel.locked) {
@@ -582,7 +667,6 @@ function createRealTimeServers(server, corsOptions) {
           return;
         }
 
-        // Send the fresh state to the joining user
         const initStateMessage = {
           type: 'init-state',
           id: null,
@@ -605,6 +689,10 @@ function createRealTimeServers(server, corsOptions) {
       try {
         if (!validateLeaveData(data)) return;
         cleanupUser(data.channelName, data.userUuid, socket);
+        if (socket.deepgramConnection) {
+          socket.deepgramConnection.finish();
+          socket.deepgramConnection = null;
+        }
       } catch (err) {
         logError('error', `Leave channel error for ${data.channelName}`, err.stack, data.userUuid, data.channelName, socket.id);
       }
@@ -615,6 +703,10 @@ function createRealTimeServers(server, corsOptions) {
         for (const [channelName, channel] of channels) {
           if (channel.sockets[socket.userUuid]) {
             cleanupUser(channelName, socket.userUuid, socket);
+            if (socket.deepgramConnection) {
+              socket.deepgramConnection.finish();
+              socket.deepgramConnection = null;
+            }
             break;
           }
         }
@@ -632,6 +724,8 @@ function createRealTimeServers(server, corsOptions) {
       }
     });
   });
+
+  return io;
 }
 
 async function handleMessage(dataObj, socket) {
@@ -662,6 +756,11 @@ async function handleMessage(dataObj, socket) {
       case 'leave-channel':
       case 'update-tab':
       case 'scroll-to-page':
+        break;
+      case 'start-transcription':
+      case 'stop-transcription':
+      case 'audio-chunk':
+        await handleTranscriptionEvent(type, dataObj, socket);
         break;
       case 'add-chat':
         await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data: { ...data, color: userColor } }, socket);
