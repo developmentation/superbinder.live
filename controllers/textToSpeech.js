@@ -40,7 +40,7 @@ const generateAudio = async (req, res) => {
       {
         output_format: "mp3_44100_128",
         text,
-        model_id: "eleven_multilingual_v2"
+        model_id: "eleven_flash_v2_5" //eleven_multilingual_v2
       }
     );
 
