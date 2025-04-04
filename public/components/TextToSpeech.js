@@ -11,7 +11,7 @@ export default {
       <audio ref="audioElement" @play="onPlay" @pause="onPause" @ended="onEnded" @error="onError" style="display: none;"></audio>
       <div class="controls flex gap-2">
         <i 
-          v-if="!isPlaying && !isLoading" 
+          v-if="!isPlaying && !isPaused && !isLoading" 
           @click="playAudio" 
           class="pi pi-play-circle text-sm text-gray-400 hover:text-gray-200 cursor-pointer"
           :class="{ 'opacity-50 cursor-not-allowed': isLoading }"
@@ -32,12 +32,12 @@ export default {
           class="pi pi-pause-circle text-sm text-gray-400 hover:text-gray-200 cursor-pointer"
         ></i>
         <i 
-          v-if="isPlaying && isPaused" 
+          v-if="isPaused" 
           @click="resumeAudio" 
           class="pi pi-play-circle text-sm text-gray-400 hover:text-gray-200 cursor-pointer"
         ></i>
         <i 
-          v-if="isPlaying" 
+          v-if="isPlaying || isPaused" 
           @click="stopAudio" 
           class="pi pi-stop-circle text-sm text-gray-400 hover:text-gray-200 cursor-pointer"
         ></i>
@@ -109,6 +109,17 @@ export default {
       sourceBuffer.value = null;
     };
 
+    const stopState = () => {
+      if (audioElement.value) {
+        audioElement.value.pause();
+        audioElement.value.currentTime = 0;
+      }
+      isPlaying.value = false;
+      isPaused.value = false;
+      isLoading.value = false;
+      // Preserve audioChunks and canDownload for reuse
+    };
+
     Vue.watch(() => props.text, (newText, oldText) => {
       if (newText !== oldText) {
         resetState();
@@ -120,7 +131,7 @@ export default {
 
       isAppending = true;
       const chunk = chunkQueue.value.shift();
-      
+
       try {
         sourceBuffer.value.appendBuffer(chunk);
       } catch (error) {
@@ -133,6 +144,30 @@ export default {
       if (isPlaying.value && !isPaused.value) return;
       if (isFetching) return;
 
+      // If paused and audio is already loaded, resume from current position
+      if (isPaused.value && audioElement.value && audioElement.value.src) {
+        await audioElement.value.play();
+        return;
+      }
+
+      // If audio is fully buffered, replay from the start
+      if (canDownload.value && audioChunks.value.length > 0) {
+        isLoading.value = true;
+        try {
+          const blob = new Blob(audioChunks.value, { type: 'audio/mpeg' });
+          audioElement.value.src = URL.createObjectURL(blob);
+          audioElement.value.currentTime = 0; // Reset to start
+          await audioElement.value.play();
+        } catch (error) {
+          console.error('Error replaying audio:', error);
+          resetState();
+        } finally {
+          isLoading.value = false;
+        }
+        return;
+      }
+
+      // Otherwise, generate and stream the audio
       isLoading.value = true;
       isFetching = true;
 
@@ -146,13 +181,13 @@ export default {
         mediaSource.value.addEventListener('sourceopen', async () => {
           sourceBuffer.value = mediaSource.value.addSourceBuffer('audio/mpeg');
           const reader = result.stream.getReader();
-          
+
           audioChunks.value = [];
           chunkQueue.value = [];
 
           sourceBuffer.value.addEventListener('updateend', () => {
             isAppending = false;
-            if (!isPlaying.value && audioElement.value.paused && mediaSource.value.readyState === 'open') {
+            if (!isPaused.value && !isPlaying.value && audioElement.value.paused && mediaSource.value.readyState === 'open') {
               audioElement.value.play();
             }
             appendNextChunk();
@@ -184,7 +219,6 @@ export default {
 
           await processStream();
         });
-
       } catch (error) {
         console.error('Error generating audio:', error);
         resetState();
@@ -195,25 +229,27 @@ export default {
     };
 
     const pauseAudio = () => {
-      if (isPlaying.value) {
+      if (isPlaying.value && !isPaused.value) {
         audioElement.value.pause();
+        isPaused.value = true;
+        isPlaying.value = false;
       }
     };
 
     const resumeAudio = () => {
       if (isPaused.value) {
-        audioElement.value.play();
+        playAudio(); // Reuse existing audio and resume
       }
     };
 
     const stopAudio = () => {
-      resetState();
+      stopState(); // Pause and reset position, hide stop button
     };
 
     const selectVoice = (voice) => {
       selectedVoice.value = voice.path;
       isDropdownOpen.value = false;
-      resetState();
+      resetState(); // Reset everything when changing voice
     };
 
     const downloadAudio = () => {
