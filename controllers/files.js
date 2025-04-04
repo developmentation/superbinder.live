@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const { upload } = require('../tools/uploads.js');
 const { ocrUpload } = require('../tools/ocrUploads.js');
 const { GoogleGenAI } = require('@google/genai');
+const { HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
 
 const filesController = {};
 
@@ -160,6 +161,32 @@ filesController.retrieveFiles = async (req, res) => {
  * POST /api/files/ocr
  */
 filesController.ocrFile = async (req, res) => {
+
+  
+ const safetySettings = [
+  {
+    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+];
+
+
   try {
     ocrUpload.array('files', 3000)(req, res, async (err) => {
       if (err) {
@@ -249,6 +276,7 @@ filesController.ocrFile = async (req, res) => {
               ],
             },
           ],
+          safety_settings:safetySettings,
         };
 
         try {

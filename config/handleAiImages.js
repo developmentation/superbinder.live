@@ -1,5 +1,6 @@
 const { GoogleGenAI } = require("@google/genai");
 const sharp = require("sharp"); // Ensure sharp is installed
+const { HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
 
 const createImageClient = (provider, credentials) => {
   const envKey = process.env[`${provider.toUpperCase()}_API_KEY`];
@@ -44,6 +45,31 @@ const handleImageGeneration = async (promptConfig, sendToClient) => {
   fullUserPrompt = fullUserPrompt.replace(/@\w+/g, '');
 
   console.log(fullUserPrompt)
+
+ const safetySettings = [
+    {
+      category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+  ];
+
+
   try {
     const provider = modelConfig.provider.toLowerCase();
     const client = createImageClient(provider, {
@@ -55,6 +81,7 @@ const handleImageGeneration = async (promptConfig, sendToClient) => {
     const response = await client.models.generateContent({
       model: modelConfig.model || 'gemini-2.0-flash-exp-image-generation',
       contents: fullUserPrompt,
+      safety_settings:safetySettings,
       config: {
         responseModalities: ['Text', 'Image'],
       },
