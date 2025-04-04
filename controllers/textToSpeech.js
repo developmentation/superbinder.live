@@ -2,6 +2,24 @@ const { ElevenLabsClient } = require("elevenlabs");
 
 const client = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
 
+
+const voices = async (req, res) =>{
+
+
+const client = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
+let voiceSearch = await client.voices.search({
+    include_total_count: true
+});
+
+
+res.status(200).json({
+  message: 'Voices Loaded Successfully',
+  voices:voiceSearch.voices.map((voice)=>{return {voice_id:voice.voice_id, name:voice.name, labels: voice.labels}}),
+});
+
+
+}
+
 const generateAudio = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: "Method not allowed" });
@@ -52,4 +70,4 @@ const generateAudio = async (req, res) => {
   }
 };
 
-module.exports = { generateAudio };
+module.exports = { voices, generateAudio };

@@ -55,11 +55,11 @@ export default {
         >
           <div 
             v-for="voice in ttsVoices" 
-            :key="voice.id" 
+            :key="voice.voice_id" 
             @click="selectVoice(voice)"
             class="dropdown-item p-2 text-sm text-gray-200 cursor-pointer hover:bg-gray-600"
           >
-            {{ voice.name }} ({{ voice.language }})
+            {{ voice.name }} ({{ voice.labels.language || voice.labels.accent || 'N/A' }})
           </div>
         </div>
         <i 
@@ -75,7 +75,7 @@ export default {
     const isPlaying = Vue.ref(false);
     const isPaused = Vue.ref(false);
     const isLoading = Vue.ref(false);
-    const selectedVoice = Vue.ref('');
+    const selectedVoice = Vue.ref('JBFqnCBsd6RMkjVDRZzb'); // Default voice_id (George)
     const isDropdownOpen = Vue.ref(false);
     const audioElement = Vue.ref(null);
     const mediaSource = Vue.ref(null);
@@ -247,7 +247,7 @@ export default {
     };
 
     const selectVoice = (voice) => {
-      selectedVoice.value = voice.path;
+      selectedVoice.value = voice.voice_id; // Use voice_id instead of path
       isDropdownOpen.value = false;
       resetState(); // Reset everything when changing voice
     };

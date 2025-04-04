@@ -3,14 +3,9 @@ let ttsVoices = Vue.ref(null);
 
 export const useTextToSpeech = () => {
   const loadVoices = async () => {
-    try {
-      ttsVoices.value = await fetch(new URL(`../assets/voices.json`, import.meta.url))
-        .then(res => res.ok ? res.json() : null);
-      console.log("Loaded AI Voices");
-    } catch (error) {
-      console.warn('Error loading voices:', error);
-      ttsVoices.value = [];
-    }
+    const response = await axios.get('/api/textToSpeech/voices');
+    ttsVoices.value = response?.data?.voices
+    console.log("Loaded voices", ttsVoices.value)
   };
 
   const generateAudioStream = async (text, voiceId = "JBFqnCBsd6RMkjVDRZzb") => {
