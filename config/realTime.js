@@ -54,6 +54,8 @@ const entityConfigs = {
   sections: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-section', update: 'update-section', remove: 'remove-section', reorder: 'reorder-section' } },
   channels: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-channel', update: 'update-channel', remove: 'remove-channel', reorder: null } },
   prompts: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-prompt', update: 'update-prompt', remove: 'remove-prompt', reorder: null } },
+  transcriptions: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-transcription', update: 'update-transcription', remove: 'remove-transcription', reorder: null } },
+  liveTranscriptions: { idKey: 'id', requiredFields: ['id'], orderField: null, events: { add: 'add-liveTranscription', update: 'update-liveTranscription', remove: 'remove-liveTranscription', reorder: null } },
 };
 
 /**
@@ -233,7 +235,7 @@ async function upsertChannel(channelName, userUuid, displayName) {
       return { id: channelName, channel: channelName, userUuid, data: { locked: existingChannel.data.locked, users }, timestamp, serverTimestamp: timestamp };
     } else {
       const channelData = {
-        id: CHANNEL_NAME,
+        id: channelName,
         channel: channelName,
         userUuid,
         data: {
@@ -395,7 +397,7 @@ async function sendLLMStream(uuid, channelName, session, type, message, isEnd = 
 // Function to handle transcription events
 async function handleTranscriptionEvent(type, data, socket) {
   try {
-    const { channelName, userUuid } = data;
+    const { channelName, userUuid, id } = data;
     if (!channelName || !userUuid) {
       socket.emit('message', { type: 'error', message: 'Invalid channel name or user UUID', timestamp: Date.now() });
       return;
@@ -404,19 +406,30 @@ async function handleTranscriptionEvent(type, data, socket) {
     if (type === 'start-transcription') {
       console.log('Transcription session started for channel:', channelName, 'by user:', userUuid, 'at:', new Date().toISOString());
 
+      if (socket.deepgramConnection) {
+        console.log(`User ${userUuid} already has an active transcription session, closing old one`);
+        socket.deepgramConnection.finish();
+      }
+
       socket.deepgramConnection = deepgram.listen.live({
         smart_format: true,
         model: "nova-2",
         language: "en-US",
-        // Remove encoding parameter; Deepgram will infer from the audio data
         sample_rate: 48000
       });
 
-      socket.audioBuffer = []; // Buffer to store WebM chunks
+      socket.audioBuffer = [];
 
       socket.deepgramConnection.on(LiveTranscriptionEvents.Open, () => {
         console.log('Deepgram WebSocket connection opened for channel:', channelName);
-        socket.emit('message', { type: 'transcription-ready', timestamp: Date.now() });
+        // Send only to the initiating socket
+        socket.emit('message', {
+          type: 'transcription-ready',
+          id: id || null,
+          userUuid,
+          data: data.data || {},
+          timestamp: Date.now()
+        });
       });
 
       socket.deepgramConnection.on(LiveTranscriptionEvents.Transcript, (transcriptData) => {
@@ -427,14 +440,14 @@ async function handleTranscriptionEvent(type, data, socket) {
           console.log(`Words detected: "${transcript}" (${wordCount} words) at ${new Date().toISOString()}`);
           const message = {
             type: 'live-transcript',
-            id: null,
+            id: id || null,
             userUuid,
             data: { transcript },
             timestamp: Date.now(),
             serverTimestamp: Date.now(),
           };
           socket.emit('message', message);
-          broadcastToChannel(channelName, 'live-transcript', { id: null, userUuid, data: { transcript } }, userUuid);
+          broadcastToChannel(channelName, 'live-transcript', { id: id || null, userUuid, data: { transcript } }, userUuid);
         } else {
           console.log('Empty transcript received at:', new Date().toISOString());
         }
@@ -479,9 +492,9 @@ async function handleTranscriptionEvent(type, data, socket) {
     socket.emit('message', { type: 'error', message: 'Server error processing transcription event', timestamp: Date.now() });
   }
 }
-
 async function handleCrudOperation(channelName, userUuid, type, payload, socket) {
   try {
+    // Determine operation and entity type from entityConfigs
     let operation, entityType;
     for (const [et, config] of Object.entries(entityConfigs)) {
       if (config.events.add === type) { operation = 'add'; entityType = et; break; }
@@ -492,30 +505,36 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
       else if (config.events.vote === type) { operation = 'vote'; entityType = et; break; }
     }
 
+    // Validate event type
     if (!operation || !entityType) {
       socket.emit('message', { type: 'error', message: `Invalid event type: ${type}`, timestamp: Date.now() });
       return;
     }
 
+    // Validate payload
     const validation = validateEntity(payload, entityType, operation);
     if (!validation.valid) {
       socket.emit('message', { type: 'error', message: validation.message, timestamp: Date.now() });
       return;
     }
 
+    // Check if channel exists
     if (!channels.has(channelName)) {
       socket.emit('message', { type: 'error', message: 'Invalid channel', timestamp: Date.now() });
       return;
     }
 
+    // Normalize payload with userUuid, timestamp, and channelName
     const timestamp = payload.timestamp || Date.now();
     const normalizedPayload = { ...payload, userUuid, timestamp, channelName };
 
+    // Special case: Remove channel
     if (entityType === 'channels' && operation === 'remove') {
       await removeChannel(channelName, userUuid);
       return;
     }
 
+    // Special case: LLM addition
     if (entityType === 'llms' && operation === 'add') {
       if (!validateLLMData(payload.data)) {
         socket.emit('message', { type: 'error', message: 'Invalid LLM data', timestamp: Date.now() });
@@ -568,26 +587,55 @@ async function handleCrudOperation(channelName, userUuid, type, payload, socket)
       return;
     }
 
+    // Determine update function and persistence
     let updateFunc, shouldPersist = true;
     switch (operation) {
-      case 'add': updateFunc = updateCreateState; break;
-      case 'update': updateFunc = updateUpdateState; break;
-      case 'remove': updateFunc = updateDeleteState; break;
-      case 'reorder': updateFunc = updateReorderState; break;
-      case 'vote': updateFunc = updateVoteState; break;
-      case 'draft': updateFunc = null; shouldPersist = false; break;
+      case 'add':
+        updateFunc = updateCreateState;
+        break;
+      case 'update':
+        updateFunc = updateUpdateState;
+        break;
+      case 'remove':
+        updateFunc = updateDeleteState;
+        break;
+      case 'reorder':
+        updateFunc = updateReorderState;
+        break;
+      case 'vote':
+        updateFunc = updateVoteState;
+        break;
+      case 'draft':
+        updateFunc = null;
+        shouldPersist = false;
+        break;
       default:
         socket.emit('message', { type: 'error', message: `Unknown operation: ${operation}`, timestamp: Date.now() });
         return;
     }
 
+    // Handle draft events (no persistence, just broadcast)
     if (operation === 'draft') {
       broadcastToChannel(channelName, type, normalizedPayload, userUuid);
       return;
     }
 
+    // Persist changes to the database
     await updateFunc(channelName, entityType, normalizedPayload);
+
+    // Broadcast to all except the initiator
     broadcastToChannel(channelName, type, normalizedPayload, userUuid);
+
+    // Optionally send an acknowledgment to the initiator for live transcription events
+    if (['add-liveTranscription', 'update-liveTranscription', 'remove-liveTranscription'].includes(type)) {
+      socket.emit('message', {
+        type: `${type}-ack`,
+        id: payload.id,
+        userUuid,
+        timestamp: Date.now(),
+        serverTimestamp: Date.now()
+      });
+    }
   } catch (err) {
     await logError('error', `CRUD operation failed for ${channelName} and type ${type}`, err.stack, userUuid, channelName, socket.id, { payload });
     socket.emit('message', { type: 'error', message: 'Server error occurred', timestamp: Date.now() });
@@ -807,6 +855,16 @@ async function handleMessage(dataObj, socket) {
       case 'add-prompt':
       case 'update-prompt':
       case 'remove-prompt':
+
+      case 'add-transcription':
+      case 'update-transcription':
+      case 'remove-transcription':
+
+      case 'add-liveTranscription':
+        case 'update-liveTranscription':
+        case 'remove-liveTranscription':
+  
+
       case 'add-channel':
       case 'remove-channel':
         await handleCrudOperation(channelName, userUuid, type, { id, userUuid, data }, socket);

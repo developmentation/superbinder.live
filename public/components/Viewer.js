@@ -8,6 +8,7 @@ import ViewerQuestions from './ViewerQuestions.js';
 import ViewerCollaboration from './ViewerCollaboration.js';
 import ViewerPrompts from './ViewerPrompts.js';
 import ViewerTranscriptions from './ViewerTranscriptions.js';
+import ViewerLiveTranscriptions from './ViewerLiveTranscriptions.js';
 import { useRealTime } from '../composables/useRealTime.js';
 
 export default {
@@ -22,6 +23,7 @@ export default {
     ViewerCollaboration,
     ViewerPrompts,
     ViewerTranscriptions,
+    ViewerLiveTranscriptions
   },
   props: {
     activeTab: {
@@ -96,6 +98,13 @@ export default {
         v-show="activeTab === 'Transcriptions'"
         class="h-full"
       />
+
+      <!-- Collaboration -->
+      <viewer-live-transcriptions
+        v-show="activeTab === 'Live'"
+        class="h-full"
+      />
+
 
       <!-- Collaboration -->
       <viewer-collaboration

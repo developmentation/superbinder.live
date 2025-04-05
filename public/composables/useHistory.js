@@ -9,6 +9,7 @@ import { useCollaboration } from './useCollaboration.js';
 import { useSections } from './useSections.js';
 import { usePrompts } from './usePrompts.js';
 import { useTranscriptions } from './useTranscriptions.js';
+import { useLiveTranscriptions } from './useLiveTranscriptions.js';
 import eventBus from './eventBus.js';
 
 export function useHistory() {
@@ -26,7 +27,7 @@ export function useHistory() {
       sections: [...(useSections().sections.value || [])],
       prompts: [...(usePrompts().prompts.value || [])],
       transcriptions: [...(useTranscriptions().transcriptions.value || [])],
-      liveTranscriptions: [...(useTranscriptions().liveTranscriptions.value || [])],
+      liveTranscriptions: [...(useLiveTranscriptions().liveTranscriptions.value || [])],
     };
     return history;
   }
@@ -85,7 +86,7 @@ export function useHistory() {
       useSections().sections.value = mergeArrays(useSections().sections.value || [], historyData.sections);
       usePrompts().prompts.value = mergeArrays(usePrompts().prompts.value || [], historyData.prompts);
       useTranscriptions().transcriptions.value = mergeArrays(useTranscriptions().transcriptions.value || [], historyData.transcriptions);
-      useTranscriptions().liveTranscriptions.value = mergeArrays(useTranscriptions().liveTranscriptions.value || [], historyData.liveTranscriptions);
+      useLiveTranscriptions().liveTranscriptions.value = mergeArrays(useLiveTranscriptions().liveTranscriptions.value || [], historyData.liveTranscriptions);
     } else {
       console.log('No meaningful data in history, skipping sync:', historyData);
     }
