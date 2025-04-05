@@ -285,6 +285,14 @@ export function useRealTime() {
     off('update-prompt');
     off('remove-prompt');
 
+    off('add-transcription');
+    off('update-transcription');
+    off('remove-transcription');
+
+    off('add-liveTranscription');
+    off('update-liveTranscription');
+    off('remove-liveTranscription');
+
   }
 
   return {

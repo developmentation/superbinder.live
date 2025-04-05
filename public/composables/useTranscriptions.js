@@ -1,6 +1,9 @@
 import { useRealTime } from './useRealTime.js';
 
-export const useTranscripts = () => {
+let transcriptions = Vue.ref([])
+let liveTranscriptions = Vue.ref([])
+
+export const useTranscriptions = () => {
   const SUPPORTED_EXTENSIONS = [
     '.mp3', '.wav', '.ogg', '.webm', '.m4a', '.aac', 
     '.aiff', '.flac', '.caf', '.mka', '.wma',
@@ -107,7 +110,7 @@ export const useTranscripts = () => {
     const liveTranscriptHandler = on('live-transcript', handleLiveTranscript);
     const errorHandler = on('error', handleError);
 
-    eventHandlers.set(useTranscripts, {
+    eventHandlers.set(useTranscriptions, {
       transcriptionReady: transcriptionReadyHandler,
       liveTranscript: liveTranscriptHandler,
       error: errorHandler,
@@ -134,12 +137,12 @@ export const useTranscripts = () => {
       isTranscriptionReady = false;
 
       // Clean up event handlers
-      const handlers = eventHandlers.get(useTranscripts);
+      const handlers = eventHandlers.get(useTranscriptions);
       if (handlers) {
         off('transcription-ready', handlers.transcriptionReady);
         off('live-transcript', handlers.liveTranscript);
         off('error', handlers.error);
-        eventHandlers.delete(useTranscripts);
+        eventHandlers.delete(useTranscriptions);
       }
     };
   };
@@ -165,6 +168,8 @@ export const useTranscripts = () => {
   };
 
   return {
+    transcriptions,
+    liveTranscriptions,
     validateFile,
     transcribeFile,
     startLiveTranscription,

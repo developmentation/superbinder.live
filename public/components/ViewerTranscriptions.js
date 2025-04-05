@@ -1,5 +1,5 @@
 // components/ViewerTranscription.js
-import { useTranscripts } from '../composables/useTranscripts.js';
+import { useTranscriptions } from '../composables/useTranscriptions.js';
 import { useArtifacts } from '../composables/useArtifacts.js';
 import SectionSelectorModal from './SectionSelectorModal.js';
 // Assuming TextToSpeech is imported by a parent component, but including it here for clarity
@@ -7,10 +7,10 @@ import SectionSelectorModal from './SectionSelectorModal.js';
 import TextToSpeech from './TextToSpeech.js';
 
 export default {
-  name: 'ViewerTranscription',
+  name: 'ViewerTranscriptions',
   components: { SectionSelectorModal, TextToSpeech },
   setup() {
-    const { transcribeFile, SUPPORTED_EXTENSIONS, startLiveTranscription, clearTranscriptBuffer, getLiveTranscript, transcriptBuffer } = useTranscripts();
+    const { transcribeFile, SUPPORTED_EXTENSIONS, startLiveTranscription, clearTranscriptBuffer, getLiveTranscript, transcriptBuffer } = useTranscriptions();
     const { addArtifact } = useArtifacts();
     const transcripts = Vue.ref([]);
     const selectedTranscript = Vue.ref(null);
@@ -91,7 +91,7 @@ export default {
         liveTranscriptEntry = null; // Reset the live transcript entry
         isRecording.value = true;
         stopLiveTranscription = await startLiveTranscription((concatenatedTranscript) => {
-          // The buffer is already updated in useTranscripts.js via transcriptBuffer
+          // The buffer is already updated in useTranscriptions.js via transcriptBuffer
           // No need to update here since we're using the reactive transcriptBuffer directly
         });
       }

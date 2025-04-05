@@ -41,6 +41,8 @@ const entityModels = {
   sections: mongoose.model('sectionsSet', entitySetSchema, 'sectionsSet'),
   channels: mongoose.model('channelsSet', entitySetSchema, 'channelsSet'),
   prompts: mongoose.model('promptsSet', entitySetSchema, 'promptsSet'),
+  transcriptions: mongoose.model('transcriptionsSet', entitySetSchema, 'transcriptionsSet'),
+  liveTranscriptions: mongoose.model('liveTranscriptionsSet', entitySetSchema, 'liveTranscriptionsSet'),
 };
 
 const LibrarySet = mongoose.model('librarySet', librarySetSchema, 'librarySet');
