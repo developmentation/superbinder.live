@@ -53,11 +53,14 @@ export function useLiveTranscriptions() {
         id,
         channel: channelName.value,
         userUuid,
-        data: { segments: [] },
+        data: { 
+          segments: [],
+          name: `Live Session ${Date.now()}`
+        },
         timestamp: Date.now(),
       };
       liveTranscriptions.value.push(transcription);
-      selectedLiveTranscription.value = transcription; // Auto-select new transcription
+      selectedLiveTranscription.value = transcription;
       emit('add-liveTranscription', transcription);
     }
 
@@ -68,6 +71,7 @@ export function useLiveTranscriptions() {
           text: segmentText,
           commandMode: isCommandMode,
           commandActioned: false,
+          commandStatus: isCommandMode ? 'pending' : 'none',
           segmentNumber: transcription.data.segments.length + 1,
         });
       } else {
@@ -75,13 +79,15 @@ export function useLiveTranscriptions() {
         lastSegment.text += ' ' + segmentText;
       }
       chunkCountSinceLastTranscript = 0;
-      emit('update-liveTranscription', {
+      let updatePayload =  {
         id,
         channel: channelName.value,
         userUuid,
         data: transcription.data,
         timestamp: Date.now(),
-      });
+      }
+      console.log("Update Payload", updatePayload)
+      emit('update-liveTranscription',updatePayload);
     }
     liveTranscriptions.value = [...liveTranscriptions.value];
   };
@@ -115,17 +121,21 @@ export function useLiveTranscriptions() {
     chunkCountSinceLastTranscript = 0;
 
     const transcriptionId = uuidv4();
+    const timestamp = Date.now();
     const payload = {
       id: transcriptionId,
       channel: channelName.value,
       userUuid: userUuid.value,
-      data: { segments: [] },
-      timestamp: Date.now(),
+      data: { 
+        segments: [],
+        name: `Live Session ${timestamp}`
+      },
+      timestamp,
     };
     liveTranscriptions.value.push(payload);
-    selectedLiveTranscription.value = payload; // Auto-select new transcription
+    selectedLiveTranscription.value = payload;
     emit('add-liveTranscription', payload);
-    emit('start-transcription', payload);
+    emit('start-transcription', { id: transcriptionId, userUuid: userUuid.value });
 
     timeout = setTimeout(() => {
       console.warn('Transcription ready timeout after 5s');
@@ -144,12 +154,46 @@ export function useLiveTranscriptions() {
   };
 
   const toggleCommandMode = (enabled) => {
-    isCommandMode = enabled;
-    console.log(`Command Mode ${enabled ? 'Enabled' : 'Disabled'}`);
+    if (enabled) {
+      isCommandMode = true;
+      console.log('Command Mode Enabled');
+      // Force a new segment when command mode starts
+      chunkCountSinceLastTranscript = 6; // Greater than 5 to ensure a new segment
+    } else {
+      isCommandMode = false;
+      console.log('Command Mode Disabled');
+      if (selectedLiveTranscription.value && selectedLiveTranscription.value.data.segments.length > 0) {
+        const lastSegment = selectedLiveTranscription.value.data.segments[selectedLiveTranscription.value.data.segments.length - 1];
+        if (lastSegment.commandMode) {
+          lastSegment.commandStatus = 'pending';
+          // Force a new segment when command mode ends
+          chunkCountSinceLastTranscript = 6; // Greater than 5 to ensure a new segment
+          emit('update-liveTranscription', {
+            id: selectedLiveTranscription.value.id,
+            channel: channelName.value,
+            userUuid:userUuid.value,
+            data: selectedLiveTranscription.value.data,
+            timestamp: Date.now(),
+          });
+        }
+      }
+    }
+    liveTranscriptions.value = [...liveTranscriptions.value];
   };
 
   const selectTranscription = (transcription) => {
     selectedLiveTranscription.value = transcription;
+  };
+
+  const updateTranscription = (transcription) => {
+    const payload = {
+      id: transcription.id,
+      channel: channelName.value,
+      userUuid: userUuid.value,
+      data: transcription.data,
+      timestamp: Date.now(),
+    };
+    emit('update-liveTranscription', payload);
   };
 
   const removeTranscription = (id) => {
@@ -182,6 +226,7 @@ export function useLiveTranscriptions() {
     startLiveTranscription,
     toggleCommandMode,
     selectTranscription,
+    updateTranscription,
     removeTranscription,
     cleanup,
   };

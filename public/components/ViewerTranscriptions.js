@@ -334,6 +334,7 @@ export default {
               No segments available for this selection.
             </div>
           </div>
+            <div class="h-[200px]"></div>
         </div>
       </div>
 

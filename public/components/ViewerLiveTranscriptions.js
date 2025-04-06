@@ -7,7 +7,7 @@ export default {
   name: 'ViewerLiveTranscriptions',
   components: { SectionSelectorModal, TextToSpeech },
   setup() {
-    const { transcriptBuffer, liveTranscriptions, selectedLiveTranscription, startLiveTranscription, toggleCommandMode, removeTranscription, selectTranscription, cleanup } = useLiveTranscriptions();
+    const { transcriptBuffer, liveTranscriptions, selectedLiveTranscription, startLiveTranscription, toggleCommandMode, selectTranscription, updateTranscription, removeTranscription, cleanup } = useLiveTranscriptions();
     const { addArtifact } = useArtifacts();
     const isRecording = Vue.ref(false);
     const isCommandMode = Vue.ref(false);
@@ -62,7 +62,13 @@ export default {
     };
 
     const renderedSegments = Vue.computed(() => {
-      return selectedLiveTranscription.value?.data.segments || [];
+      if (!selectedLiveTranscription.value) return [];
+      return selectedLiveTranscription.value.data.segments.map(segment => ({
+        text: segment.text,
+        segmentNumber: segment.segmentNumber,
+        commandMode: segment.commandMode,
+        commandActioned: segment.commandActioned,
+      }));
     });
 
     const entireTranscriptText = Vue.computed(() => {
@@ -70,13 +76,32 @@ export default {
       return selectedLiveTranscription.value.data.segments.map(s => s.text).join('\n');
     });
 
+    const startEditingTranscription = (transcription) => {
+      liveTranscriptions.value.forEach(t => {
+        t.isEditing = false;
+        t.editedName = t.data.name;
+      });
+      transcription.isEditing = true;
+      transcription.editedName = transcription.data.name;
+    };
+
+    const finishEditingTranscription = (transcription) => {
+      transcription.data.name = transcription.editedName || `Live Session ${transcription.timestamp}`;
+      transcription.isEditing = false;
+      liveTranscriptions.value = [...liveTranscriptions.value];
+      updateTranscription(transcription);
+    };
+
     const openArtifactModal = (target) => {
-      // Ensure we're passing just the text, not the entire object
-      const text = typeof target.text === 'function' ? target.text() : target.text;
+      const text = typeof target.text === 'function' ? target.text() : (target.data ? entireTranscriptTextForTranscription(target) : target.text);
       artifactTarget.value = { text };
       showArtifactModal.value = true;
       console.log('Opening artifact modal with target:', { text });
       console.log('showArtifactModal.value:', showArtifactModal.value);
+    };
+
+    const entireTranscriptTextForTranscription = (transcription) => {
+      return transcription.data.segments.map(s => s.text).join('\n');
     };
 
     const saveArtifactFromModal = ({ sectionIds, name }) => {
@@ -86,7 +111,6 @@ export default {
         sectionIds.forEach((sectionId, index) => {
           const artifactName = name || `Live Transcript Artifact ${timestamp}`;
           const finalName = sectionIds.length > 1 && index > 0 ? `${artifactName} (${index + 1})` : artifactName;
-          // Ensure we're saving the plain text string, not a JSON object
           const textToSave = artifactTarget.value.text;
           const pagesText = [textToSave];
           console.log('Saving artifact with pagesText:', pagesText);
@@ -120,6 +144,8 @@ export default {
       endCommandMode,
       selectTranscription,
       removeTranscription: removeTranscriptionWrapper,
+      startEditingTranscription,
+      finishEditingTranscription,
       renderedSegments,
       entireTranscriptText,
       openArtifactModal,
@@ -157,16 +183,34 @@ export default {
           <div class="flex-1 overflow-y-auto">
             <div v-for="transcription in liveTranscriptions" :key="transcription.id" class="p-2 border-b border-[#2d3748]">
               <div class="flex items-center justify-between">
-                <div
-                  @click="selectTranscription(transcription)"
-                  class="text-[#e2e8f0] font-semibold text-sm truncate cursor-pointer hover:bg-[#2d3748] p-1"
-                  :class="{ 'bg-[#3b82f6]': selectedLiveTranscription === transcription }"
-                >
-                  Live Session {{ transcription.timestamp }}
+                <div class="flex items-center">
+                  <div
+                    @click="selectTranscription(transcription)"
+                    class="text-[#e2e8f0] font-semibold text-sm truncate cursor-pointer hover:bg-[#2d3748] p-1"
+                    :class="{ 'bg-[#3b82f6]': selectedLiveTranscription === transcription }"
+                  >
+                    <span v-if="!transcription.isEditing">{{ transcription.data.name }}</span>
+                    <input
+                      v-else
+                      v-model="transcription.editedName"
+                      @click.stop
+                      @blur="finishEditingTranscription(transcription)"
+                      @keypress.enter="finishEditingTranscription(transcription)"
+                      class="p-1 bg-[#2d3748] text-[#e2e8f0] rounded-lg border border-[#4b5563] text-sm"
+                    />
+                  </div>
+                  <button
+                    v-if="!transcription.isEditing"
+                    @click.stop="startEditingTranscription(transcription)"
+                    class="ml-2 text-[#f59e0b] hover:text-[#d97706]"
+                    title="Edit Transcription Name"
+                  >
+                    <i class="pi pi-pencil"></i>
+                  </button>
                 </div>
                 <div class="flex items-center gap-2">
                   <button
-                    @click.stop="openArtifactModal({ text: entireTranscriptText })"
+                    @click.stop="openArtifactModal(transcription)"
                     class="text-blue-400 hover:text-blue-300"
                     title="Save Entire Transcript as Artifact"
                   >
@@ -185,6 +229,7 @@ export default {
             <div v-if="!liveTranscriptions.length" class="p-4 text-[#94a3b8] text-sm text-center">
               No live transcriptions yet.
             </div>
+                 <div class="h-[200px]"></div>
           </div>
         </div>
 
@@ -192,7 +237,7 @@ export default {
         <div class="w-full md:w-2/3 overflow-hidden flex flex-col">
           <div v-if="selectedLiveTranscription" class="p-2 bg-[#1a2233] border-b border-[#2d3748] sticky top-0 z-10">
             <h2 class="text-sm font-bold text-gray-500 truncate">
-              Live Session {{ selectedLiveTranscription.timestamp }}
+              {{ selectedLiveTranscription.data.name }}
             </h2>
           </div>
           <div class="flex-1 overflow-y-auto p-4">
@@ -224,6 +269,7 @@ export default {
             <div v-else class="h-full flex items-center justify-center text-[#94a3b8] text-sm">
               No segments available yet.
             </div>
+              <div class="h-[200px]"></div>
           </div>
         </div>
       </div>

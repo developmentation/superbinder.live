@@ -17,6 +17,9 @@ import { useCollaboration } from "../composables/useCollaboration.js";
 import { usePrompts } from "../composables/usePrompts.js";
 import { useConfigs } from "../composables/useConfigs.js";
 
+import { useTranscriptions } from "../composables/useTranscriptions.js";
+import { useLiveTranscriptions } from "../composables/useLiveTranscriptions.js";
+
 export default {
   name: "Binder",
   components: {
@@ -159,6 +162,10 @@ export default {
     const { breakouts, cleanup: cleanupCollaboration } = useCollaboration();
     const { prompts, cleanup: cleanupPrompts } = usePrompts();
 
+    const { transcriptions, cleanup: cleanupTranscriptions } = useTranscriptions();
+    const { liveTranscriptions, cleanup: cleanupLiveTranscriptions } = useLiveTranscriptions();
+
+
     const sessionReady = Vue.ref(false);
     const activeTab = Vue.ref("Dashboard");
     const activeDocumentSubTab = Vue.ref("Uploads");
@@ -188,6 +195,8 @@ export default {
     const artifactCount = Vue.computed(() => (history.value.artifacts || []).length);
     const sectionCount = Vue.computed(() => (history.value.sections || []).length);
     const promptsCount = Vue.computed(() => (history.value.prompts || []).length);
+    const transcriptionsCount = Vue.computed(() => (history.value.transcriptions || []).length);
+    const liveTranscriptionsCount = Vue.computed(() => (history.value.liveTranscriptions || []).length);
 
     Vue.watch(
       () => gatherLocalHistory(),
@@ -234,6 +243,8 @@ export default {
       sections.value = [];
       breakouts.value = [];
       prompts.value = [];
+      transcriptions.value = [];
+      liveTranscriptions.value = [];
     }
 
     function handleResetSession() {
@@ -313,6 +324,10 @@ export default {
           return `Collaboration (${breakouts.value.length})`;
           case 'Prompts':
             return `Prompts (${prompts.value.length})`;
+          case 'Transcriptions':
+            return `Transcriptions (${transcriptions.value.length})`;
+          case 'Live':
+            return `Live (${liveTranscriptions.value.length})`;
           default:
           return tab;
       }
@@ -395,6 +410,8 @@ export default {
       cleanupSections();
       cleanupCollaboration();
       cleanupPrompts();
+      cleanupTranscriptions();
+      cleanupLiveTranscriptions();
     });
 
     Vue.watch(isConnected, (connected) => {
@@ -435,6 +452,8 @@ export default {
       artifactCount,
       sectionCount,
       promptsCount,
+      transcriptionsCount,
+      liveTranscriptionsCount,
       sections,
       goals,
       agents,
