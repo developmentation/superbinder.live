@@ -3,7 +3,7 @@ import { useQuestions } from '../composables/useQuestions.js';
 import { useDocuments } from '../composables/useDocuments.js';
 import { useLLM } from '../composables/useLLM.js';
 import { useScrollNavigation } from '../composables/useScrollNavigation.js';
-import { useArtifacts } from '../composables/useArtifacts.js'; // New import
+import { useArtifacts } from '../composables/useArtifacts.js';
 import ViewerEditor from './ViewerEditor.js';
 
 export default {
@@ -58,15 +58,18 @@ export default {
               @click="toggleAnswered(question.id, question.data.answered)"
             ></i>
             <span class="text-gray-400 mr-2">{{ question.data.order + 1 }}.</span>
-            <div
-              contenteditable="true"
-              @input="updateQuestion(question.id, { text: $event.target.textContent })"
-              @blur="$event.target.textContent = question.data.text"
-              @paste="handlePaste($event)" 
-              class="flex-1 text-white break-words whitespace-pre-wrap"   
-            >
+            <div v-if="!editingQuestion[question.id]" class="flex-1 text-white break-words whitespace-pre-wrap" @click="startEditingQuestion(question.id)">
               {{ question.data.text }}
             </div>
+            <input
+              v-else
+              ref="questionInput"
+              v-model="questionEditText[question.id]"
+              @keypress.enter="stopEditingQuestion(question.id)"
+              @blur="stopEditingQuestion(question.id)"
+              class="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
+              @paste="handlePaste($event)"
+            />
             <button @click="moveQuestionUp(question.id, index)" class="text-blue-400 hover:text-blue-300">↑</button>
             <button @click="moveQuestionDown(question.id, index)" class="text-blue-400 hover:text-blue-300">↓</button>
             <button @click="toggleCollapse(question.id)" class="text-blue-400 hover:text-blue-300">
@@ -91,21 +94,18 @@ export default {
                   <div
                     v-if="!editingAnswer[answer.id]"
                     class="markdown-body"
-                    @click="startEditing(answer.id)"
+                    @click="startEditingAnswer(answer.id)"
                     v-html="renderMarkdown(answer.data.text) || ' '"
                   ></div>
-                  <div
+                  <textarea
                     v-else
                     ref="answerInput"
-                    contenteditable="true"
-                    @input="updateAnswer(answer.id, answer.data.questionId, { text: $event.target.textContent })"
-                    @blur="stopEditing(answer.id, answer.data.questionId, $event.target.textContent)"
-                    @keypress.enter.prevent="stopEditing(answer.id, answer.data.questionId, $event.target.textContent)"
-                    @paste="handlePaste($event)"  
-                    class="flex-1 text-white break-words whitespace-pre-wrap"
-                  >
-                    {{ answer.data.text }}
-                  </div>
+                    v-model="answerEditText[answer.id]"
+                    @keypress.enter.prevent="stopEditingAnswer(answer.id, answer.data.questionId)"
+                    @blur="stopEditingAnswer(answer.id, answer.data.questionId)"
+                    class="w-full h-[300px] p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none resize-none"
+                    @paste="handlePaste($event)"
+                  ></textarea>
                 </div>
                 <div class="flex gap-2">
                   <button @click="voteAnswer(answer.data.questionId, answer.id, 'up')" class="text-green-400">↑ {{ answer.data.votes || 0 }}</button>
@@ -196,11 +196,15 @@ export default {
     const { selectedDocument, documents, setSelectedDocument } = useDocuments();
     const { llmRequests, triggerLLM } = useLLM();
     const { jumpToPageNumber } = useScrollNavigation();
-    const { artifacts , selectedArtifact } = useArtifacts(); // New
+    const { artifacts, selectedArtifact } = useArtifacts();
     const newQuestion = Vue.ref('');
     const answerInput = Vue.ref([]);
+    const questionInput = Vue.ref([]);
     const answerLLMMap = Vue.ref({});
     const editingAnswer = Vue.ref({});
+    const editingQuestion = Vue.ref({});
+    const questionEditText = Vue.ref({});
+    const answerEditText = Vue.ref({});
     const activeTab = Vue.ref('Active');
     const tabs = ['Active', 'Answered'];
     const filterQuery = Vue.ref('');
@@ -253,25 +257,46 @@ export default {
     function addAnswerLocal(questionId) {
       const answerId = addAnswer(questionId);
       Vue.nextTick(() => {
-        editingAnswer.value[answerId] = true;
+        startEditingAnswer(answerId);
+      });
+    }
+
+    function startEditingQuestion(questionId) {
+      const question = rawQuestions.value.find(q => q.id === questionId);
+      if (question) {
+        editingQuestion.value[questionId] = true;
+        questionEditText.value[questionId] = question.data.text;
         Vue.nextTick(() => {
-          const answerEl = answerInput.value.find(el => rawAnswers.value.some(a => a.id === answerId && a.data.questionId === questionId));
-          if (answerEl) answerEl.focus();
+          const inputEl = questionInput.value.find(el => el === document.activeElement);
+          if (inputEl) inputEl.focus();
         });
-      });
+      }
     }
 
-    function startEditing(answerId) {
-      editingAnswer.value[answerId] = true;
-      Vue.nextTick(() => {
-        const answerEl = answerInput.value.find(el => rawAnswers.value.some(a => a.id === answerId));
-        if (answerEl) answerEl.focus();
-      });
+    function stopEditingQuestion(questionId) {
+      if (editingQuestion.value[questionId]) {
+        updateQuestion(questionId, { text: questionEditText.value[questionId] });
+        editingQuestion.value[questionId] = false;
+      }
     }
 
-    function stopEditing(answerId, questionId, text) {
-      updateAnswer(answerId, questionId, { text });
-      editingAnswer.value[answerId] = false;
+    function startEditingAnswer(answerId) {
+      const answer = rawAnswers.value.find(a => a.id === answerId);
+      if (answer) {
+        editingAnswer.value[answerId] = true;
+        answerEditText.value[answerId] = answer.data.text;
+        Vue.nextTick(() => {
+          const inputEl = answerInput.value.find(el => el === document.activeElement);
+          if (inputEl) inputEl.focus();
+        });
+      }
+    }
+
+    function stopEditingAnswer(answerId, questionId) {
+      if (editingAnswer.value[answerId]) {
+        updateAnswer(answerId, questionId, { text: answerEditText.value[answerId] });
+        editingAnswer.value[answerId] = false;
+      }
     }
 
     function moveQuestionUp(id, currentIndex) {
@@ -316,32 +341,27 @@ export default {
     function getDocumentName(docId) {
       const doc = documents.value.find(d => d.id === docId);
       const arti = artifacts.value.find(d => d.id === docId);
-      return arti?.data?.name || doc?.data?.name || "Unknown Document/Artifact"
-      // return doc ? doc.data.name : 'Unknown Document';
+      return arti?.data?.name || doc?.data?.name || "Unknown Document/Artifact";
     }
 
     function openDocumentModal(docId, page) {
-
       const doc = documents.value.find(d => d.id === docId);
       const arti = artifacts.value.find(d => d.id === docId);
 
-      if(doc?.id)
-      {
+      if (doc?.id) {
         selectedArtifact.value = null;
         selectedDocument.value = JSON.parse(JSON.stringify(documents.value.find(d => d.id === docId) || null));
         jumpToPageNumber.value = page;
         modalKey.value += 1;
-
       }
 
-      if(arti?.id)
-        {
-          selectedDocument.value = null;
-          selectedArtifact.value = JSON.parse(JSON.stringify(artifacts.value.find(d => d.id === docId) || null));
-          jumpToPageNumber.value = 0;
-          modalKey.value += 1;
-        }
-  
+      if (arti?.id) {
+        selectedDocument.value = null;
+        selectedArtifact.value = JSON.parse(JSON.stringify(artifacts.value.find(d => d.id === docId) || null));
+        jumpToPageNumber.value = 0;
+        modalKey.value += 1;
+      }
+
       showDocumentModal.value = true;
     }
 
@@ -355,29 +375,26 @@ export default {
       const answerId = addAnswer(questionId);
       const llmId = uuidv4();
       answerLLMMap.value[llmId] = answerId;
-  
+
       const question = rawQuestions.value.find(q => q.id === questionId);
       const questionText = question ? question.data.text : '';
-      // Include all documents
       const documentMaterials = documents.value.map(doc => ({
         documentId: doc.id,
         name: doc.data.name,
         pages: JSON.stringify(doc.data.pagesText.map((text, index) => ({ id: doc.id, page: index + 1, text })))
       }));
-      // Include all artifacts
       const artifactMaterials = artifacts.value.map(artifact => ({
         artifactId: artifact.id,
         name: artifact.data.name,
         content: JSON.stringify(artifact.data.pagesText.map((text, index) => ({ id: artifact.id, page: index + 1, text })))
       }));
-      // Combine materials
       const materials = { documents: documentMaterials, artifacts: artifactMaterials };
       const userPrompt = `
         Answer the following question using the provided materials, without repeating the question in the response: "${questionText}"
         Provide a single, clean JSON array of references at the end in the format: [{"id": "documentId or artifactId", "page": number}]
         Materials: ${JSON.stringify(materials)}
       `;
-  
+
       triggerLLM(
         llmId,
         { provider: 'gemini', model: 'gemini-2.0-flash', name: "gemini-2.0-flash" },
@@ -411,7 +428,7 @@ export default {
           if (answer) {
             let responseText = request.llmResponse.trim();
             let links = [];
-  
+
             const jsonMatches = responseText.match(/\[[\s\S]*?\]/g);
             if (jsonMatches && jsonMatches.length > 0) {
               const lastJsonStr = jsonMatches[jsonMatches.length - 1];
@@ -427,14 +444,12 @@ export default {
                 console.error('Failed to parse JSON from LLM response:', e, lastJsonStr);
               }
             }
-  
+
             console.log('Processed LLM Response:', { responseText, links });
-  
-            // Overwrite text on completion, mimicking update-collab
+
             if (!request.isStreaming) {
               updateAnswer(answerId, answer.data.questionId, { text: responseText, links });
             } else if (answer.data.text !== responseText) {
-              // Only update text during streaming if it changes
               updateAnswer(answerId, answer.data.questionId, { text: responseText });
             }
           }
@@ -447,11 +462,8 @@ export default {
       questionsWithAnswers.value.forEach(question => {
         const answers = question.data.answers || [];
         if (answers.length === 0) return;
-    
-        // Find the highest vote count
+
         const maxVotes = Math.max(...answers.map(a => a.data.votes || 0));
-        
-        // If maxVotes > 0, mark all answers with maxVotes as top answers
         if (maxVotes > 0) {
           answers.forEach(answer => {
             if ((answer.data.votes || 0) === maxVotes) {
@@ -466,9 +478,7 @@ export default {
     function deleteLink(answerId, questionId, linkId, linkPage) {
       const answer = rawAnswers.value.find(a => a.id === answerId && a.data.questionId === questionId);
       if (answer && answer.data.links) {
-        // Filter out the link with the matching id and page
         const updatedLinks = answer.data.links.filter(link => !(link.id === linkId && link.page === linkPage));
-        // Update the answer with the new links array
         updateAnswer(answerId, questionId, { links: updatedLinks });
       }
     }
@@ -485,13 +495,19 @@ export default {
       deleteAnswer,
       voteAnswer,
       answerInput,
+      questionInput,
       moveQuestionUp,
       moveQuestionDown,
       answerWithAI,
       renderMarkdown,
       editingAnswer,
-      startEditing,
-      stopEditing,
+      editingQuestion,
+      questionEditText,
+      answerEditText,
+      startEditingQuestion,
+      stopEditingQuestion,
+      startEditingAnswer,
+      stopEditingAnswer,
       activeTab,
       tabs,
       filterQuery,
