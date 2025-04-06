@@ -1,29 +1,28 @@
 import { useRealTime } from './useRealTime.js';
 
-const transcriptBuffer = Vue.ref([]); // Store raw JSON responses
-let liveTranscriptions = Vue.ref([])
-// Singleton instance to prevent multiple registrations
+const transcriptBuffer = Vue.ref([]); // Raw JSON responses
+const liveTranscriptions = Vue.ref([]); // Structured transcriptions
+const selectedLiveTranscription = Vue.ref(null); // Track the selected transcription
 let instance = null;
 
 export function useLiveTranscriptions() {
-  // Return the singleton instance if it exists
-  if (instance) {
-    return instance;
-  }
+  if (instance) return instance;
 
   let isTranscriptionActive = false;
   let isTranscriptionReady = false;
+  let isCommandMode = false;
   let onAudioChunkCallback = null;
+  let chunkCountSinceLastTranscript = 0;
   const { emit, on, off, userUuid, channelName } = useRealTime();
 
-  // Store event handlers to ensure single registration
   let eventHandlersRegistered = false;
-  let timeout = null; // Store the timeout reference
+  let timeout = null;
 
   const sendAudioChunk = (chunk) => {
     if (chunk.size > 0 && isTranscriptionReady) {
       console.log(`Sending audio chunk of size ${chunk.size} bytes`);
       emit('audio-chunk', { chunk });
+      chunkCountSinceLastTranscript++;
     } else {
       console.warn('Audio chunk ignored:', { isTranscriptionReady, chunkSize: chunk.size });
     }
@@ -32,7 +31,6 @@ export function useLiveTranscriptions() {
   const handleTranscriptionReady = (eventObj) => {
     console.log('Received transcription-ready event:', eventObj);
     isTranscriptionReady = true;
-    // Clear the timeout since we received transcription-ready
     if (timeout) {
       clearTimeout(timeout);
       timeout = null;
@@ -47,16 +45,52 @@ export function useLiveTranscriptions() {
     if (!isTranscriptionActive) return;
     console.log('Received live-transcript event:', eventObj);
     transcriptBuffer.value.push(eventObj);
-    transcriptBuffer.value = [...transcriptBuffer.value];
+
+    const { id, userUuid, data, timestamp } = eventObj;
+    let transcription = liveTranscriptions.value.find(t => t.id === id);
+    if (!transcription) {
+      transcription = {
+        id,
+        channel: channelName.value,
+        userUuid,
+        data: { segments: [] },
+        timestamp: Date.now(),
+      };
+      liveTranscriptions.value.push(transcription);
+      selectedLiveTranscription.value = transcription; // Auto-select new transcription
+      emit('add-liveTranscription', transcription);
+    }
+
+    const segmentText = data.transcript || '';
+    if (segmentText.trim()) {
+      if (chunkCountSinceLastTranscript > 5 || transcription.data.segments.length === 0) {
+        transcription.data.segments.push({
+          text: segmentText,
+          commandMode: isCommandMode,
+          commandActioned: false,
+          segmentNumber: transcription.data.segments.length + 1,
+        });
+      } else {
+        const lastSegment = transcription.data.segments[transcription.data.segments.length - 1];
+        lastSegment.text += ' ' + segmentText;
+      }
+      chunkCountSinceLastTranscript = 0;
+      emit('update-liveTranscription', {
+        id,
+        channel: channelName.value,
+        userUuid,
+        data: transcription.data,
+        timestamp: Date.now(),
+      });
+    }
+    liveTranscriptions.value = [...liveTranscriptions.value];
   };
 
   const handleError = (eventObj) => {
     console.error('Server error:', eventObj.message, 'Timestamp:', eventObj.timestamp);
     transcriptBuffer.value.push(eventObj);
-    transcriptBuffer.value = [...transcriptBuffer.value];
   };
 
-  // Register event handlers only once
   if (!eventHandlersRegistered) {
     console.log('Registering event handlers');
     on('transcription-ready', handleTranscriptionReady);
@@ -69,55 +103,61 @@ export function useLiveTranscriptions() {
     if (!userUuid.value || !channelName.value) {
       throw new Error('userUuid and channelName are required');
     }
-
     if (isTranscriptionActive) {
-      console.warn('Transcription already active, ignoring start request');
+      console.warn('Transcription already active');
       return () => {};
     }
 
     isTranscriptionActive = true;
     isTranscriptionReady = false;
-    onAudioChunkCallback = (sendAudioChunk) => {
-      // Guard against restarting MediaRecorder if already active
-      if (onAudioChunk.state === 'recording') {
-        console.log('MediaRecorder already recording, skipping start');
-        return;
-      }
-      onAudioChunk(sendAudioChunk);
-    };
+    onAudioChunkCallback = onAudioChunk;
     transcriptBuffer.value = [];
+    chunkCountSinceLastTranscript = 0;
 
     const transcriptionId = uuidv4();
     const payload = {
       id: transcriptionId,
+      channel: channelName.value,
       userUuid: userUuid.value,
-      channelName: channelName.value,
-      data: { status: 'starting' },
+      data: { segments: [] },
       timestamp: Date.now(),
     };
-    console.log('Emitting start-transcription:', payload);
+    liveTranscriptions.value.push(payload);
+    selectedLiveTranscription.value = payload; // Auto-select new transcription
+    emit('add-liveTranscription', payload);
     emit('start-transcription', payload);
 
-    // Set a timeout as a fallback
     timeout = setTimeout(() => {
       console.warn('Transcription ready timeout after 5s');
       isTranscriptionReady = true;
-      if (onAudioChunkCallback) {
-        onAudioChunkCallback(sendAudioChunk);
-      }
+      if (onAudioChunkCallback) onAudioChunkCallback(sendAudioChunk);
     }, 5000);
 
     return () => {
       console.log('Stopping live transcription');
-      if (timeout) {
-        clearTimeout(timeout);
-        timeout = null;
-      }
+      if (timeout) clearTimeout(timeout);
       emit('stop-transcription', { id: transcriptionId, userUuid: userUuid.value });
       isTranscriptionActive = false;
       isTranscriptionReady = false;
       onAudioChunkCallback = null;
     };
+  };
+
+  const toggleCommandMode = (enabled) => {
+    isCommandMode = enabled;
+    console.log(`Command Mode ${enabled ? 'Enabled' : 'Disabled'}`);
+  };
+
+  const selectTranscription = (transcription) => {
+    selectedLiveTranscription.value = transcription;
+  };
+
+  const removeTranscription = (id) => {
+    liveTranscriptions.value = liveTranscriptions.value.filter(t => t.id !== id);
+    if (selectedLiveTranscription.value && selectedLiveTranscription.value.id === id) {
+      selectedLiveTranscription.value = liveTranscriptions.value.length > 0 ? liveTranscriptions.value[liveTranscriptions.value.length - 1] : null;
+    }
+    emit('remove-liveTranscription', { id, userUuid: userUuid.value, timestamp: Date.now() });
   };
 
   const cleanup = () => {
@@ -127,22 +167,23 @@ export function useLiveTranscriptions() {
     off('error', handleError);
     eventHandlersRegistered = false;
     transcriptBuffer.value = [];
+    liveTranscriptions.value = [];
+    selectedLiveTranscription.value = null;
     isTranscriptionActive = false;
     isTranscriptionReady = false;
     onAudioChunkCallback = null;
-    if (timeout) {
-      clearTimeout(timeout);
-      timeout = null;
-    }
+    if (timeout) clearTimeout(timeout);
   };
 
-  // Create the instance to return
   instance = {
-    liveTranscriptions,
     transcriptBuffer,
+    liveTranscriptions,
+    selectedLiveTranscription,
     startLiveTranscription,
+    toggleCommandMode,
+    selectTranscription,
+    removeTranscription,
     cleanup,
   };
-
   return instance;
 }
