@@ -13,9 +13,18 @@ const defaultOcrPrompt = `
         "type": "string",
         "description": "string"
       }
+    "fileMetadata":{
+      "date":"",
+      "setting":"",
+      "application":"",
+      "device":"",
+    },
     ]
   }
   Please process each image and return an array of results in this exact JSON format, one entry per image.
+  Include file metadata in your analysis if the metadata includes meaningful insights into the content or subject of the file. 
+  Consider whether the filename contains meaningful dates, locations, or metadata which could be interpreted to better understand the image.
+  
 `;
 
 const ocrPrompt = Vue.ref(defaultOcrPrompt);
@@ -160,7 +169,7 @@ export function useFiles() {
   }
 
   // Main OCR function
-  async function ocrFiles(uuids, documentData, pages) {
+  async function ocrFiles(uuids, documentData, pages, customPrompt = null) {
     const supportedMimeTypes = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
     const maxFileSize = 7 * 1024 * 1024; // 7MB
 
@@ -208,7 +217,7 @@ export function useFiles() {
     }
 
     const formData = new FormData();
-    formData.append('prompt', ocrPrompt.value);
+    formData.append('prompt', customPrompt || ocrPrompt.value);
     validFiles.forEach(item => {
       const blob = new Blob([item.data], { type: item.mimeType });
       formData.append('files', blob); // No filename provided

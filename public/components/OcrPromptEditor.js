@@ -1,4 +1,3 @@
-// components/OcrPromptEditor.js
 import { usePrompts } from '../composables/usePrompts.js'; // Import usePrompts
 
 export default {
@@ -8,10 +7,15 @@ export default {
       type: String,
       required: true,
     },
+    includeFileMetadata: {
+      type: Boolean,
+      default: true,
+    },
   },
-  emits: ['update-prompt', 'close', 'reset-prompt'],
+  emits: ['update-prompt', 'close', 'reset-prompt', 'toggle-metadata'],
   setup(props, { emit }) {
     const prompt = Vue.ref(props.initialPrompt);
+    const includeMetadata = Vue.ref(props.includeFileMetadata);
     const { prompts, cleanup } = usePrompts(); // Use the prompts composable
 
     // Save the current prompt and close the modal
@@ -41,10 +45,21 @@ export default {
       }
     };
 
+    // Toggle metadata inclusion
+    const toggleMetadata = () => {
+      emit('toggle-metadata', !includeMetadata.value);
+    };
+
     // Watch for changes to initialPrompt prop
     Vue.watch(() => props.initialPrompt, (newValue) => {
       console.log('Initial prompt changed:', newValue);
       prompt.value = newValue;
+    });
+
+    // Watch for changes to includeFileMetadata prop
+    Vue.watch(() => props.includeFileMetadata, (newValue) => {
+      console.log('Include file metadata changed:', newValue);
+      includeMetadata.value = newValue;
     });
 
     // Cleanup event listeners when component is unmounted
@@ -59,6 +74,8 @@ export default {
       cancel,
       resetToDefault,
       selectPrompt,
+      includeMetadata,
+      toggleMetadata,
     };
   },
   template: `
@@ -77,6 +94,15 @@ export default {
           class="w-full h-64 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 resize-none"
           placeholder="Enter your OCR prompt here..."
         ></textarea>
+        <div class="flex items-center mt-4">
+          <input
+            type="checkbox"
+            v-model="includeMetadata"
+            @change="toggleMetadata"
+            class="h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+          />
+          <label class="ml-2 text-white">Include file metadata in OCR prompt</label>
+        </div>
         <div class="flex gap-4 mt-6">
           <button
             @click="savePrompt"

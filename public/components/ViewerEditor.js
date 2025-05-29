@@ -1,4 +1,3 @@
-// components/ViewerEditor.js
 import LazyScrollViewer from './LazyScrollViewer.js';
 import OcrPromptEditor from './OcrPromptEditor.js';
 import { useFiles } from '../composables/useFiles.js';
@@ -31,6 +30,7 @@ export default {
     const md = markdownit({ html: true, linkify: true, typographer: true, breaks: true });
     const ocrProgress = Vue.ref(0);
     const isOcrAllRunning = Vue.ref(false);
+    const includeFileMetadata = Vue.ref(true); // State for including file metadata
     let ocrAllAbortController = null;
 
     const imageTypes = ['png', 'jpg', 'jpeg', 'webp'];
@@ -266,9 +266,9 @@ export default {
       Vue.nextTick(() => restoreCursorPosition(element, position));
     };
 
-    const handleTextInput = (index, event) => {
-      editedContent.value[index] = event.target.value;
-      console.log('handleTextInput: updated editedContent:', editedContent.value);
+    const handleTextInput = (index, description) => {
+      editedContent.value[index] = description.target.value;
+      console.log('Document Text Input:', editedContent.value);
     };
 
     const handlePageVisible = (pageIndex) => {
@@ -281,12 +281,27 @@ export default {
       try {
         isOcrLoading.value = true;
         const pageToOcr = props.item.data.type === 'pdf' ? currentPage.value : 0;
-        const ocrResults = await ocrFiles([props.item.id], [props.item], [pageToOcr]);
-        console.log("ocrResults", ocrResults)
+
+        // Construct finalPrompt with metadata if includeFileMetadata is true
+        let finalPrompt = ocrPrompt.value;
+        if (includeFileMetadata.value) {
+          const metadata = [{
+            name: props.item.data.name,
+            type: props.item.data.type,
+            mimeType: props.item.data.mimeType,
+            size: props.item.data.size,
+            lastModified: props.item.data.lastModified,
+          }];
+          const metadataString = JSON.stringify(metadata, null, 2);
+          finalPrompt = `${finalPrompt}\n\nFile Metadata:\n${metadataString}`;
+        }
+
+        const ocrResults = await ocrFiles([props.item.id], [props.item], [pageToOcr], finalPrompt);
+        console.log("ocrResults:", ocrResults);
         const { uuids, text, pages } = ocrResults;
         if (uuids[0] === props.item.id) {
           const pageIndex = pages[0];
-          const ocrText = text[0] || ''; // text[0] is response.data.text[0]
+          const ocrText = text[0] || '';
           editedContent.value[pageIndex] = ocrText;
           const updateFn = props.item.type === 'document' ? updateDocumentOcr : updateArtifact;
           if (props.item.type === 'document') {
@@ -294,7 +309,7 @@ export default {
           } else {
             const updatedPagesText = props.item.data.pagesText ? [...props.item.data.pagesText] : [''];
             updatedPagesText[0] = ocrText;
-            console.log('Updating artifact with pagesText:', updatedPagesText); // Log to confirm
+            console.log('Updating artifact with pagesText:', updatedPagesText);
             updateFn(props.item.id, { pagesText: updatedPagesText });
           }
         }
@@ -304,6 +319,7 @@ export default {
         isOcrLoading.value = false;
       }
     };
+
     const ocrAllPages = async () => {
       try {
         isOcrLoading.value = true;
@@ -311,25 +327,39 @@ export default {
         ocrProgress.value = 0;
         const totalPages = props.item.data.pages?.length || 0;
         const newPagesText = [...(props.item.data.pagesText || Array(totalPages).fill(''))];
-        
+
+        // Construct finalPrompt with metadata if includeFileMetadata is true
+        let finalPrompt = ocrPrompt.value;
+        if (includeFileMetadata.value) {
+          const metadata = [{
+            name: props.item.data.name,
+            type: props.item.data.type,
+            mimeType: props.item.data.mimeType,
+            size: props.item.data.size,
+            lastModified: props.item.data.lastModified,
+          }];
+          const metadataString = JSON.stringify(metadata, null, 2);
+          finalPrompt = `${finalPrompt}\n\nFile Metadata:\n${metadataString}`;
+        }
+
         for (let page = 0; page < totalPages; page++) {
           if (!isOcrAllRunning.value) break;
-          
+
           try {
-            const ocrResults = await ocrFiles([props.item.id], [props.item], [page]);
+            const ocrResults = await ocrFiles([props.item.id], [props.item], [page], finalPrompt);
             const { uuids, text, pages } = ocrResults;
-            
+
             if (uuids[0] === props.item.id && text[0] !== null) {
               const pageIndex = pages[0];
               newPagesText[pageIndex] = text[0];
-              
+
               const updateFn = props.item.type === 'document' ? updateDocument : updateArtifact;
               if (props.item.type === 'document') {
                 updateFn(props.item.id, { pagesText: newPagesText });
               } else {
                 updateFn(props.item.id, { pagesText: newPagesText });
               }
-              
+
               if (isEditing.value) {
                 editedContent.value[pageIndex] = text[0];
               }
@@ -376,6 +406,10 @@ export default {
       resetOcrPrompt();
     };
 
+    const toggleMetadata = (value) => {
+      includeFileMetadata.value = value;
+    };
+
     const closeOcrPromptEditor = () => {
       showOcrPromptEditor.value = false;
     };
@@ -405,8 +439,10 @@ export default {
       openOcrPromptEditor,
       updateOcrPrompt,
       resetOcrPromptHandler,
+      toggleMetadata,
       closeOcrPromptEditor,
       ocrPrompt,
+      includeFileMetadata,
     };
   },
   template: `
@@ -424,7 +460,7 @@ export default {
         <button v-if="isEditing" @click="finishEditing" class="py-1 px-2 bg-[#10b981] text-white rounded-lg text-sm">
           Done
         </button>
-        <text-to-speech :key = "item.data.id"  v-if = "item?.data?.pagesText?.[0]" :text="item.data.pagesText[0]" />
+        <text-to-speech :key="item.data.id" v-if="item?.data?.pagesText?.[0]" :text="item.data.pagesText[0]" />
 
         <template v-if="((item.data.type === 'pdf' && displayMode === 'PDF') || (item.data.type && (['png', 'jpg', 'jpeg', 'webp'].includes(item.data.type) || (item.type === 'artifact' && item.data.type === 'image')) && displayMode === 'Image')) && !isEditing">
           <div v-if="item.data.type === 'pdf' || item.type === 'artifact'" class="flex items-center gap-1">
@@ -515,8 +551,10 @@ export default {
       <ocr-prompt-editor
         v-if="showOcrPromptEditor"
         :initial-prompt="ocrPrompt"
+        :include-file-metadata="includeFileMetadata"
         @update-prompt="updateOcrPrompt"
         @reset-prompt="resetOcrPromptHandler"
+        @toggle-metadata="toggleMetadata"
         @close="closeOcrPromptEditor"
       />
     </div>

@@ -1,4 +1,3 @@
-// components/ViewerSections.js
 import SectionTreeViewer from './SectionTreeViewer.js';
 import ViewerEditor from './ViewerEditor.js';
 import OcrPromptEditor from './OcrPromptEditor.js'; // Import OcrPromptEditor for reuse
@@ -27,6 +26,7 @@ export default {
     const expandedKeys = Vue.ref({});
     const isLoadingFiles = Vue.ref(false);
     const showOcrPromptEditor = Vue.ref(false); // State for OCR prompt editor modal
+    const includeFileMetadata = Vue.ref(true); // State for including file metadata in OCR prompt
 
     const treeNodes = Vue.computed(() => {
       const docNodes = documents.value.map(doc => ({
@@ -102,9 +102,28 @@ export default {
           const imageUuids = imageFiles.map(file => uuids[uploadedFiles.indexOf(file)]);
           const documentData = imageFiles; // Raw File objects (Blobs)
           const pages = imageFiles.map(() => 0); // All images are page 0
+          
+          // Prepare OCR prompt with optional metadata
+          let finalOcrPrompt = ocrPrompt.value;
+          if (includeFileMetadata.value) {
+            const metadata = imageFiles.map((file, index) => {
+              const uuid = imageUuids[index];
+              const doc = documents.value.find(d => d.id === uuid);
+              return doc ? {
+                name: doc.data.name,
+                type: doc.data.type,
+                mimeType: doc.data.mimeType,
+                size: doc.data.size,
+                lastModified: doc.data.lastModified,
+              } : {};
+            });
+            const metadataString = JSON.stringify(metadata, null, 2);
+            finalOcrPrompt = `${finalOcrPrompt}\n\nFile Metadata:\n${metadataString}`;
+            console.log('finalOcrPrompt', finalOcrPrompt)
+          }
 
           try {
-            const ocrResults = await ocrFiles(imageUuids, documentData, pages);
+            const ocrResults = await ocrFiles(imageUuids, documentData, pages, finalOcrPrompt);
             ocrResults.uuids.forEach((uuid, index) => {
               const text = ocrResults.text[index];
               const page = ocrResults.pages[index];
@@ -222,6 +241,10 @@ export default {
       resetOcrPrompt();
     };
 
+    const toggleMetadata = (value) => {
+      includeFileMetadata.value = value;
+    };
+
     const closeOcrPromptEditor = () => {
       showOcrPromptEditor.value = false;
     };
@@ -234,6 +257,7 @@ export default {
       expandedKeys,
       isLoadingFiles,
       showOcrPromptEditor,
+      includeFileMetadata,
       handleNodeSelect,
       handleFileUpload,
       renderFiles,
@@ -244,6 +268,7 @@ export default {
       openOcrPromptEditor,
       updateOcrPrompt,
       resetOcrPromptHandler,
+      toggleMetadata,
       closeOcrPromptEditor,
       ocrPrompt,
     };
@@ -328,8 +353,10 @@ export default {
       <ocr-prompt-editor
         v-if="showOcrPromptEditor"
         :initial-prompt="ocrPrompt"
+        :include-file-metadata="includeFileMetadata"
         @update-prompt="updateOcrPrompt"
         @reset-prompt="resetOcrPromptHandler"
+        @toggle-metadata="toggleMetadata"
         @close="closeOcrPromptEditor"
       />
     </div>
